@@ -69,14 +69,13 @@ function conversationsApiPlugin(): Plugin {
 // Convenience: allow ?file=~/... to reach real session files under the home directory.
 export const HOME = homedir();
 
+// Single entry point (index.html) for now -- per the current build phase,
+// the sketched dashboard layout is the one page, backed by an in-memory
+// mock data store (see src/dashboard/mock-conversations.ts) rather than the
+// real disk-backed conversations API. The real API/session-jsonl-source code
+// is untouched and can be wired back in behind the same ConversationsStore
+// interface later -- this isn't a deletion of that work, just not the
+// default entry point right now.
 export default defineConfig({
 	plugins: [tailwindcss(), sessionEventsApiPlugin(), conversationsApiPlugin()],
-	build: {
-		rollupOptions: {
-			input: {
-				main: join(process.cwd(), "index.html"),
-				playground: join(process.cwd(), "playground.html"),
-			},
-		},
-	},
 });

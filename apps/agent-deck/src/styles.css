@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "dockview/dist/styles/dockview.css";
+@import "gridstack/dist/gridstack.css";
 
 /* Tailwind v4 defaults dark: to a prefers-color-scheme media query; this
    project needs class-based dark mode so the theme controller (theme.ts)
