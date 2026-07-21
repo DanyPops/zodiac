@@ -1,13 +1,13 @@
-import { Send } from "lucide";
+import { ChevronLeft, ChevronRight, Send } from "lucide";
 import { renderConversationSidebar } from "./dashboard/conversation-sidebar.js";
-import { createDashboardGrid } from "./dashboard/dashboard-grid.js";
+import { createDashboardDockview } from "./dashboard/dashboard-dockview.js";
 import { migrateDashboard, type DashboardLayout } from "./dashboard/dashboard-schema.js";
-import { attachFixtureIcons, fixtureSourceCardHtml, FIXTURE_WIDGETS } from "./dashboard/fixture-widgets.js";
 import { createInMemoryConversationsStore } from "./dashboard/mock-conversations.js";
 import { icon } from "./playground/icon.js";
 import { createBrowserThemeController } from "./theme.js";
 
 const STORAGE_KEY = "agent-deck-dashboard-layout";
+const SIDEBAR_COLLAPSE_KEY = "agent-deck-sidebar-collapsed";
 
 function loadPersistedLayout(): DashboardLayout | undefined {
 	try {
@@ -27,30 +27,43 @@ function persistLayout(layout: DashboardLayout): void {
 	}
 }
 
+function loadSidebarCollapsed(): boolean {
+	try {
+		return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "true";
+	} catch {
+		return false;
+	}
+}
+
+function saveSidebarCollapsed(value: boolean): void {
+	try {
+		localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(value));
+	} catch {
+		// ignore
+	}
+}
+
 function main(): void {
 	const app = document.querySelector<HTMLDivElement>("#app");
 	if (!app) return;
 
 	const theme = createBrowserThemeController();
+	let sidebarCollapsed = loadSidebarCollapsed();
 
-	// Sketched 4-region layout: [Conversations sidebar] | [Dashboard grid (top) /
-	// Conversation History with draggable fixture widgets (bottom) / input box].
+	// [Collapsible Conversations sidebar] | [Dashboard + Conversation as real
+	// dockview panels -- drag a tab to any edge to split horizontally or
+	// vertically, native dockview behavior] / [input box].
 	app.innerHTML = `
 		<div class="flex h-screen p-3 gap-3">
-			<aside class="w-[220px] shrink-0 flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
-				<h2 class="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-3 border-b border-gray-100 dark:border-gray-700">Conversations</h2>
-				<div id="conversation-sidebar" class="flex-1 overflow-auto p-1.5 space-y-0.5"></div>
+			<aside id="conversations-sidebar" class="shrink-0 flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]">
+				<div id="sidebar-header" class="flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-700 shrink-0">
+					<h2 class="sidebar-label text-xs font-semibold text-gray-500 dark:text-gray-400">Conversations</h2>
+					<button id="sidebar-collapse-toggle" class="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"></button>
+				</div>
+				<div id="conversation-sidebar" class="sidebar-label flex-1 overflow-auto p-1.5 space-y-0.5"></div>
 			</aside>
 			<main class="flex-1 min-w-0 flex flex-col gap-3">
-				<section class="flex-1 min-h-0 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-auto p-2">
-					<div id="dashboard-grid" class="grid-stack"></div>
-				</section>
-				<section class="h-[168px] shrink-0 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
-					<h2 class="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-100 dark:border-gray-700">
-						Conversation History <span class="font-normal text-gray-400 dark:text-gray-500">\u00b7 drag a widget into the dashboard above</span>
-					</h2>
-					<div id="conversation-history" class="flex-1 overflow-auto p-2 flex flex-wrap gap-2 content-start"></div>
-				</section>
+				<div id="dashboard-dockview-container" class="flex-1 min-h-0 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden"></div>
 				<div class="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)]">
 					<input
 						type="text"
@@ -67,31 +80,53 @@ function main(): void {
 
 	app.querySelector("#input-send")?.appendChild(icon(Send, { size: 15 }));
 
-	const historyEl = document.querySelector<HTMLDivElement>("#conversation-history");
-	if (historyEl) {
-		historyEl.innerHTML = FIXTURE_WIDGETS.map(fixtureSourceCardHtml).join("");
-		attachFixtureIcons(historyEl);
+	function applySidebarCollapsed(): void {
+		const sidebar = document.querySelector<HTMLElement>("#conversations-sidebar");
+		const header = document.querySelector<HTMLElement>("#sidebar-header");
+		sidebar?.classList.toggle("w-[220px]", !sidebarCollapsed);
+		sidebar?.classList.toggle("w-[52px]", sidebarCollapsed);
+		header?.classList.toggle("justify-center", sidebarCollapsed);
+		header?.classList.toggle("justify-between", !sidebarCollapsed);
+		for (const label of document.querySelectorAll<HTMLElement>(".sidebar-label")) {
+			label.classList.toggle("hidden", sidebarCollapsed);
+		}
+		const toggleBtn = document.querySelector("#sidebar-collapse-toggle");
+		if (toggleBtn) {
+			toggleBtn.innerHTML = "";
+			toggleBtn.appendChild(icon(sidebarCollapsed ? ChevronRight : ChevronLeft, { size: 14 }));
+		}
 	}
+	applySidebarCollapsed();
+	document.querySelector("#sidebar-collapse-toggle")?.addEventListener("click", () => {
+		sidebarCollapsed = !sidebarCollapsed;
+		saveSidebarCollapsed(sidebarCollapsed);
+		applySidebarCollapsed();
+	});
 
 	const conversationsStore = createInMemoryConversationsStore();
 	const sidebarEl = document.querySelector<HTMLDivElement>("#conversation-sidebar");
 	if (sidebarEl) renderConversationSidebar(sidebarEl, conversationsStore);
 
-	const gridEl = document.querySelector<HTMLDivElement>("#dashboard-grid");
-	if (gridEl) {
-		const dashboard = createDashboardGrid(gridEl, ".fixture-drag-source");
-		const persisted = loadPersistedLayout();
-		if (persisted && persisted.panels.length > 0) dashboard.load(persisted);
+	const dockviewContainer = document.querySelector<HTMLDivElement>("#dashboard-dockview-container");
+	if (dockviewContainer) {
+		const dashboardDockview = createDashboardDockview(dockviewContainer);
+		dashboardDockview.setDark(theme.isDark());
+		theme.subscribe((isDark) => dashboardDockview.setDark(isDark));
 
-		// Persist on any change (add/move/resize/drop) -- gridstack fires "change" for these.
-		gridEl.addEventListener("dropped", () => persistLayout(dashboard.save()));
-		const observer = new MutationObserver(() => persistLayout(dashboard.save()));
-		observer.observe(gridEl, { childList: true, subtree: true, attributes: true });
+		const dashboard = dashboardDockview.getDashboardGrid();
+		if (dashboard) {
+			const persisted = loadPersistedLayout();
+			if (persisted && persisted.panels.length > 0) dashboard.load(persisted);
+
+			const gridEl = dockviewContainer.querySelector<HTMLElement>(".grid-stack");
+			if (gridEl) {
+				gridEl.addEventListener("dropped", () => persistLayout(dashboard.save()));
+				const observer = new MutationObserver(() => persistLayout(dashboard.save()));
+				observer.observe(gridEl, { childList: true, subtree: true, attributes: true });
+			}
+		}
 	}
 
-	// Theme toggling is app-wide (see main.ts/playground-main.ts) -- this page
-	// doesn't have its own toggle yet since the sketch didn't call for one;
-	// it still respects the persisted mode via createBrowserThemeController.
 	document.documentElement.classList.toggle("dark", theme.isDark());
 }
 

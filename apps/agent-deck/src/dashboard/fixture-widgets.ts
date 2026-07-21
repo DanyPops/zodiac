@@ -33,18 +33,39 @@ export function findFixtureWidget(type: string): FixtureWidgetDef | undefined {
 	return FIXTURE_WIDGETS.find((w) => w.type === type);
 }
 
-/** A draggable source card for the catalog shown in Conversation History. */
+/**
+ * A draggable source card for the catalog shown in Conversation History.
+ *
+ * Shows a real, live-rendered preview of the widget's actual content, not
+ * just an icon+label pill -- per direct instruction, matching how every
+ * real product researched (Claude Artifacts, ChatGPT Canvas, and their
+ * real open-source clones LobeChat/NextChat) shows a meaningful preview of
+ * generated content even in compact/collapsed form. The preview is the
+ * exact same renderer the Dashboard grid uses once dropped, just fitted
+ * into a small fixed-height crop with a fade-out at the bottom rather than
+ * a separate, curated "thumbnail" variant -- keeps one source of truth for
+ * what each widget actually looks like instead of two renderers to keep in
+ * sync. Pointer events are disabled on the preview itself so a person can
+ * grab and drag the card without accidentally interacting with the tile
+ * content underneath (e.g. the CI tile's own scroll area).
+ */
 export function fixtureSourceCardHtml(widget: FixtureWidgetDef): string {
 	const category = CATEGORIES[widget.type];
 	return `
 		<div
-			class="fixture-drag-source flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 cursor-grab active:cursor-grabbing"
+			class="fixture-drag-source shrink-0 w-[240px] h-[136px] flex flex-col rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white dark:bg-gray-900 cursor-grab active:cursor-grabbing overflow-hidden"
 			data-widget-type="${widget.type}"
 			gs-w="${widget.defaultSize.w}"
 			gs-h="${widget.defaultSize.h}"
 		>
-			<span class="fixture-icon shrink-0"></span>
-			<span class="text-sm font-medium text-gray-700 dark:text-gray-200">${widget.title}</span>
+			<div class="flex items-center gap-2 px-2.5 py-1.5 border-b border-gray-100 dark:border-gray-700 shrink-0">
+				<span class="fixture-icon shrink-0"></span>
+				<span class="text-xs font-medium text-gray-700 dark:text-gray-200">${widget.title}</span>
+			</div>
+			<div class="relative flex-1 min-h-0">
+				<div class="fixture-preview absolute inset-0 pointer-events-none text-[10px]" style="transform: scale(0.72); transform-origin: top left; width: 139%; height: 139%;"></div>
+				<div class="absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-white dark:from-gray-900 to-transparent"></div>
+			</div>
 		</div>
 	`;
 }
@@ -52,6 +73,14 @@ export function fixtureSourceCardHtml(widget: FixtureWidgetDef): string {
 export function attachFixtureIcons(container: HTMLElement): void {
 	for (const widget of FIXTURE_WIDGETS) {
 		const card = container.querySelector(`[data-widget-type="${widget.type}"] .fixture-icon`);
-		card?.appendChild(icon(CATEGORIES[widget.type].icon, { size: 14, className: CATEGORIES[widget.type].text }));
+		card?.appendChild(icon(CATEGORIES[widget.type].icon, { size: 12, className: CATEGORIES[widget.type].text }));
+	}
+}
+
+/** Renders each widget's real content into its card's preview crop -- the same renderer the Dashboard grid uses once dropped. */
+export function attachFixturePreviews(container: HTMLElement): void {
+	for (const widget of FIXTURE_WIDGETS) {
+		const preview = container.querySelector<HTMLElement>(`[data-widget-type="${widget.type}"] .fixture-preview`);
+		if (preview) widget.render(preview);
 	}
 }

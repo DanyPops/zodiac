@@ -21,7 +21,7 @@ export interface DashboardGrid {
  * element only carries a data-widget-type attribute; this module is
  * responsible for turning that into the fixture's real rendered content.
  */
-export function createDashboardGrid(container: HTMLElement, dragSourceSelector: string): DashboardGrid {
+export function createDashboardGrid(container: HTMLElement, dragSourceSelector: string, options: { setupDragIn?: boolean } = {}): DashboardGrid {
 	const grid = GridStack.init(
 		{
 			column: 12,
@@ -57,7 +57,19 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 	// without overriding it here, drag never initiates at all (verified via a
 	// real headless-Chromium drag attempt: 0 grid items resulted until this
 	// was set explicitly to match our own card class).
-	GridStack.setupDragIn(dragSourceSelector, { appendTo: "body", helper: "clone", handle: dragSourceSelector });
+	//
+	// Defaults to true, but callable=false when the drag-source elements live
+	// in a *different* dockview panel than this grid (dashboard-dockview.ts):
+	// dockview gives no ordering guarantee between separate panels' init(), so
+	// calling this here can run before the fixture cards even exist in the DOM
+	// -- confirmed via measurement (ddDraggable was never attached, 0 grid
+	// items resulted, not a mouse-simulation issue this time). The caller is
+	// then responsible for calling GridStack.setupDragIn itself once both
+	// panels are known to exist -- safe to call more than once, it skips
+	// elements that are already draggable.
+	if (options.setupDragIn ?? true) {
+		GridStack.setupDragIn(dragSourceSelector, { appendTo: "body", helper: "clone", handle: dragSourceSelector });
+	}
 
 	function renderPanelContent(el: HTMLElement, type: string, title: string): void {
 		const contentEl = el.querySelector<HTMLElement>(".grid-stack-item-content");
