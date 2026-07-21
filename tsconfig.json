@@ -13,5 +13,5 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "tailwind.config.ts"]
 }

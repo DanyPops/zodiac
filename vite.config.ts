@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { createSessionJsonlSource } from "./src/ingest/session-jsonl-source.js";
@@ -42,5 +43,5 @@ function sessionEventsApiPlugin(): Plugin {
 export const HOME = homedir();
 
 export default defineConfig({
-	plugins: [sessionEventsApiPlugin()],
+	plugins: [tailwindcss(), sessionEventsApiPlugin()],
 });

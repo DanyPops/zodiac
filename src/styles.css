@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* Tailwind v4 defaults dark: to a prefers-color-scheme media query; this
+   project needs class-based dark mode so the theme controller (theme.ts)
+   can drive it explicitly. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+	/*
+	 * Full palette rebuild, not an extension of Tailwind's defaults.
+	 * `--color-*: initial` clears every built-in color (including red) so
+	 * red-* utilities simply don't exist in this build — see doc
+	 * design-tokens-red-hat-informed-not-red-hat-branded-rm7c: red is
+	 * reserved for brand identity, never for errors, and agent-deck isn't
+	 * a Red Hat product so it isn't used at all here.
+	 */
+	--color-*: initial;
+
+	--color-white: #ffffff;
+	--color-black: #000000;
+	--color-transparent: transparent;
+	--color-current: currentColor;
+
+	/* Neutral gray — Tailwind's own stock gray scale (kept explicit since defaults were cleared). */
+	--color-gray-50: #f9fafb;
+	--color-gray-100: #f3f4f6;
+	--color-gray-200: #e5e7eb;
+	--color-gray-300: #d1d5db;
+	--color-gray-400: #9ca3af;
+	--color-gray-500: #6b7280;
+	--color-gray-600: #4b5563;
+	--color-gray-700: #374151;
+	--color-gray-800: #1f2937;
+	--color-gray-900: #111827;
+	--color-gray-950: #030712;
+
+	/* Accent / interactive — Red Hat interaction-blue scale (not generic Tailwind blue). */
+	--color-accent-10: #e0f0ff;
+	--color-accent-20: #b9dafc;
+	--color-accent-30: #92c5f9;
+	--color-accent-40: #4394e5;
+	--color-accent-50: #0066cc;
+	--color-accent-60: #004d99;
+	--color-accent-70: #003366;
+	--color-accent-80: #032142;
+	--color-accent: #0066cc;
+
+	/* Semantic status colors — Red Hat's information palette, utilitarian not decorative. */
+	--color-success-10: #e9f7df;
+	--color-success-50: #63993d;
+	--color-success-80: #183301;
+	--color-success: #63993d;
+
+	--color-danger-10: #ffe3d9;
+	--color-danger-50: #f0561d;
+	--color-danger-80: #4c1405;
+	--color-danger: #f0561d;
+
+	--color-warning-10: #fff4cc;
+	--color-warning-30: #ffcc17;
+	--color-warning-80: #54330b;
+	--color-warning: #ffcc17;
+
+	--color-teal-10: #daf2f2;
+	--color-teal-50: #37a3a3;
+	--color-teal-80: #003333;
+	--color-teal: #37a3a3;
+
+	--color-info-10: #ece6ff;
+	--color-info-50: #5e40be;
+	--color-info-80: #1b0d33;
+	--color-info: #5e40be;
+}
+
+@layer base {
+	.dark {
+		color-scheme: dark;
+	}
+	body {
+		@apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100;
+	}
+}
