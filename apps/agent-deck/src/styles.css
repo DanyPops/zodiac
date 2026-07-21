@@ -81,3 +81,20 @@
 		@apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100;
 	}
 }
+
+/*
+ * Soften dockview's own chrome (default is a flat, 0-radius IDE look) to
+ * match this app's own rounded/soft visual language (see doc research on
+ * ~/Repositories/org-pulse-core's styling) -- overriding its documented
+ * CSS custom properties rather than fighting it with !important overrides.
+ * Applies to both dockview-theme-dark and dockview-theme-light since it's
+ * a purely cosmetic improvement equally valid for both.
+ */
+.dockview-theme-dark,
+.dockview-theme-light {
+	--dv-border-radius: 10px;
+	--dv-tab-border-radius: 8px;
+	--dv-sash-border-radius: 4px;
+	--dv-dropdown-border-radius: 8px;
+	--dv-tabs-and-actions-container-height: 38px;
+}

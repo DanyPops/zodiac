@@ -7,5 +7,5 @@ import type { Config } from "tailwindcss";
  * root-level (index.html) and src-level files.
  */
 export default {
-	content: ["./index.html", "./src/**/*.{ts,html}"],
+	content: ["./index.html", "./playground.html", "./src/**/*.{ts,html}"],
 } satisfies Config;

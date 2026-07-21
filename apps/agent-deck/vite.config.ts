@@ -44,4 +44,12 @@ export const HOME = homedir();
 
 export default defineConfig({
 	plugins: [tailwindcss(), sessionEventsApiPlugin()],
+	build: {
+		rollupOptions: {
+			input: {
+				main: join(process.cwd(), "index.html"),
+				playground: join(process.cwd(), "playground.html"),
+			},
+		},
+	},
 });
