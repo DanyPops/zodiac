@@ -1,6 +1,7 @@
 import { DockviewComponent, type GroupPanelPartInitParameters, type IContentRenderer, type ITabRenderer } from "dockview";
 import { CategoryTabRenderer } from "./category-tab.js";
 import type { CategoryId } from "./category.js";
+import { GroupCloseAction } from "./group-close-action.js";
 import { renderCITile } from "./tiles/ci-tile.js";
 import { renderPRsTile } from "./tiles/prs-tile.js";
 import { renderTerminalTile } from "./tiles/terminal-tile.js";
@@ -58,11 +59,14 @@ export function createDockviewPlayground(container: HTMLElement): DockviewPlaygr
 			if (!render) throw new Error(`Unknown playground tile: ${options.name}`);
 			return new StaticTilePanel(render);
 		},
-		// One shared custom tab (icon + label + close) for every panel --
-		// options.id is this playground's own panel id ("ci", "tickets", ...),
-		// which doubles as the CategoryId key since they're defined to match.
+		// One shared custom tab (icon + label) for every panel -- options.id is
+		// this playground's own panel id ("ci", "tickets", ...), which doubles
+		// as the CategoryId key since they're defined to match.
 		defaultTabComponent: "category-tab",
 		createTabComponent: (options): ITabRenderer => new CategoryTabRenderer(options.id as CategoryId),
+		// Close control pinned to the group header's actual right edge --
+		// see group-close-action.ts for why this replaced a per-tab close button.
+		createRightHeaderActionComponent: (group) => new GroupCloseAction(group),
 	});
 
 	// initialWidth/initialHeight hints were tried here first but are not
