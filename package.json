@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -11,6 +13,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.9.3",
+    "vite": "^7.3.6",
     "vitest": "^3.2.4"
   }
 }
