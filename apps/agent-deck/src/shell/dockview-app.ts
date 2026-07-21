@@ -1,12 +1,12 @@
 import { DockviewComponent, type GroupPanelPartInitParameters, type IContentRenderer } from "dockview";
-import type { NormalizedEvent } from "../ingest/types.js";
+import type Graph from "graphology";
 import { renderConversationView } from "./conversation-view.js";
 import { renderObservabilityView } from "./observability-view.js";
 
 class ConversationPanel implements IContentRenderer {
 	private readonly _element: HTMLElement;
 
-	constructor(private readonly events: NormalizedEvent[]) {
+	constructor(private readonly graph: Graph) {
 		this._element = document.createElement("div");
 		this._element.className = "h-full";
 	}
@@ -16,7 +16,7 @@ class ConversationPanel implements IContentRenderer {
 	}
 
 	init(_parameters: GroupPanelPartInitParameters): void {
-		renderConversationView(this._element, this.events);
+		renderConversationView(this._element, this.graph);
 	}
 }
 
@@ -50,12 +50,12 @@ export interface DockviewApp {
  * — see the observability-tile task). Panel content is deliberately thin
  * here; this task is only the dockview wiring itself.
  */
-export function createDockviewApp(container: HTMLElement, events: NormalizedEvent[]): DockviewApp {
+export function createDockviewApp(container: HTMLElement, graph: Graph): DockviewApp {
 	const component = new DockviewComponent(container, {
 		createComponent: (options): IContentRenderer => {
 			switch (options.name) {
 				case "conversation":
-					return new ConversationPanel(events);
+					return new ConversationPanel(graph);
 				case "observability":
 					return new ObservabilityPanel();
 				default:

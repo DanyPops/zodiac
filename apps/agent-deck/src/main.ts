@@ -1,3 +1,4 @@
+import { SessionGraph } from "./graph/session-graph.js";
 import { createDockviewApp } from "./shell/dockview-app.js";
 import { createBrowserThemeController, type ThemeMode } from "./theme.js";
 import type { NormalizedEvent } from "./ingest/types.js";
@@ -41,9 +42,12 @@ async function main(): Promise<void> {
 		</div>
 	`;
 
+	const sessionGraph = new SessionGraph();
+	for (const event of data.events) sessionGraph.ingest(event);
+
 	const dockviewContainer = document.querySelector<HTMLDivElement>("#dockview-container");
 	if (dockviewContainer) {
-		const dockviewApp = createDockviewApp(dockviewContainer, data.events);
+		const dockviewApp = createDockviewApp(dockviewContainer, sessionGraph.graph);
 		dockviewApp.setDark(theme.isDark());
 		theme.subscribe((isDark) => dockviewApp.setDark(isDark));
 	}
