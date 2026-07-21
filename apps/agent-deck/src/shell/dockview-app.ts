@@ -22,8 +22,9 @@ class ConversationPanel implements IContentRenderer {
 
 class ObservabilityPanel implements IContentRenderer {
 	private readonly _element: HTMLElement;
+	private view: { resize(): void; dispose(): void } | undefined;
 
-	constructor() {
+	constructor(private readonly graph: Graph) {
 		this._element = document.createElement("div");
 		this._element.className = "h-full";
 	}
@@ -33,7 +34,17 @@ class ObservabilityPanel implements IContentRenderer {
 	}
 
 	init(_parameters: GroupPanelPartInitParameters): void {
-		renderObservabilityView(this._element);
+		this.view = renderObservabilityView(this._element, this.graph);
+	}
+
+	// sigma can't measure a hidden container -- if this panel starts inactive
+	// (e.g. stacked behind another tab), resize once it actually becomes visible.
+	onShow(): void {
+		this.view?.resize();
+	}
+
+	dispose(): void {
+		this.view?.dispose();
 	}
 }
 
@@ -57,7 +68,7 @@ export function createDockviewApp(container: HTMLElement, graph: Graph): Dockvie
 				case "conversation":
 					return new ConversationPanel(graph);
 				case "observability":
-					return new ObservabilityPanel();
+					return new ObservabilityPanel(graph);
 				default:
 					throw new Error(`Unknown dockview component: ${options.name}`);
 			}
