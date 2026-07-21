@@ -78,4 +78,11 @@ export const HOME = homedir();
 // default entry point right now.
 export default defineConfig({
 	plugins: [tailwindcss(), sessionEventsApiPlugin(), conversationsApiPlugin()],
+	test: {
+		// e2e/ holds real Playwright Test specs (playwright.config.ts), a
+		// separate framework from vitest -- without this exclude, vitest's
+		// default *.spec.ts matching tries to collect them as its own tests
+		// and fails immediately (test.beforeEach() isn't vitest's API).
+		exclude: ["**/node_modules/**", "**/e2e/**"],
+	},
 });

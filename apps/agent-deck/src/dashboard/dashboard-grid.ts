@@ -27,6 +27,15 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 			column: 12,
 			cellHeight: 60,
 			margin: 6,
+			// Root cause of "nothing happens when I drop it inside", confirmed via
+			// direct measurement (getBoundingClientRect), not guessed: gridstack
+			// computes its own height from content and collapses to 0px when empty
+			// (default minRow is 0). The large empty area a person sees is the
+			// parent <section>'s background -- the actual grid-stack element,
+			// the only thing with drop-target behavior attached, occupied zero
+			// real pixels, so no drop could ever land "inside" it. This affected
+			// a real human, not just automation -- confirmed by the user directly.
+			minRow: 8,
 			// acceptWidgets: true resolves internally to accepting only elements
 			// matching '.grid-stack-item' (gridstack's own internal marker class,
 			// meant for dragging between two existing grids) -- our fixture cards
@@ -74,6 +83,15 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 		const el = newNode.el;
 		const type = el?.getAttribute("data-widget-type");
 		if (!el || !type) return;
+		// Second real bug in the same feature, found the same way (measurement,
+		// not guessing): items dropped via external drag-in never get an `id`
+		// at all (confirmed: saved node had x/y/w/h but no id field), so
+		// save()'s filter correctly rejected them as malformed -- the drop
+		// visually succeeded but silently produced an empty persisted layout.
+		// Assign one at drop time, before anything can call save().
+		if (!newNode.id) {
+			grid.update(el, { id: `panel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
+		}
 		const widget = findFixtureWidget(type);
 		renderPanelContent(el, type, widget?.title ?? type);
 	});
