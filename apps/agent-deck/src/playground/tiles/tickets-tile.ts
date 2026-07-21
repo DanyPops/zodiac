@@ -1,7 +1,8 @@
-import { Ticket, User } from "lucide";
+import { User } from "lucide";
 import { icon } from "../icon.js";
 import { type Issue, mockIssues } from "../mock-data.js";
 import { issuePriorityBadge, issueStatusBadge } from "../status-badge.js";
+import { attachTileHeaderIcon, tileHeaderHtml } from "../tile-header.js";
 
 function issueRowHtml(issue: Issue): string {
 	return `
@@ -32,14 +33,11 @@ export function renderTicketsTile(container: HTMLElement): void {
 	const issues = mockIssues();
 	container.innerHTML = `
 		<div class="h-full overflow-auto p-3 space-y-3">
-			<div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 px-1">
-				<span class="tickets-header-icon"></span>
-				<span>Jira \u00b7 Networking / ptp \u00b7 synthetic data</span>
-			</div>
+			${tileHeaderHtml("tickets", "Issue tracker \u00b7 synthetic data")}
 			${issues.map(issueRowHtml).join("")}
 		</div>
 	`;
-	container.querySelector(".tickets-header-icon")?.appendChild(icon(Ticket, { size: 14 }));
+	attachTileHeaderIcon(container, "tickets");
 	for (const el of container.querySelectorAll(".issue-assignee-icon")) {
 		el.appendChild(icon(User, { size: 12 }));
 	}

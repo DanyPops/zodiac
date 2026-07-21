@@ -1,7 +1,6 @@
-import { GitPullRequest } from "lucide";
-import { icon } from "../icon.js";
 import { mockPullRequests, type PullRequest } from "../mock-data.js";
 import { prReviewBadge, prStateBadge } from "../status-badge.js";
+import { attachTileHeaderIcon, tileHeaderHtml } from "../tile-header.js";
 
 function prRowHtml(pr: PullRequest): string {
 	return `
@@ -25,12 +24,9 @@ export function renderPRsTile(container: HTMLElement): void {
 	const prs = mockPullRequests();
 	container.innerHTML = `
 		<div class="h-full overflow-auto p-3 space-y-3">
-			<div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 px-1">
-				<span class="prs-header-icon"></span>
-				<span>GitHub / GitLab \u00b7 synthetic data</span>
-			</div>
+			${tileHeaderHtml("prs", "Code review \u00b7 synthetic data")}
 			${prs.map(prRowHtml).join("")}
 		</div>
 	`;
-	container.querySelector(".prs-header-icon")?.appendChild(icon(GitPullRequest, { size: 14 }));
+	attachTileHeaderIcon(container, "prs");
 }

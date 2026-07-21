@@ -1,6 +1,5 @@
-import { Workflow } from "lucide";
-import { icon } from "../icon.js";
 import { mockWorkflow, type WorkflowNodeKind } from "../mock-data.js";
+import { attachTileHeaderIcon, tileHeaderHtml } from "../tile-header.js";
 
 /**
  * Static, hand-positioned node/edge diagram -- not a general graph-layout
@@ -87,10 +86,7 @@ export function renderWorkflowTile(container: HTMLElement): void {
 
 	container.innerHTML = `
 		<div class="h-full overflow-auto p-3">
-			<div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 px-1 mb-2">
-				<span class="workflow-header-icon"></span>
-				<span>QE recurring operating loop \u00b7 synthetic workflow</span>
-			</div>
+			${tileHeaderHtml("workflow", "Recurring investigation loop \u00b7 synthetic workflow")}
 			<svg viewBox="0 0 760 260" class="w-full h-auto min-w-[600px]">
 				<defs>
 					<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -103,5 +99,5 @@ export function renderWorkflowTile(container: HTMLElement): void {
 			</svg>
 		</div>
 	`;
-	container.querySelector(".workflow-header-icon")?.appendChild(icon(Workflow, { size: 14 }));
+	attachTileHeaderIcon(container, "workflow");
 }

@@ -98,3 +98,22 @@
 	--dv-dropdown-border-radius: 8px;
 	--dv-tabs-and-actions-container-height: 38px;
 }
+
+/*
+ * Close-dock fade-out: purposeful and brief, not decorative -- per Apple's
+ * HIG on motion ("add motion purposefully", "make motion optional").
+ * Respects prefers-reduced-motion by simply not transitioning (the panel
+ * still closes immediately via the JS fallback in category-tab.ts).
+ */
+.dock-closing {
+	opacity: 0;
+	transform: scale(0.98);
+	transition:
+		opacity 180ms ease-out,
+		transform 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.dock-closing {
+		transition: none;
+	}
+}

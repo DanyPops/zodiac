@@ -1,7 +1,6 @@
-import { GitBranch } from "lucide";
-import { icon } from "../icon.js";
 import { type CIRun, type CIStageNode, mockCIRuns } from "../mock-data.js";
 import { runStatusBadge } from "../status-badge.js";
+import { attachTileHeaderIcon, tileHeaderHtml } from "../tile-header.js";
 
 function formatDuration(ms?: number): string {
 	if (!ms) return "";
@@ -58,12 +57,9 @@ export function renderCITile(container: HTMLElement): void {
 	const runs = mockCIRuns();
 	container.innerHTML = `
 		<div class="h-full overflow-auto p-3 space-y-3">
-			<div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 px-1">
-				<span class="ci-header-icon"></span>
-				<span>Jenkins \u00b7 far-edge-vran \u00b7 synthetic data</span>
-			</div>
+			${tileHeaderHtml("ci", "Continuous integration \u00b7 synthetic data")}
 			${runs.map(runCardHtml).join("")}
 		</div>
 	`;
-	container.querySelector(".ci-header-icon")?.appendChild(icon(GitBranch, { size: 14 }));
+	attachTileHeaderIcon(container, "ci");
 }
