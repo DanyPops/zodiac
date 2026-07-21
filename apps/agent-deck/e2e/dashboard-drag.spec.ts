@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * Real drag-and-drop E2E coverage for the Dashboard grid.
@@ -15,7 +15,17 @@ import { expect, test } from "@playwright/test";
  * pixels, so no drop could ever land "inside" it, for a human or a script.
  * Fixed with minRow (dashboard-grid.ts). The first test below is the direct
  * regression guard for that specific failure mode.
+ *
+ * Drag sources are no longer a fixed pre-populated catalog -- per direct
+ * correction, a widget only exists after asking for it with a specific
+ * scope ("Create a widget which shows only the CI jobs I've initiated").
+ * submitPrompt below drives the real input box exactly as a person would.
  */
+
+async function submitPrompt(page: Page, prompt: string): Promise<void> {
+	await page.locator("#prompt-input").fill(prompt);
+	await page.locator("#input-send").click();
+}
 
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
@@ -28,8 +38,11 @@ test("an empty dashboard grid has real, non-zero hoverable area", async ({ page 
 	expect(gridBox!.height).toBeGreaterThan(0);
 });
 
-test("dragging a fixture widget from Conversation History lands it in the Dashboard grid", async ({ page }) => {
-	const source = page.locator('[data-widget-type="ci"]');
+test("dragging a widget generated from a prompt lands it in the Dashboard grid", async ({ page }) => {
+	await submitPrompt(page, "Create a widget which show only the CI jobs I've initiated");
+	const source = page.locator('[data-widget-type="ci-initiated-by-me"]');
+	await expect(source).toBeVisible();
+
 	const sourceBox = await source.boundingBox();
 	const targetBox = await page.locator("#dashboard-grid").boundingBox();
 	expect(sourceBox).not.toBeNull();
@@ -44,11 +57,14 @@ test("dragging a fixture widget from Conversation History lands it in the Dashbo
 	await page.mouse.up();
 
 	await expect(page.locator(".grid-stack-item")).toHaveCount(1);
-	await expect(page.locator(".grid-stack-item [data-widget-type], .grid-stack-item").first()).toContainText("CI");
+	await expect(page.locator(".grid-stack-item").first()).toContainText("CI jobs I've initiated");
 });
 
-test("a dropped widget persists across reload with its real rendered content", async ({ page }) => {
-	const source = page.locator('[data-widget-type="tickets"]');
+test("a dropped widget persists across reload with its real, filtered rendered content", async ({ page }) => {
+	await submitPrompt(page, "Create a widget which only shows the bugs which are assigned to me");
+	const source = page.locator('[data-widget-type="tickets-assigned-to-me"]');
+	await expect(source).toBeVisible();
+
 	const sourceBox = await source.boundingBox();
 	const targetBox = await page.locator("#dashboard-grid").boundingBox();
 
@@ -62,8 +78,16 @@ test("a dropped widget persists across reload with its real rendered content", a
 	await page.waitForSelector("#dashboard-grid");
 
 	await expect(page.locator(".grid-stack-item")).toHaveCount(1);
-	// Real widget content, not just an empty grid cell -- the fixture tile's
-	// own rendered subtitle text, proving the full save -> load -> render
-	// pipeline ran, not just a bare position record.
-	await expect(page.locator(".grid-stack-item")).toContainText("Issue tracker");
+	// Real, filtered content, not just an empty grid cell or the unfiltered
+	// catalog view -- proves the full save -> load -> render pipeline
+	// reconstructed the *specific scope* that was asked for, not just a bare
+	// "tickets" widget.
+	await expect(page.locator(".grid-stack-item")).toContainText("Bugs assigned to me");
+});
+
+test("an unrecognized prompt fails visibly instead of silently doing nothing", async ({ page }) => {
+	await submitPrompt(page, "what's the weather like");
+	await expect(page.locator("#prompt-error")).toBeVisible();
+	await expect(page.locator("#prompt-error")).toContainText("don't recognize");
+	await expect(page.locator(".fixture-drag-source")).toHaveCount(0);
 });

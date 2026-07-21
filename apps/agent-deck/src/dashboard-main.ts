@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Send } from "lucide";
 import { renderConversationSidebar } from "./dashboard/conversation-sidebar.js";
 import { createDashboardDockview } from "./dashboard/dashboard-dockview.js";
 import { migrateDashboard, type DashboardLayout } from "./dashboard/dashboard-schema.js";
+import { parseWidgetPrompt } from "./dashboard/generated-widget.js";
 import { createInMemoryConversationsStore } from "./dashboard/mock-conversations.js";
 import { icon } from "./playground/icon.js";
 import { createBrowserThemeController } from "./theme.js";
@@ -65,15 +66,18 @@ function main(): void {
 			</aside>
 			<main class="flex-1 min-w-0 flex flex-col gap-3">
 				<div id="dashboard-dockview-container" class="flex-1 min-h-0 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden"></div>
-				<div class="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)]">
-					<input
-						type="text"
-						placeholder="Message Alef\u2026"
-						disabled
-						title="Not wired to a live Alef session yet -- visual placeholder only, per the sketched layout"
-						class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none disabled:cursor-not-allowed"
-					/>
-					<button id="input-send" disabled class="flex items-center justify-center h-8 w-8 rounded-xl bg-accent-10 dark:bg-accent-80 text-accent-60 dark:text-accent-20 disabled:opacity-50"></button>
+				<div>
+					<div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)]">
+						<input
+							id="prompt-input"
+							type="text"
+							placeholder="Ask Alef to create a widget\u2026 e.g. &quot;Create a widget which shows only the CI jobs I\u2019ve initiated&quot;"
+							title="Not wired to a live Alef/LLM yet -- recognizes a small fixed set of example prompts (fixture phase)"
+							class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none"
+						/>
+						<button id="input-send" class="flex items-center justify-center h-8 w-8 rounded-xl bg-accent-10 dark:bg-accent-80 text-accent-60 dark:text-accent-20 hover:bg-accent-20 dark:hover:bg-accent-70 transition-colors"></button>
+					</div>
+					<p id="prompt-error" class="hidden text-xs text-danger-50 px-2 pt-1.5"></p>
 				</div>
 			</main>
 		</div>
@@ -124,10 +128,11 @@ function main(): void {
 	if (sidebarEl) renderConversationSidebar(sidebarEl, conversationsStore);
 
 	const dockviewContainer = document.querySelector<HTMLDivElement>("#dashboard-dockview-container");
+	let dashboardDockview: ReturnType<typeof createDashboardDockview> | undefined;
 	if (dockviewContainer) {
-		const dashboardDockview = createDashboardDockview(dockviewContainer);
+		dashboardDockview = createDashboardDockview(dockviewContainer);
 		dashboardDockview.setDark(theme.isDark());
-		theme.subscribe((isDark) => dashboardDockview.setDark(isDark));
+		theme.subscribe((isDark) => dashboardDockview?.setDark(isDark));
 
 		const dashboard = dashboardDockview.getDashboardGrid();
 		if (dashboard) {
@@ -142,6 +147,32 @@ function main(): void {
 			}
 		}
 	}
+
+	// Fixture-phase prompt handling: a small fixed set of recognized requests
+	// (generated-widget.ts), not a live LLM/Alef yet. Unrecognized prompts fail
+	// visibly rather than silently doing nothing or guessing, per direct
+	// requirement.
+	function submitPrompt(): void {
+		const input = document.querySelector<HTMLInputElement>("#prompt-input");
+		const errorEl = document.querySelector<HTMLElement>("#prompt-error");
+		const prompt = input?.value.trim();
+		if (!input || !errorEl || !prompt) return;
+
+		const presetKey = parseWidgetPrompt(prompt);
+		const added = presetKey ? (dashboardDockview?.addGeneratedWidget(presetKey) ?? false) : false;
+
+		if (added) {
+			input.value = "";
+			errorEl.classList.add("hidden");
+		} else {
+			errorEl.textContent = "Sorry, I don't recognize that widget request yet.";
+			errorEl.classList.remove("hidden");
+		}
+	}
+	document.querySelector("#input-send")?.addEventListener("click", submitPrompt);
+	document.querySelector("#prompt-input")?.addEventListener("keydown", (event) => {
+		if ((event as KeyboardEvent).key === "Enter") submitPrompt();
+	});
 
 	document.documentElement.classList.toggle("dark", theme.isDark());
 }

@@ -14,6 +14,9 @@
 // CI -- shape matches ~/Workspace/conty internal/domain/ci.go + status.go
 // ---------------------------------------------------------------------------
 
+/** Mock "current user" identity, so filtered widgets ("...I've initiated", "...assigned to me") have something real to key on -- matches the existing fictional assignee already used elsewhere in this file. */
+export const CURRENT_USER = "j.rivera";
+
 export type RunStatus = "pending" | "running" | "success" | "failure" | "aborted" | "not_found";
 
 export interface CIStep {
@@ -39,6 +42,8 @@ export interface CIRun {
 	durationMs?: number;
 	url?: string;
 	stages: CIStageNode[];
+	/** Who triggered this run -- lets a generated widget scope to "jobs I've initiated". */
+	initiatedBy: string;
 }
 
 export function mockCIRuns(): CIRun[] {
@@ -50,6 +55,7 @@ export function mockCIRuns(): CIRun[] {
 			startedAt: "2026-07-21T09:12:00Z",
 			durationMs: 41 * 60 * 1000,
 			url: "https://ci.example.internal/job/northwind-integration-tests/4127/",
+			initiatedBy: CURRENT_USER,
 			stages: [
 				{ id: "deploy", name: "Deploy", status: "success", durationMs: 8 * 60 * 1000 },
 				{ id: "unit-tests", name: "Unit Tests", status: "success", durationMs: 6 * 60 * 1000 },
@@ -76,6 +82,7 @@ export function mockCIRuns(): CIRun[] {
 			startedAt: "2026-07-21T06:00:00Z",
 			durationMs: 5 * 3600 * 1000 + 18 * 60 * 1000,
 			url: "https://ci.example.internal/job/northwind-regression-suite/891/",
+			initiatedBy: "ci-bot",
 			stages: [
 				{ id: "load-validation", name: "Load Validation", status: "failure", durationMs: 12 * 60 * 1000 },
 				{ id: "stability", name: "Stability (no workload)", status: "aborted" },
@@ -88,6 +95,7 @@ export function mockCIRuns(): CIRun[] {
 			startedAt: "2026-07-20T00:03:00Z",
 			durationMs: 58 * 60 * 1000,
 			url: "https://ci.example.internal/job/northwind-integration-tests/4126/",
+			initiatedBy: "a.chen",
 			stages: [
 				{ id: "deploy", name: "Deploy", status: "success" },
 				{ id: "unit-tests", name: "Unit Tests", status: "success" },

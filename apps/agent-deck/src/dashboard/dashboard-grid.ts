@@ -2,6 +2,22 @@ import { GridStack, type GridStackNode, type GridStackWidget } from "gridstack";
 import type { DashboardLayout, DashboardPanel } from "./dashboard-schema.js";
 import { emptyDashboard } from "./dashboard-schema.js";
 import { findFixtureWidget } from "./fixture-widgets.js";
+import { findGeneratedWidgetPreset } from "./generated-widget.js";
+
+/**
+ * Resolves a dropped/persisted panel's `type` string to a renderer + title.
+ * A widget's type is either a fixed catalog entry OR a generated-from-prompt
+ * preset key (e.g. "ci-initiated-by-me") -- both are checked, since a
+ * generated widget's whole point is carrying its own specific scope/filter,
+ * not being interchangeable with the bare category it's based on.
+ */
+function resolveWidget(type: string): { title: string; render: (container: HTMLElement) => void } | undefined {
+	const fixture = findFixtureWidget(type);
+	if (fixture) return fixture;
+	const preset = findGeneratedWidgetPreset(type);
+	if (preset) return preset;
+	return undefined;
+}
 
 export interface DashboardGrid {
 	save(): DashboardLayout;
@@ -75,7 +91,7 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 		const contentEl = el.querySelector<HTMLElement>(".grid-stack-item-content");
 		if (!contentEl) return;
 		contentEl.className = "grid-stack-item-content rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white dark:bg-gray-900 overflow-hidden";
-		const widget = findFixtureWidget(type);
+		const widget = resolveWidget(type);
 		if (!widget) {
 			contentEl.innerHTML = `<p class="p-3 text-xs text-gray-400">Unknown widget type: ${type}</p>`;
 			return;
@@ -104,7 +120,7 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 		if (!newNode.id) {
 			grid.update(el, { id: `panel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
 		}
-		const widget = findFixtureWidget(type);
+		const widget = resolveWidget(type);
 		renderPanelContent(el, type, widget?.title ?? type);
 	});
 
@@ -119,7 +135,7 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 					return {
 						id: w.id,
 						type,
-						title: findFixtureWidget(type)?.title ?? type,
+						title: resolveWidget(type)?.title ?? type,
 						gridPos: { x: w.x, y: w.y, w: w.w, h: w.h },
 					};
 				});

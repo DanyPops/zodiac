@@ -29,12 +29,18 @@ function issueRowHtml(issue: Issue): string {
 	`;
 }
 
-export function renderTicketsTile(container: HTMLElement): void {
-	const issues = mockIssues();
+export interface RenderTicketsTileOptions {
+	/** Scopes which issues render -- e.g. "assigned to me". Same renderer serves both the unfiltered catalog view and any generated, scoped widget. */
+	filter?: (issue: Issue) => boolean;
+	subtitle?: string;
+}
+
+export function renderTicketsTile(container: HTMLElement, options: RenderTicketsTileOptions = {}): void {
+	const issues = mockIssues().filter(options.filter ?? (() => true));
 	container.innerHTML = `
 		<div class="h-full overflow-auto p-3 space-y-3">
-			${tileHeaderHtml("tickets", "Issue tracker \u00b7 synthetic data")}
-			${issues.map(issueRowHtml).join("")}
+			${tileHeaderHtml("tickets", options.subtitle ?? "Issue tracker \u00b7 synthetic data")}
+			${issues.length > 0 ? issues.map(issueRowHtml).join("") : `<p class="text-sm text-gray-400 dark:text-gray-500 px-1">No matching issues.</p>`}
 		</div>
 	`;
 	attachTileHeaderIcon(container, "tickets");

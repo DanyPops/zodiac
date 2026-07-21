@@ -63,14 +63,23 @@ test("sidebar collapse state persists across reload", async ({ page }) => {
 	expect(box!.width).toBeLessThan(60);
 });
 
-test("Conversation History cards render real content, not just an icon and label", async ({ page }) => {
-	const ciCard = page.locator('[data-widget-type="ci"]');
-	// The fixture tile's own real subtitle text, not the bare "CI" label --
-	// proves the actual renderer ran inside the card, not just a catalog pill.
-	await expect(ciCard).toContainText("Continuous integration");
+test("Conversation History starts empty with a hint, not a pre-populated catalog", async ({ page }) => {
+	// Per direct correction: widgets are the result of asking for them with a
+	// specific scope, not picked off a fixed shelf that's there from the start.
+	await expect(page.locator(".fixture-drag-source")).toHaveCount(0);
+	await expect(page.locator("text=Ask Alef to create a widget")).toBeVisible();
+});
 
-	const ticketsCard = page.locator('[data-widget-type="tickets"]');
-	await expect(ticketsCard).toContainText("Issue tracker");
+test("a generated widget card renders its real, filtered content, not just an icon and label", async ({ page }) => {
+	await page.locator("#prompt-input").fill("Create a widget which show only the CI jobs I've initiated");
+	await page.locator("#input-send").click();
+
+	const card = page.locator('[data-widget-type="ci-initiated-by-me"]');
+	// The real tile renderer's own subtitle text, not the bare card title --
+	// proves the actual filtered renderer ran inside the card.
+	await expect(card).toContainText("CI jobs I've initiated");
+	// And the empty-state hint is gone now that a real card exists.
+	await expect(page.locator("text=Ask Alef to create a widget")).toHaveCount(0);
 });
 
 test("Dashboard and Conversation are real, separately-titled dockview panels", async ({ page }) => {

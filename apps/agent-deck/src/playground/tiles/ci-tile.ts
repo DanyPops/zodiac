@@ -53,12 +53,18 @@ function runCardHtml(run: CIRun): string {
 	`;
 }
 
-export function renderCITile(container: HTMLElement): void {
-	const runs = mockCIRuns();
+export interface RenderCITileOptions {
+	/** Scopes which runs render -- e.g. "jobs I've initiated". Same renderer serves both the unfiltered catalog view and any generated, scoped widget -- one source of truth for what a CI widget looks like. */
+	filter?: (run: CIRun) => boolean;
+	subtitle?: string;
+}
+
+export function renderCITile(container: HTMLElement, options: RenderCITileOptions = {}): void {
+	const runs = mockCIRuns().filter(options.filter ?? (() => true));
 	container.innerHTML = `
 		<div class="h-full overflow-auto p-3 space-y-3">
-			${tileHeaderHtml("ci", "Continuous integration \u00b7 synthetic data")}
-			${runs.map(runCardHtml).join("")}
+			${tileHeaderHtml("ci", options.subtitle ?? "Continuous integration \u00b7 synthetic data")}
+			${runs.length > 0 ? runs.map(runCardHtml).join("") : `<p class="text-sm text-gray-400 dark:text-gray-500 px-1">No matching CI runs.</p>`}
 		</div>
 	`;
 	attachTileHeaderIcon(container, "ci");
