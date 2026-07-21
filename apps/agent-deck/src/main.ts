@@ -1,4 +1,5 @@
 import { SessionGraph } from "./graph/session-graph.js";
+import { renderConversationPicker } from "./shell/conversation-picker.js";
 import { createDockviewApp } from "./shell/dockview-app.js";
 import { createBrowserThemeController, type ThemeMode } from "./theme.js";
 import type { NormalizedEvent } from "./ingest/types.js";
@@ -20,6 +21,20 @@ async function main(): Promise<void> {
 	const theme = createBrowserThemeController();
 
 	const params = new URLSearchParams(window.location.search);
+
+	// No ?file= yet -- show the Conversation picker instead of requiring a
+	// hand-crafted URL. Picking one just navigates to the same ?file=&sessionId=
+	// URL this app already knows how to open, so nothing below this branch changes.
+	if (!params.get("file")) {
+		await renderConversationPicker(app, (filePath, sessionId) => {
+			const next = new URLSearchParams();
+			next.set("file", filePath);
+			next.set("sessionId", sessionId);
+			window.location.search = next.toString();
+		});
+		return;
+	}
+
 	const query = params.toString();
 	const response = await fetch(`/api/events${query ? `?${query}` : ""}`);
 	const data = (await response.json()) as EventsResponse;
