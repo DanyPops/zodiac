@@ -19,6 +19,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "dockview": "^7.0.2",
     "graphology": "^0.26.0"
   }
 }
