@@ -55,12 +55,13 @@ function main(): void {
 	// vertically, native dockview behavior] / [input box].
 	app.innerHTML = `
 		<div class="flex h-screen p-3 gap-3">
-			<aside id="conversations-sidebar" class="shrink-0 flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]">
-				<div id="sidebar-header" class="flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-700 shrink-0">
-					<h2 class="sidebar-label text-xs font-semibold text-gray-500 dark:text-gray-400">Conversations</h2>
-					<button id="sidebar-collapse-toggle" class="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"></button>
+			<aside id="conversations-sidebar" class="shrink-0 self-stretch flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]">
+				<div id="sidebar-header" class="sidebar-expanded-only flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-700 shrink-0">
+					<h2 class="text-xs font-semibold text-gray-500 dark:text-gray-400">Conversations</h2>
+					<button id="sidebar-collapse-toggle" class="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150" title="Collapse"></button>
 				</div>
-				<div id="conversation-sidebar" class="sidebar-label flex-1 overflow-auto p-1.5 space-y-0.5"></div>
+				<div id="conversation-sidebar" class="sidebar-expanded-only flex-1 overflow-auto p-1.5 space-y-0.5"></div>
+				<button id="sidebar-expand-toggle" class="sidebar-collapsed-only h-10 w-10 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" title="Show conversations"></button>
 			</aside>
 			<main class="flex-1 min-w-0 flex flex-col gap-3">
 				<div id="dashboard-dockview-container" class="flex-1 min-h-0 rounded-2xl border border-gray-200/70 dark:border-gray-700/60 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden"></div>
@@ -80,28 +81,43 @@ function main(): void {
 
 	app.querySelector("#input-send")?.appendChild(icon(Send, { size: 15 }));
 
+	// Collapse hides the sidebar entirely rather than narrowing it to an
+	// icon-only strip -- what's left is a single small floating button (not a
+	// full-height bar) reminding the user how to bring it back, per direct
+	// correction. self-stretch (full height) only applies when expanded;
+	// collapsed drops to the button's own intrinsic size and top-aligns.
 	function applySidebarCollapsed(): void {
 		const sidebar = document.querySelector<HTMLElement>("#conversations-sidebar");
-		const header = document.querySelector<HTMLElement>("#sidebar-header");
 		sidebar?.classList.toggle("w-[220px]", !sidebarCollapsed);
-		sidebar?.classList.toggle("w-[52px]", sidebarCollapsed);
-		header?.classList.toggle("justify-center", sidebarCollapsed);
-		header?.classList.toggle("justify-between", !sidebarCollapsed);
-		for (const label of document.querySelectorAll<HTMLElement>(".sidebar-label")) {
-			label.classList.toggle("hidden", sidebarCollapsed);
+		sidebar?.classList.toggle("self-stretch", !sidebarCollapsed);
+		sidebar?.classList.toggle("w-10", sidebarCollapsed);
+		sidebar?.classList.toggle("h-10", sidebarCollapsed);
+		sidebar?.classList.toggle("self-start", sidebarCollapsed);
+		for (const el of document.querySelectorAll<HTMLElement>(".sidebar-expanded-only")) {
+			el.classList.toggle("hidden", sidebarCollapsed);
 		}
-		const toggleBtn = document.querySelector("#sidebar-collapse-toggle");
-		if (toggleBtn) {
-			toggleBtn.innerHTML = "";
-			toggleBtn.appendChild(icon(sidebarCollapsed ? ChevronRight : ChevronLeft, { size: 14 }));
+		for (const el of document.querySelectorAll<HTMLElement>(".sidebar-collapsed-only")) {
+			el.classList.toggle("hidden", !sidebarCollapsed);
+		}
+		const collapseBtn = document.querySelector("#sidebar-collapse-toggle");
+		if (collapseBtn) {
+			collapseBtn.innerHTML = "";
+			collapseBtn.appendChild(icon(ChevronLeft, { size: 14 }));
+		}
+		const expandBtn = document.querySelector("#sidebar-expand-toggle");
+		if (expandBtn) {
+			expandBtn.innerHTML = "";
+			expandBtn.appendChild(icon(ChevronRight, { size: 14 }));
 		}
 	}
 	applySidebarCollapsed();
-	document.querySelector("#sidebar-collapse-toggle")?.addEventListener("click", () => {
+	function toggleSidebar(): void {
 		sidebarCollapsed = !sidebarCollapsed;
 		saveSidebarCollapsed(sidebarCollapsed);
 		applySidebarCollapsed();
-	});
+	}
+	document.querySelector("#sidebar-collapse-toggle")?.addEventListener("click", toggleSidebar);
+	document.querySelector("#sidebar-expand-toggle")?.addEventListener("click", toggleSidebar);
 
 	const conversationsStore = createInMemoryConversationsStore();
 	const sidebarEl = document.querySelector<HTMLDivElement>("#conversation-sidebar");
