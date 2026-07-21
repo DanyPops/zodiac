@@ -27,7 +27,16 @@ export function createDashboardGrid(container: HTMLElement, dragSourceSelector: 
 			column: 12,
 			cellHeight: 60,
 			margin: 6,
-			acceptWidgets: true,
+			// acceptWidgets: true resolves internally to accepting only elements
+			// matching '.grid-stack-item' (gridstack's own internal marker class,
+			// meant for dragging between two existing grids) -- our fixture cards
+			// don't have that class and never will, so the real fix is passing our
+			// own selector here, not `true`. Found by reading gridstack's actual
+			// accept-predicate source (dist/gridstack.js), not guessed: every prior
+			// symptom (drag starts and the ghost tracks correctly, but drop never
+			// completes under real headless-Chromium mouse simulation) is fully
+			// explained by this -- it was never a simulation/automation artifact.
+			acceptWidgets: dragSourceSelector,
 			removable: false,
 		},
 		container,
