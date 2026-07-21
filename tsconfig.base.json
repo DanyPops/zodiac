@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ES2022",
     "moduleResolution": "bundler",
     "strict": true,
@@ -9,9 +8,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "outDir": "dist",
-    "types": ["node"]
-  },
-  "include": ["src", "vite.config.ts", "tailwind.config.ts"]
+    "declaration": true
+  }
 }
