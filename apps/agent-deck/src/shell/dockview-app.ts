@@ -22,7 +22,7 @@ class ConversationPanel implements IContentRenderer {
 
 class ObservabilityPanel implements IContentRenderer {
 	private readonly _element: HTMLElement;
-	private view: { resize(): void; dispose(): void } | undefined;
+	private view: { resize(): void; dispose(): void; setDark(isDark: boolean): void } | undefined;
 
 	constructor(private readonly graph: Graph) {
 		this._element = document.createElement("div");
@@ -41,6 +41,10 @@ class ObservabilityPanel implements IContentRenderer {
 	// (e.g. stacked behind another tab), resize once it actually becomes visible.
 	onShow(): void {
 		this.view?.resize();
+	}
+
+	setDark(isDark: boolean): void {
+		this.view?.setDark(isDark);
 	}
 
 	dispose(): void {
@@ -62,13 +66,16 @@ export interface DockviewApp {
  * here; this task is only the dockview wiring itself.
  */
 export function createDockviewApp(container: HTMLElement, graph: Graph): DockviewApp {
+	let observabilityPanel: ObservabilityPanel | undefined;
+
 	const component = new DockviewComponent(container, {
 		createComponent: (options): IContentRenderer => {
 			switch (options.name) {
 				case "conversation":
 					return new ConversationPanel(graph);
 				case "observability":
-					return new ObservabilityPanel(graph);
+					observabilityPanel = new ObservabilityPanel(graph);
+					return observabilityPanel;
 				default:
 					throw new Error(`Unknown dockview component: ${options.name}`);
 			}
@@ -86,6 +93,7 @@ export function createDockviewApp(container: HTMLElement, graph: Graph): Dockvie
 	function setDark(isDark: boolean): void {
 		container.classList.toggle("dockview-theme-dark", isDark);
 		container.classList.toggle("dockview-theme-light", !isDark);
+		observabilityPanel?.setDark(isDark);
 	}
 
 	return {

@@ -6,6 +6,25 @@ export interface ObservabilityView {
 	/** Call when the host panel becomes visible after being hidden (e.g. a dockview tab switch) — sigma can't measure a hidden container. */
 	resize(): void;
 	dispose(): void;
+	/**
+	 * Re-applies theme-dependent rendering settings (currently: label color).
+	 * Sigma's own default labelColor is a hardcoded "#000" (see sigma's
+	 * settings source), never theme-aware — against this app's dark theme
+	 * background (#111827) that computes to a 1.18:1 contrast ratio, far
+	 * below the WCAG 4.5:1 minimum for text. Call whenever the app-wide
+	 * theme changes, matching the pattern DockviewApp.setDark already uses.
+	 */
+	setDark(isDark: boolean): void;
+}
+
+/**
+ * Matches this app's own dark:/light: text convention (styles.css --color-gray-100
+ * / --color-gray-900) rather than inventing new colors. Verified contrast:
+ * dark (#f3f4f6 on #111827) = 16.12:1, light (#111827 on #ffffff) = 17.74:1 --
+ * both well above the WCAG 4.5:1 minimum for body text.
+ */
+function themeLabelColor(isDark: boolean): string {
+	return isDark ? "#f3f4f6" : "#111827";
 }
 
 /**
@@ -26,14 +45,22 @@ export function renderObservabilityView(container: HTMLElement, graph: Graph): O
 				<p class="text-sm text-gray-400 dark:text-gray-500">No graph data yet.</p>
 			</div>
 		`;
-		return { resize(): void {}, dispose(): void {} };
+		return { resize(): void {}, dispose(): void {}, setDark(): void {} };
 	}
 
 	const renderGraph = buildRenderGraph(graph);
 
 	container.innerHTML = "";
 	const sigmaContainer = document.createElement("div");
-	sigmaContainer.className = "h-full w-full";
+	// Explicit background rather than relying on dockview's own panel
+	// background: DockviewComponent defaults to its built-in "abyss" theme
+	// (always dark) unless a `theme` option is passed, so the manual
+	// dockview-theme-dark/light class toggle on an outer container doesn't
+	// reach this element -- sigma's canvas itself paints transparent, so
+	// without this the abyss background always shows through regardless of
+	// the app's own theme. Same gray-900/white pairing themeLabelColor()
+	// below assumes when computing contrast.
+	sigmaContainer.className = "h-full w-full bg-white dark:bg-gray-900";
 	container.appendChild(sigmaContainer);
 
 	// dockview can call init() before the browser has finished laying out the
@@ -41,9 +68,14 @@ export function renderObservabilityView(container: HTMLElement, graph: Graph): O
 	// hard error. allowInvalidContainer avoids the throw; the ResizeObserver
 	// below calls resize() once real dimensions are available, so the graph
 	// actually appears instead of silently staying blank.
+	// Initial value is corrected immediately by the first setDark() call the
+	// caller makes right after construction (see dockview-app.ts / main.ts),
+	// before the browser has a chance to paint -- no visible flash of the
+	// wrong-theme color.
 	const renderer = new Sigma(renderGraph, sigmaContainer, {
 		renderLabels: true,
 		allowInvalidContainer: true,
+		labelColor: { color: themeLabelColor(false) },
 	});
 
 	const resizeObserver = new ResizeObserver(() => {
@@ -88,6 +120,10 @@ export function renderObservabilityView(container: HTMLElement, graph: Graph): O
 		dispose(): void {
 			resizeObserver.disconnect();
 			renderer.kill();
+		},
+		setDark(isDark: boolean): void {
+			renderer.setSetting("labelColor", { color: themeLabelColor(isDark) });
+			renderer.refresh();
 		},
 	};
 }
