@@ -156,7 +156,7 @@ function renderToolCall(toolName: string, request: unknown, response: unknown): 
 				<summary class="px-3 py-2 cursor-pointer text-gray-600 dark:text-gray-300 font-medium">
 					<code class="text-accent-50 dark:text-accent-30">${toolName}</code>
 				</summary>
-				<div class="px-3 pb-2 space-y-2">
+				<div class="px-3 pt-2 pb-2 space-y-2">
 					<div>
 						<p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Request</p>
 						<pre class="text-xs overflow-auto">${escapeHtml(requestJson)}</pre>
