@@ -19,10 +19,19 @@ export default defineConfig({
 	timeout: 15_000,
 	fullyParallel: false,
 	retries: 0,
-	reporter: "list",
+	// "list" for a human watching the terminal; "json" so pass/fail becomes a
+	// structured artifact something else (a future CI gate, or a Papyrus task's
+	// command-type gate) can actually consume deterministically instead of
+	// requiring a human to read colored terminal output.
+	reporter: [["list"], ["json", { outputFile: "test-results/results.json" }]],
 	use: {
 		baseURL: "http://localhost:5173",
 		trace: "retain-on-failure",
+		// Pin a fixed viewport so screenshot baselines (toHaveScreenshot below)
+		// are reproducible across machines -- visual diffs are only a real
+		// deterministic validation if layout can't shift from an unpinned
+		// window size.
+		viewport: { width: 1280, height: 800 },
 	},
 	webServer: {
 		command: "npm run dev",
