@@ -56,7 +56,7 @@ function main(): void {
 	// vertically, native dockview behavior] / [input box].
 	app.innerHTML = `
 		<div class="flex h-screen p-3 gap-3">
-			<aside id="conversations-sidebar" class="shrink-0 self-stretch flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)]">
+			<aside id="conversations-sidebar" class="shrink-0 flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)]">
 				<div id="sidebar-header" class="sidebar-expanded-only flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-700 shrink-0">
 					<h2 class="text-xs font-semibold text-gray-500 dark:text-gray-400">Conversations</h2>
 					<button id="sidebar-collapse-toggle" class="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150" title="Collapse"></button>
@@ -88,8 +88,23 @@ function main(): void {
 	// Collapse hides the sidebar entirely rather than narrowing it to an
 	// icon-only strip -- what's left is a single small floating button (not a
 	// full-height bar) reminding the user how to bring it back, per direct
-	// correction. self-stretch (full height) only applies when expanded;
-	// collapsed drops to the button's own intrinsic size and top-aligns.
+	// correction.
+	//
+	// Both width AND height must be real, explicit, animatable length values
+	// for the collapse to read as a genuine diagonal shrink toward the
+	// top-left corner. The original version toggled align-self (self-stretch
+	// <-> self-start) to control height, but align-self is a keyword, not a
+	// length -- browsers cannot interpolate between two alignment keywords,
+	// so it snapped instantly while width eased smoothly, producing a
+	// sideways-then-snap motion instead of a diagonal one (confirmed: this is
+	// exactly what was reported). h-[calc(100vh_-_24px)] (100vh minus the
+	// outer flex container's p-3 top+bottom padding) gives the expanded state
+	// a real, resize-safe pixel height the browser can tween against h-10
+	// (40px) collapsed -- once both axes are explicit lengths, the parent's
+	// default flex align-items: stretch naturally falls back to top-alignment
+	// for a definite (non-auto) cross size, so no align-self class is needed
+	// at all; both dimensions now shrink from the same top-left-anchored
+	// point, at the same time, with the same rubber-band curve.
 	//
 	// The width/height transition itself uses cubic-bezier(0.68, -0.6, 0.32,
 	// 1.6) -- the standard "easeInOutBack" curve -- instead of a plain ease.
@@ -103,10 +118,9 @@ function main(): void {
 	function applySidebarCollapsed(): void {
 		const sidebar = document.querySelector<HTMLElement>("#conversations-sidebar");
 		sidebar?.classList.toggle("w-[220px]", !sidebarCollapsed);
-		sidebar?.classList.toggle("self-stretch", !sidebarCollapsed);
+		sidebar?.classList.toggle("h-[calc(100vh_-_24px)]", !sidebarCollapsed);
 		sidebar?.classList.toggle("w-10", sidebarCollapsed);
 		sidebar?.classList.toggle("h-10", sidebarCollapsed);
-		sidebar?.classList.toggle("self-start", sidebarCollapsed);
 		for (const el of document.querySelectorAll<HTMLElement>(".sidebar-expanded-only")) {
 			el.classList.toggle("hidden", sidebarCollapsed);
 		}

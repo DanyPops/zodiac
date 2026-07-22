@@ -76,6 +76,36 @@ test("sidebar collapse toggle has a real rubber-band overshoot, not a plain line
 	expect(widths[widths.length - 1]).toBeLessThan(45); // settles back at the real collapsed width
 });
 
+test("sidebar collapses diagonally -- width and height move together, not sequentially", async ({ page }) => {
+	// The original bug this guards against: height was driven by toggling
+	// align-self (self-stretch <-> self-start), a keyword browsers cannot
+	// interpolate -- it snapped instantly while width eased smoothly, so the
+	// box shrank sideways and only then snapped short, not a real diagonal.
+	// Fixed by making height an explicit, transitionable length on both ends
+	// (h-[calc(100vh_-_24px)] <-> h-10). Proof: sample points mid-transition
+	// where BOTH dimensions are simultaneously between their start and end
+	// values -- if height still snapped, no such point would exist because
+	// it would already equal its final 40px the instant width started moving.
+	const expandedBox = await page.locator("#conversations-sidebar").boundingBox();
+	const startHeight = expandedBox!.height;
+
+	const samples: { w: number; h: number }[] = [];
+	await page.locator("#sidebar-collapse-toggle").click();
+	const deadline = Date.now() + 480;
+	while (Date.now() < deadline) {
+		const box = await page.locator("#conversations-sidebar").boundingBox();
+		if (box) samples.push({ w: box.width, h: box.height });
+	}
+
+	const bothMidTransition = samples.some((s) => s.w < 218 && s.w > 42 && s.h < startHeight - 2 && s.h > 42);
+	expect(bothMidTransition).toBe(true);
+
+	// And height genuinely varies across many distinct values (real
+	// interpolation), not a single instant jump from startHeight to 40.
+	const distinctHeights = new Set(samples.map((s) => Math.round(s.h)));
+	expect(distinctHeights.size).toBeGreaterThan(5);
+});
+
 test("sidebar collapse state persists across reload", async ({ page }) => {
 	await page.locator("#sidebar-collapse-toggle").click();
 	await page.reload();
