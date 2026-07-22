@@ -56,7 +56,7 @@ function main(): void {
 	// vertically, native dockview behavior] / [input box].
 	app.innerHTML = `
 		<div class="flex h-screen p-3 gap-3">
-			<aside id="conversations-sidebar" class="shrink-0 self-stretch flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]">
+			<aside id="conversations-sidebar" class="shrink-0 self-stretch flex flex-col rounded-2xl border border-gray-200/70 dark:border-gray-700/60 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.68,-0.6,0.32,1.6)]">
 				<div id="sidebar-header" class="sidebar-expanded-only flex items-center justify-between px-3 py-3 border-b border-gray-100 dark:border-gray-700 shrink-0">
 					<h2 class="text-xs font-semibold text-gray-500 dark:text-gray-400">Conversations</h2>
 					<button id="sidebar-collapse-toggle" class="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150" title="Collapse"></button>
@@ -90,6 +90,16 @@ function main(): void {
 	// full-height bar) reminding the user how to bring it back, per direct
 	// correction. self-stretch (full height) only applies when expanded;
 	// collapsed drops to the button's own intrinsic size and top-aligns.
+	//
+	// The width/height transition itself uses cubic-bezier(0.68, -0.6, 0.32,
+	// 1.6) -- the standard "easeInOutBack" curve -- instead of a plain ease.
+	// A CSS transition-timing-function's control points aren't clamped to
+	// [0,1]: a negative y1 makes the animated value dip *below* its starting
+	// point before it starts moving toward the target (a rubber band's initial
+	// give), and a y2 above 1 makes it overshoot *past* the target before
+	// settling back (the band's snap-back oscillation) -- both purely via the
+	// timing function, no extra keyframes needed, so it applies symmetrically
+	// whether the sidebar is collapsing or expanding.
 	function applySidebarCollapsed(): void {
 		const sidebar = document.querySelector<HTMLElement>("#conversations-sidebar");
 		sidebar?.classList.toggle("w-[220px]", !sidebarCollapsed);

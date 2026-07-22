@@ -21,12 +21,12 @@ test("sidebar collapses to a small floating button, not a full-height strip", as
 	expect(expandedBox!.height).toBeGreaterThan(500);
 
 	await page.locator("#sidebar-collapse-toggle").click();
-	// The sidebar animates its width/height over a 300ms CSS transition --
+	// The sidebar animates its width/height over a 500ms CSS transition --
 	// measuring immediately catches a mid-transition value, not the settled
 	// state (confirmed by actually running this: got 213px, neither the
 	// expanded 220px nor the collapsed ~40px -- a genuine bug in this test,
 	// not the app).
-	await page.waitForTimeout(350);
+	await page.waitForTimeout(600);
 
 	const collapsedBox = await page.locator("#conversations-sidebar").boundingBox();
 	// The point of this test: collapsed must be a small square button, not a
@@ -41,17 +41,39 @@ test("sidebar collapses to a small floating button, not a full-height strip", as
 
 test("sidebar expands back to full size and the conversation list becomes visible again", async ({ page }) => {
 	await page.locator("#sidebar-collapse-toggle").click();
-	await page.waitForTimeout(350);
+	await page.waitForTimeout(600);
 	await expect(page.locator("#conversation-sidebar")).toBeHidden();
 
 	await page.locator("#sidebar-expand-toggle").click();
-	await page.waitForTimeout(350);
+	await page.waitForTimeout(600);
 
 	// Full settled width, not a loose ">150" that a mid-transition value could
 	// also satisfy -- the point is confirming it actually finished expanding.
 	const box = await page.locator("#conversations-sidebar").boundingBox();
 	expect(box!.width).toBeGreaterThan(200);
 	await expect(page.locator("#conversation-sidebar")).toBeVisible();
+});
+
+test("sidebar collapse toggle has a real rubber-band overshoot, not a plain linear/ease transition", async ({ page }) => {
+	// cubic-bezier(0.68, -0.6, 0.32, 1.6) (easeInOutBack) is only a genuine
+	// "rubber" effect if the animated width actually leaves the [end, start]
+	// range mid-transition -- a claim that it "looks bouncy" isn't evidence.
+	// Poll the real boundingBox() throughout the 500ms transition and check
+	// both signatures the curve's negative/>1 control points predict: a
+	// stretch-wider-than-220px dip right after starting to collapse (y < 0
+	// early on), and a shrink-narrower-than-40px overshoot before it settles
+	// (y > 1 late on).
+	const widths: number[] = [];
+	await page.locator("#sidebar-collapse-toggle").click();
+	const deadline = Date.now() + 650;
+	while (Date.now() < deadline) {
+		const box = await page.locator("#conversations-sidebar").boundingBox();
+		if (box) widths.push(box.width);
+	}
+
+	expect(widths.some((w) => w > 222)).toBe(true); // stretched past the 220px starting width
+	expect(widths.some((w) => w < 38)).toBe(true); // overshot past the 40px collapsed target
+	expect(widths[widths.length - 1]).toBeLessThan(45); // settles back at the real collapsed width
 });
 
 test("sidebar collapse state persists across reload", async ({ page }) => {
