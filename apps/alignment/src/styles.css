@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+	--color-*: initial;
+	--color-white: #ffffff;
+	--color-black: #000000;
+	--color-transparent: transparent;
+	--color-current: currentColor;
+
+	--color-gray-50: #f9fafb;
+	--color-gray-100: #f3f4f6;
+	--color-gray-200: #e5e7eb;
+	--color-gray-300: #d1d5db;
+	--color-gray-400: #9ca3af;
+	--color-gray-500: #6b7280;
+	--color-gray-600: #4b5563;
+	--color-gray-700: #374151;
+	--color-gray-800: #1f2937;
+	--color-gray-900: #111827;
+	--color-gray-950: #030712;
+
+	--color-accent-10: #e0f0ff;
+	--color-accent-20: #b9dafc;
+	--color-accent-30: #92c5f9;
+	--color-accent-40: #4394e5;
+	--color-accent-50: #0066cc;
+	--color-accent-60: #004d99;
+	--color-accent-70: #003366;
+	--color-accent-80: #032142;
+	--color-accent: #0066cc;
+
+	--color-success-10: #e9f7df;
+	--color-success-50: #63993d;
+	--color-success-80: #183301;
+	--color-success: #63993d;
+	--color-danger-10: #ffe3d9;
+	--color-danger-50: #f0561d;
+	--color-danger-80: #4c1405;
+	--color-danger: #f0561d;
+	--color-warning-10: #fff4cc;
+	--color-warning-30: #ffcc17;
+	--color-warning-80: #54330b;
+	--color-warning: #ffcc17;
+}
+
+@layer base {
+	:root {
+		font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		font-synthesis: none;
+		text-rendering: optimizeLegibility;
+	}
+
+	.dark {
+		color-scheme: dark;
+	}
+
+	html,
+	body,
+	#app {
+		height: 100%;
+		margin: 0;
+	}
+
+	body {
+		@apply overflow-hidden bg-gray-100 text-gray-950 antialiased dark:bg-gray-950 dark:text-gray-100;
+	}
+
+	button,
+	input,
+	textarea {
+		font: inherit;
+	}
+
+	button:not(:disabled) {
+		cursor: pointer;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}
+
+@media (forced-colors: active) {
+	button:focus-visible,
+	[tabindex]:focus-visible {
+		outline: 2px solid CanvasText;
+	}
+}
