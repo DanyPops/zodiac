@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { CommandContext } from "./registry.js";
-import type { CommandDialogMode } from "./CommandDialog.js";
+
+/** Every modal dialog Alignment can have open at once -- at most one, per `effectiveContexts` collapsing to `dialog` whenever one is set. */
+export type DialogMode = "palette" | "shortcuts" | "templates" | null;
 
 const WORKSPACE_SELECTION: readonly CommandContext[] = ["workspace-selection", "global"];
 const CANVAS: readonly CommandContext[] = ["canvas", "global"];
@@ -12,13 +14,13 @@ const DIALOG: readonly CommandContext[] = ["dialog"];
 export interface CommandContextStack {
 	/** The contexts the command registry should currently honor -- collapses to `dialog` whenever one is open. */
 	effectiveContexts: readonly CommandContext[];
-	dialogMode: CommandDialogMode;
+	dialogMode: DialogMode;
 	enterGlobal: () => void;
 	enterWorkspaceSelection: () => void;
 	enterCanvas: () => void;
 	enterSurface: () => void;
 	enterTextInput: () => void;
-	openDialog: (mode: CommandDialogMode) => void;
+	openDialog: (mode: DialogMode) => void;
 	closeDialog: () => void;
 }
 
@@ -30,7 +32,7 @@ export interface CommandContextStack {
  */
 export function useCommandContextStack(): CommandContextStack {
 	const [activeContexts, setActiveContexts] = useState<readonly CommandContext[]>(GLOBAL);
-	const [dialogMode, setDialogMode] = useState<CommandDialogMode>(null);
+	const [dialogMode, setDialogMode] = useState<DialogMode>(null);
 
 	return {
 		effectiveContexts: dialogMode ? DIALOG : activeContexts,

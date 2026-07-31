@@ -6,28 +6,56 @@ function command(id: string, execute = vi.fn()): CommandDefinition {
 	return { id, title: id, description: `Run ${id}`, execute };
 }
 
+function fixtureActions(): AlignmentCommandActions {
+	const action = vi.fn();
+	return {
+		toggleWorkspaceSelection: action,
+		focusWorkspaceSelection: action,
+		focusCanvas: action,
+		focusPreviousConversation: action,
+		focusNextConversation: action,
+		focusFirstConversation: action,
+		focusLastConversation: action,
+		cycleTheme: action,
+		sendMessage: action,
+		openPalette: action,
+		openShortcuts: action,
+		closeDialog: action,
+		openConversation: action,
+		canSendMessage: () => true,
+		nextWindow: action,
+		previousWindow: action,
+		newWindow: action,
+		toggleChat: action,
+		openTemplatesPicker: action,
+		dockDefaultTemplate: action,
+	};
+}
+
 describe("Alignment command catalog", () => {
-	it("gives every first-slice action an inspectable default binding", () => {
-		const action = vi.fn();
-		const actions: AlignmentCommandActions = {
-			toggleWorkspaceSelection: action,
-			focusWorkspaceSelection: action,
-			focusCanvas: action,
-			focusPreviousConversation: action,
-			focusNextConversation: action,
-			focusFirstConversation: action,
-			focusLastConversation: action,
-			showSurface: action,
-			cycleTheme: action,
-			sendMessage: action,
-			openPalette: action,
-			openShortcuts: action,
-			closeDialog: action,
-			openConversation: action,
-			canSendMessage: () => true,
-		};
-		const registry = createAlignmentCommandRegistry(actions);
-		for (const registered of registry.commands()) expect(registry.bindingFor(registered.id)).toBeDefined();
+	it("gives every core navigation/dialog/window/chat command an inspectable default binding", () => {
+		const registry = createAlignmentCommandRegistry(fixtureActions());
+		const mustBeBound = [
+			"workspace.toggleSelection",
+			"workspace.focusSelection",
+			"workspace.focusCanvas",
+			"theme.cycle",
+			"palette.open",
+			"shortcuts.open",
+			"window.next",
+			"window.previous",
+			"window.new",
+			"chat.toggle",
+			"templates.open",
+		];
+		for (const id of mustBeBound) expect(registry.bindingFor(id)).toBeDefined();
+	});
+
+	it("registers a dock command for every built-in Surface Template, deliberately unbound by default (docked via click, drag, or the templates picker)", () => {
+		const registry = createAlignmentCommandRegistry(fixtureActions());
+		const dockCommand = registry.commands().find((command) => command.id === "template.dockActivity");
+		expect(dockCommand).toBeDefined();
+		expect(registry.bindingFor("template.dockActivity")).toBeUndefined();
 	});
 });
 

@@ -2,20 +2,20 @@ import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar } from "lucide
 import type { RefObject } from "react";
 import type { ConversationSummary } from "../conversation/client.js";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
-import { CHAT_SURFACE_REGISTRY } from "./chat-surface-registry.js";
+import { PillarTooltip } from "./PillarTooltip.js";
 
 interface WorkspaceSelectionProps {
 	readonly collapsed: boolean;
 	readonly conversations: readonly ConversationSummary[];
 	readonly selectedConversationId?: string;
 	readonly loading: boolean;
-	readonly activeDomain: string;
 	readonly selectionRef: RefObject<HTMLElement | null>;
 	readonly selectedButtonRef: RefObject<HTMLButtonElement | null>;
 	readonly onConversationFocus: (conversationId: string) => void;
 }
 
-export function WorkspaceSelection({ collapsed, conversations, selectedConversationId, loading, activeDomain, selectionRef, selectedButtonRef, onConversationFocus }: WorkspaceSelectionProps): React.JSX.Element {
+/** The only shell sidebar, for choosing which Workspace (Conversation) is active -- nothing else. Surface docking lives in the Window Carousel/center/Surface Templates pillar instead. */
+export function WorkspaceSelection({ collapsed, conversations, selectedConversationId, loading, selectionRef, selectedButtonRef, onConversationFocus }: WorkspaceSelectionProps): React.JSX.Element {
 	return (
 		<>
 			{!collapsed && (
@@ -76,10 +76,30 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 			{collapsed && (
 				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
 					<CollapsedToggle />
-					<div className="flex flex-1 flex-col items-center gap-1 py-2">
-						{CHAT_SURFACE_REGISTRY.map((surface) => (
-							<PillarCommand key={surface.id} commandId={surface.showCommandId} label={surface.title} active={activeDomain === surface.id} icon={<surface.icon aria-hidden="true" size={17} />} />
-						))}
+					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
+						{conversations.map((conversation) => {
+							const selected = conversation.id === selectedConversationId;
+							const title = conversation.name ?? `Untitled — ${conversation.latestSessionId}`;
+							const initial = title.trim().charAt(0).toUpperCase() || "?";
+							return (
+								<div key={conversation.id} className="group relative">
+									<CommandButton
+										ref={selected ? selectedButtonRef : undefined}
+										commandId="conversation.open"
+										commandArgs={[conversation.id]}
+										data-conversation-id={conversation.id}
+										onFocus={() => onConversationFocus(conversation.id)}
+										label={title}
+										tooltip={false}
+										aria-current={selected ? "page" : undefined}
+										className={`grid size-9 place-items-center rounded-md text-xs font-semibold focus-visible:outline-2 focus-visible:outline-accent ${selected ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"}`}
+									>
+										{initial}
+									</CommandButton>
+									<PillarTooltip side="right" label={title} />
+								</div>
+							);
+						})}
 					</div>
 					<div className="flex flex-col items-center gap-1 border-t border-gray-200 py-2 dark:border-gray-700">
 						<PillarCommand commandId="palette.open" label="Command palette" icon={<Command aria-hidden="true" size={16} />} />
@@ -89,20 +109,6 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 				</nav>
 			)}
 		</>
-	);
-}
-
-/**
- * A hover/focus-revealed tooltip anchored to the right of a `group`-marked
- * trigger -- shared by CollapsedToggle and PillarCommand instead of each
- * repeating the same positioning and reveal markup.
- */
-function RightTooltip({ label, shortcut }: { readonly label: string; readonly shortcut: string }): React.JSX.Element {
-	return (
-		<div role="tooltip" className="pointer-events-none invisible absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-gray-700 bg-gray-950 px-2.5 py-1.5 text-xs text-white opacity-0 shadow-lg group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-			<span className="block">{label}</span>
-			<kbd className="mt-0.5 block font-mono text-[10px] text-gray-400">{shortcut}</kbd>
-		</div>
 	);
 }
 
@@ -122,25 +128,19 @@ function CollapsedToggle(): React.JSX.Element {
 					<ChevronsRight aria-hidden="true" size={16} className="absolute opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" />
 				</span>
 			</CommandButton>
-			<RightTooltip label={label} shortcut={shortcut} />
+			<PillarTooltip side="right" label={label} shortcut={shortcut} />
 		</div>
 	);
 }
 
-function PillarCommand({ commandId, label, icon, active = false }: { readonly commandId: string; readonly label: string; readonly icon: React.ReactNode; readonly active?: boolean }): React.JSX.Element {
+function PillarCommand({ commandId, label, icon }: { readonly commandId: string; readonly label: string; readonly icon: React.ReactNode }): React.JSX.Element {
 	const shortcut = useCommandShortcut(commandId);
 	return (
 		<div className="group relative">
-			<CommandButton
-				commandId={commandId}
-				label={label}
-				aria-current={active ? "page" : undefined}
-				tooltip={false}
-				className={`grid size-9 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-accent ${active ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"}`}
-			>
+			<CommandButton commandId={commandId} label={label} tooltip={false} className="grid size-9 place-items-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-950 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
 				{icon}
 			</CommandButton>
-			<RightTooltip label={label} shortcut={shortcut} />
+			<PillarTooltip side="right" label={label} shortcut={shortcut} />
 		</div>
 	);
 }

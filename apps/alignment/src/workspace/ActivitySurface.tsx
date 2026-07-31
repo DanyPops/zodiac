@@ -1,6 +1,6 @@
 import { Wrench } from "lucide-react";
 
-/** The Activity child surface's content -- split out from chat-surface-registry.tsx so that data/registry module exports only data, never a mix of data and components (required for reliable Fast Refresh). */
+/** The Activity Surface Template's docked content -- split out from surface-templates.tsx so that data/registry module exports only data, never a mix of data and components (required for reliable Fast Refresh). */
 export function ActivitySurfaceContent(): React.JSX.Element {
 	return (
 		<div className="h-full overflow-auto p-6">

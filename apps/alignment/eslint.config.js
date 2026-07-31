@@ -28,6 +28,7 @@ const ADAPTER_ALLOWLIST = [
 	"src/main.tsx", // entry point: mounts React onto a real DOM node
 	"src/theme.ts", // ThemeController's own browser adapter factory
 	"src/conversation/client.ts", // ConversationClient's own fetch adapter factory (fetch is its injectable default, never called literally here)
+	"src/platform/pointer.ts", // PointerTracker's own browser adapter factory
 ];
 
 const RESTRICTED_GLOBALS = [

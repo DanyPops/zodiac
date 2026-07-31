@@ -1,126 +1,130 @@
-export type WorkspaceSurfaceKind = "chat" | "conversation" | "activity";
-export type SurfaceLayout = "leaf" | "tabs" | "split-horizontal" | "split-vertical";
-
-export interface WorkspaceSurfaceSpec {
+/**
+ * One instance of a Surface Template docked into a Window's center. `id` is
+ * unique per instance (a Window can dock the same template kind more than
+ * once -- two Terminal surfaces, say), `templateId` names which entry in the
+ * Surface Templates registry produced it.
+ */
+export interface DockedSurfaceInstance {
 	id: string;
-	kind: WorkspaceSurfaceKind;
+	templateId: string;
 	title: string;
-	layout: SurfaceLayout;
-	parentId?: string;
 }
 
-export interface WorkspaceSurface extends WorkspaceSurfaceSpec {
-	childIds: string[];
-}
-
-export interface WorkspaceDefinition {
+/**
+ * One Workspace's numbered arrangement slot. Each Window owns its own
+ * independent set of docked Surfaces -- switching Windows changes what's in
+ * the center, not the Workspace itself. The actual split/tab *geometry* of
+ * those docked Surfaces is owned by the docking engine (dockview), not this
+ * domain model; a Window only tracks *which* Surface instances exist.
+ */
+export interface WorkspaceWindow {
 	id: string;
-	title: string;
-	conversationId: string;
-	surfaces: WorkspaceSurfaceSpec[];
+	dockedSurfaces: DockedSurfaceInstance[];
 }
 
 export interface Workspace {
 	id: string;
 	title: string;
 	conversationId: string;
-	rootSurfaceIds: string[];
-	surfaces: Record<string, WorkspaceSurface>;
-	/** Which child is currently visible for each non-leaf surface, keyed by parent id. Absent until activateSurface sets one explicitly. */
-	activeChildBySurfaceId: Record<string, string>;
+	windows: WorkspaceWindow[];
+	/** Index into `windows`, always in bounds -- see nextWindow/previousWindow for the wrap-around policy. */
+	activeWindowIndex: number;
+	/**
+	 * The Conversation Chat Surface's visibility. It is a floating overlay,
+	 * not a docked Surface -- hidden by default, summoned by an edge-hover or
+	 * a keymap, never part of any Window's dockedSurfaces.
+	 */
+	chatVisible: boolean;
 }
 
-const MAX_SURFACE_DEPTH = 4;
+export interface WorkspaceDefinition {
+	id: string;
+	title: string;
+	conversationId: string;
+}
+
+let instanceCounter = 0;
+
+/** A fresh, collision-resistant id for a docked Surface instance or a new Window, without pulling in a uuid dependency for a single counter's worth of need. */
+function nextInstanceId(prefix: string): string {
+	instanceCounter += 1;
+	return `${prefix}-${instanceCounter}`;
+}
 
 export function createWorkspace(definition: WorkspaceDefinition): Workspace {
-	const surfaces: Record<string, WorkspaceSurface> = {};
-	for (const spec of definition.surfaces) {
-		if (surfaces[spec.id]) throw new Error(`Duplicate WorkspaceSurface id: ${spec.id}`);
-		surfaces[spec.id] = { ...spec, childIds: [] };
-	}
-
-	for (const surface of Object.values(surfaces)) {
-		if (!surface.parentId) continue;
-		const parent = surfaces[surface.parentId];
-		if (!parent) throw new Error(`WorkspaceSurface ${surface.id} has missing parent ${surface.parentId}`);
-		if (parent.layout === "leaf") throw new Error(`Leaf WorkspaceSurface ${parent.id} cannot contain children`);
-		parent.childIds.push(surface.id);
-	}
-
-	for (const surface of Object.values(surfaces)) assertAcyclicAndBounded(surface, surfaces);
-
 	return {
 		id: definition.id,
 		title: definition.title,
 		conversationId: definition.conversationId,
-		rootSurfaceIds: definition.surfaces.filter((surface) => !surface.parentId).map((surface) => surface.id),
-		surfaces,
-		activeChildBySurfaceId: {},
+		windows: [{ id: nextInstanceId("window"), dockedSurfaces: [] }],
+		activeWindowIndex: 0,
+		chatVisible: false,
 	};
 }
 
-/**
- * The child surface a non-leaf surface should currently show: whichever one
- * was last explicitly activated, falling back to its first child by
- * containment order. Undefined for a leaf surface (nothing to show) or an
- * unknown/childless parent id.
- */
-export function visibleSurfaceId(workspace: Workspace, parentId: string): string | undefined {
-	const parent = workspace.surfaces[parentId];
-	if (!parent || parent.childIds.length === 0) return undefined;
-	return workspace.activeChildBySurfaceId[parentId] ?? parent.childIds[0];
+export function activeWindow(workspace: Workspace): WorkspaceWindow {
+	const window = workspace.windows[workspace.activeWindowIndex];
+	if (!window) throw new Error(`Workspace ${workspace.id} has an out-of-bounds activeWindowIndex ${workspace.activeWindowIndex}`);
+	return window;
 }
 
 /**
- * Activates a surface as the visible child of its parent. Returns a new
- * Workspace rather than mutating the given one, so callers (and tests) can
- * compare before/after state. Throws for an id that isn't part of this
- * Workspace's containment tree at all -- a stale or mistyped id is a defect,
- * not a case to silently ignore.
+ * Moves to the next Window, wrapping from the last back to the first --
+ * the Window Carousel is a ring, not a clamped strip.
  */
-export function activateSurface(workspace: Workspace, surfaceId: string): Workspace {
-	const surface = workspace.surfaces[surfaceId];
-	if (!surface) throw new Error(`Cannot activate unknown surface id: ${surfaceId}`);
-	if (!surface.parentId) return workspace;
-	return {
-		...workspace,
-		activeChildBySurfaceId: { ...workspace.activeChildBySurfaceId, [surface.parentId]: surfaceId },
-	};
+export function nextWindow(workspace: Workspace): Workspace {
+	return { ...workspace, activeWindowIndex: (workspace.activeWindowIndex + 1) % workspace.windows.length };
 }
 
-/** Rebinds a Workspace to a different Conversation without disturbing its surface tree or current focus/visibility state. */
+/** Moves to the previous Window, wrapping from the first back to the last. */
+export function previousWindow(workspace: Workspace): Workspace {
+	const count = workspace.windows.length;
+	return { ...workspace, activeWindowIndex: (workspace.activeWindowIndex - 1 + count) % count };
+}
+
+/** Jumps directly to a Window by index (e.g. clicking a specific entry in the Window Carousel). Throws for an out-of-bounds index -- a stale or mistyped index is a defect, not a case to silently clamp. */
+export function selectWindow(workspace: Workspace, index: number): Workspace {
+	if (index < 0 || index >= workspace.windows.length) throw new Error(`Workspace ${workspace.id} has no Window at index ${index}`);
+	return { ...workspace, activeWindowIndex: index };
+}
+
+/** Appends a new empty Window at the end (index -1, rightmost) and switches to it. */
+export function addWindow(workspace: Workspace): Workspace {
+	const windows = [...workspace.windows, { id: nextInstanceId("window"), dockedSurfaces: [] }];
+	return { ...workspace, windows, activeWindowIndex: windows.length - 1 };
+}
+
+/** Docks a new Surface instance of `templateId` into the active Window. Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
+export function dockSurface(workspace: Workspace, templateId: string, title: string): { workspace: Workspace; instance: DockedSurfaceInstance } {
+	const instance: DockedSurfaceInstance = { id: nextInstanceId(templateId), templateId, title };
+	const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? { ...window, dockedSurfaces: [...window.dockedSurfaces, instance] } : window));
+	return { workspace: { ...workspace, windows }, instance };
+}
+
+/** Removes a docked Surface instance from whichever Window holds it (a no-op if the id isn't docked anywhere). */
+export function undockSurface(workspace: Workspace, surfaceInstanceId: string): Workspace {
+	const windows = workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.id !== surfaceInstanceId) }));
+	return { ...workspace, windows };
+}
+
+export function showChat(workspace: Workspace): Workspace {
+	return workspace.chatVisible ? workspace : { ...workspace, chatVisible: true };
+}
+
+export function hideChat(workspace: Workspace): Workspace {
+	return workspace.chatVisible ? { ...workspace, chatVisible: false } : workspace;
+}
+
+export function toggleChat(workspace: Workspace): Workspace {
+	return { ...workspace, chatVisible: !workspace.chatVisible };
+}
+
+/** Rebinds a Workspace to a different Conversation without disturbing its Windows or Chat visibility. */
 export function withConversation(workspace: Workspace, conversationId: string): Workspace {
 	if (workspace.conversationId === conversationId) return workspace;
 	return { ...workspace, conversationId };
 }
 
-function assertAcyclicAndBounded(start: WorkspaceSurface, surfaces: Record<string, WorkspaceSurface>): void {
-	const visited = new Set<string>();
-	let current: WorkspaceSurface | undefined = start;
-	let depth = 0;
-	while (current?.parentId) {
-		if (visited.has(current.id)) throw new Error(`WorkspaceSurface containment cycle at ${current.id}`);
-		visited.add(current.id);
-		depth += 1;
-		if (depth > MAX_SURFACE_DEPTH) throw new Error(`WorkspaceSurface ${start.id} exceeds maximum depth ${MAX_SURFACE_DEPTH}`);
-		current = surfaces[current.parentId];
-	}
-}
-
-/** Well-known surface ids for the first-slice Workspace -- the single source of truth other modules (App.tsx, chat-surface-registry.tsx) reference instead of retyping string literals. */
-export const CHAT_SURFACE_ID = "chat";
-export const CONVERSATION_SURFACE_ID = "conversation";
-export const ACTIVITY_SURFACE_ID = "activity";
-
 export function createFirstSliceWorkspace(conversationId: string): Workspace {
-	return createWorkspace({
-		id: "alignment",
-		title: "Alignment",
-		conversationId,
-		surfaces: [
-			{ id: CHAT_SURFACE_ID, kind: "chat", title: "Chat", layout: "tabs" },
-			{ id: CONVERSATION_SURFACE_ID, kind: "conversation", title: "Conversation", layout: "leaf", parentId: CHAT_SURFACE_ID },
-			{ id: ACTIVITY_SURFACE_ID, kind: "activity", title: "Activity", layout: "leaf", parentId: CHAT_SURFACE_ID },
-		],
-	});
+	return createWorkspace({ id: "alignment", title: "Alignment", conversationId });
 }

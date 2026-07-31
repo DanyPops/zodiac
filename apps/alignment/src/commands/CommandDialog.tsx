@@ -4,8 +4,7 @@ import { Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CommandButton, useCommandEnvironment } from "./react.js";
 import type { KeybindingDefinition } from "./registry.js";
-
-export type CommandDialogMode = "palette" | "shortcuts" | null;
+import type { DialogMode } from "./useCommandContextStack.js";
 
 function bindingLabel(isEditingThisCommand: boolean, isRecording: boolean, binding: KeybindingDefinition | undefined): string {
 	if (isEditingThisCommand && isRecording) return "Press keys…";
@@ -18,10 +17,12 @@ export function CommandDialog({
 	onModeChange,
 	onRebind,
 }: {
-	readonly mode: CommandDialogMode;
-	readonly onModeChange: (mode: CommandDialogMode) => void;
+	/** Only "palette" and "shortcuts" open this dialog; any other DialogMode (including "templates", owned by TemplatesDialog) renders it closed. */
+	readonly mode: DialogMode;
+	readonly onModeChange: (mode: DialogMode) => void;
 	readonly onRebind: (commandId: string, hotkey: Hotkey) => string | undefined;
 }): React.JSX.Element {
+	const isOpen = mode === "palette" || mode === "shortcuts";
 	const { registry } = useCommandEnvironment();
 	const [query, setQuery] = useState("");
 	const [editingCommandId, setEditingCommandId] = useState<string>();
@@ -58,7 +59,7 @@ export function CommandDialog({
 	}, [query, registry]);
 
 	return (
-		<Dialog.Root open={mode !== null} onOpenChange={(open) => !open && onModeChange(null)}>
+		<Dialog.Root open={isOpen} onOpenChange={(open) => !open && onModeChange(null)}>
 			<Dialog.Portal>
 				<Dialog.Overlay className="fixed inset-0 z-40 bg-gray-950/45 backdrop-blur-[1px] data-[state=open]:animate-in" />
 				<Dialog.Content

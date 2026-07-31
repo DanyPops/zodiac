@@ -1,9 +1,18 @@
 // Pure budget-evaluation logic for check-bundle-budget.mjs, split out so it
 // can be unit tested against fabricated sizes instead of only a real build.
-
+//
+// Two tiers per asset type, not one: "entry" is the initial page load's own
+// weight (the `alignment-*` chunk Vite builds from index.html's declared
+// entry) -- this is what every session pays before anything is interactive,
+// so it stays close to its measured baseline. "total" bounds everything
+// shipped, including chunks split out via dynamic import() (e.g.
+// WindowDockview's dockview-react dependency) -- looser, since those bytes
+// are real but deferred off the critical path, not absent.
 export const BUDGETS_BYTES = {
-	js: 200_000, // gzip
-	css: 20_000, // gzip
+	entryJs: 150_000, // gzip -- measured ~124.2kB baseline, ~18% headroom
+	entryCss: 7_000, // gzip -- measured ~5.6kB baseline, ~21% headroom
+	totalJs: 245_000, // gzip -- measured ~207.2kB baseline (entry + WindowDockview's dockview-react chunk), ~15% headroom
+	totalCss: 18_000, // gzip -- measured ~14.3kB baseline, ~23% headroom
 };
 
 export function humanKb(bytes) {
@@ -11,18 +20,18 @@ export function humanKb(bytes) {
 }
 
 /**
- * Compares each extension's total gzip size against its budget.
- * `sizesByExtension` maps extension -> { totalGzipBytes, fileCount }.
+ * Compares each bucket's total gzip size against its budget.
+ * `sizesByBucket` maps bucket name (e.g. "entryJs") -> { totalGzipBytes, fileCount }.
  * Returns { report: string[], violations: string[] }.
  */
-export function evaluateBudgets(sizesByExtension, budgets = BUDGETS_BYTES) {
+export function evaluateBudgets(sizesByBucket, budgets = BUDGETS_BYTES) {
 	const report = [];
 	const violations = [];
 
-	for (const [extension, budget] of Object.entries(budgets)) {
-		const { totalGzipBytes = 0, fileCount = 0 } = sizesByExtension[extension] ?? {};
-		report.push(`${extension.toUpperCase()}: ${humanKb(totalGzipBytes)} gzip (budget ${humanKb(budget)}) across ${fileCount} file(s)`);
-		if (totalGzipBytes > budget) violations.push(`${extension.toUpperCase()} bundle is ${humanKb(totalGzipBytes)} gzip, over the ${humanKb(budget)} budget`);
+	for (const [bucket, budget] of Object.entries(budgets)) {
+		const { totalGzipBytes = 0, fileCount = 0 } = sizesByBucket[bucket] ?? {};
+		report.push(`${bucket}: ${humanKb(totalGzipBytes)} gzip (budget ${humanKb(budget)}) across ${fileCount} file(s)`);
+		if (totalGzipBytes > budget) violations.push(`${bucket} bundle is ${humanKb(totalGzipBytes)} gzip, over the ${humanKb(budget)} budget`);
 	}
 
 	return { report, violations };

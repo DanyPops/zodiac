@@ -16,8 +16,7 @@ function renderCollapsed(execute = vi.fn()) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "workspace.toggleSelection", title: "Toggle workspace selection", description: "", execute },
-			{ id: "surface.showConversation", title: "Show conversation", description: "", execute: vi.fn() },
-			{ id: "surface.showActivity", title: "Show activity", description: "", execute: vi.fn() },
+			{ id: "conversation.open", title: "Open selected conversation", description: "", execute: vi.fn() },
 			{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
 			{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
 			{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
@@ -30,7 +29,6 @@ function renderCollapsed(execute = vi.fn()) {
 				collapsed
 				conversations={[]}
 				loading={false}
-				activeDomain="conversation"
 				selectionRef={createRef()}
 				selectedButtonRef={createRef()}
 				onConversationFocus={vi.fn()}

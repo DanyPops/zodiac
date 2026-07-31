@@ -30,7 +30,6 @@ function fullCommandSet() {
 		focusNextConversation: noop,
 		focusFirstConversation: noop,
 		focusLastConversation: noop,
-		showSurface: noop,
 		cycleTheme: noop,
 		sendMessage: noop,
 		openPalette: noop,
@@ -38,6 +37,12 @@ function fullCommandSet() {
 		closeDialog: noop,
 		openConversation: noop,
 		canSendMessage: () => true,
+		nextWindow: noop,
+		previousWindow: noop,
+		newWindow: noop,
+		toggleChat: noop,
+		openTemplatesPicker: noop,
+		dockDefaultTemplate: noop,
 	};
 	return createAlignmentCommandRegistry(actions).commands();
 }

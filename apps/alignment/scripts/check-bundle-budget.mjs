@@ -7,15 +7,20 @@
 // set with headroom above the first slice's actual measured size, not
 // shrink-wrapped to today's number -- the point is to catch real growth, not
 // to force a re-justification on every dependency bump.
+//
+// "entry" (Vite's index.html-declared `alignment` input) vs. "total"
+// (everything, including chunks split out via dynamic import()) are budgeted
+// separately -- see bundle-budget.mjs for why.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BUDGETS_BYTES, evaluateBudgets } from "./bundle-budget.mjs";
+import { evaluateBudgets } from "./bundle-budget.mjs";
 
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distAssets = join(appRoot, "dist", "assets");
+const ENTRY_PREFIX = "alignment-";
 
 let assets;
 try {
@@ -25,14 +30,27 @@ try {
 	process.exit(1);
 }
 
-const sizesByExtension = {};
-for (const extension of Object.keys(BUDGETS_BYTES)) {
-	const matches = assets.filter((name) => name.endsWith(`.${extension}`));
-	const totalGzipBytes = matches.reduce((sum, name) => sum + gzipSync(readFileSync(join(distAssets, name))).length, 0);
-	sizesByExtension[extension] = { totalGzipBytes, fileCount: matches.length };
+function gzipBytes(name) {
+	return gzipSync(readFileSync(join(distAssets, name))).length;
 }
 
-const { report, violations } = evaluateBudgets(sizesByExtension);
+function bucketFor(extension, isEntry) {
+	return `${isEntry ? "entry" : "total"}${extension.toUpperCase()[0]}${extension.slice(1)}`;
+}
+
+const sizesByBucket = {};
+for (const extension of ["js", "css"]) {
+	const matches = assets.filter((name) => name.endsWith(`.${extension}`));
+	const entryMatches = matches.filter((name) => name.startsWith(ENTRY_PREFIX));
+
+	const entryGzipBytes = entryMatches.reduce((sum, name) => sum + gzipBytes(name), 0);
+	const totalGzipBytes = matches.reduce((sum, name) => sum + gzipBytes(name), 0);
+
+	sizesByBucket[bucketFor(extension, true)] = { totalGzipBytes: entryGzipBytes, fileCount: entryMatches.length };
+	sizesByBucket[bucketFor(extension, false)] = { totalGzipBytes, fileCount: matches.length };
+}
+
+const { report, violations } = evaluateBudgets(sizesByBucket);
 console.log(report.join("\n"));
 
 if (violations.length > 0) {

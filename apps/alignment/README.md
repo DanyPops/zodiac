@@ -1,6 +1,6 @@
 # Alignment application
 
-The React 19 client for Alignment. It renders Alef conversations inside a keyboard-first Workspace Canvas.
+The React 19 client for Alignment. A Workspace is its Canvas: a numbered, wrap-around **Window Carousel** (top) holds independent docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a floating overlay hidden by default -- summoned by the bottom screen edge or a keymap, not a docked tab.
 
 ## Development
 
@@ -50,7 +50,18 @@ Default bindings include:
 | Keyboard shortcuts | `Mod+/` |
 | Toggle Workspace Selection | `Mod+B` |
 | Focus Workspace Selection | `Mod+1` |
-| Focus Workspace Canvas | `Mod+2` |
-| Previous/next child surface | `Mod+Shift+[` / `Mod+Shift+]` |
+| Focus Window view | `Mod+2` |
+| Next/previous Window | `Mod+PageDown` / `Mod+PageUp` |
+| New Window | `Mod+Alt+N` |
+| Toggle Chat | `Mod+.` |
+| Browse Surface Templates | `Mod+Shift+K` |
 | Send message | `Mod+Enter` |
 | Cycle theme | `Mod+Alt+L` |
+
+Pulling a Surface Template into the center by mouse is one path, not the only one: `Mod+Shift+K` opens a keyboard-native, launcher-style flow -- filter the catalog by typing, pick a template, then pick where it docks (as a tab, or split in a direction), the same choice a drag on to an edge or a tab strip makes.
+
+## Docking engine
+
+The center's split/tab layout is `dockview-react` (MIT, zero runtime dependencies, real `react ^19.0.0` peer support -- verified against its own published peer range, not forced). It is lazy-loaded (`React.lazy`/`Suspense` in `App.tsx`): the core shell becomes interactive without waiting on it, since the docking engine is a real ~80kB gzip dependency. `npm run check:bundle-budget` tracks the initial (`entry*`) and combined (`total*`) gzip weight as separate budgets for exactly this reason -- see `scripts/bundle-budget.mjs`.
+
+Dropping near an edge of an already-docked Surface splits the Window in that direction, with a debounced/idle-gated preview (own code, in `WindowDockview.tsx`'s `onWillShowOverlay` handler) so a fast pass over several drop zones doesn't flicker a highlight on every one it crosses. Dropping on a Surface's tab strip inserts a tab. A known gap: dragging a Surface Template from the pillar directly onto an *existing* tab strip to insert a tab is not covered end-to-end (dockview's external-drag acceptance API, `onUnhandledDragOver`, only confirmed reachable at the root/edge level during this implementation, not per-group) -- the tab-insertion placement itself is fully covered via click-to-dock and the keyboard picker's "As a tab" option instead.

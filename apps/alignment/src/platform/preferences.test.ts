@@ -47,6 +47,16 @@ describe("Alignment preferences", () => {
 		expect(createPreferences(storage).keybindingOverrides()).toEqual([]);
 	});
 
+	it("round-trips bounded saved Surface Templates and rejects malformed storage", () => {
+		const storage = memoryStorage();
+		const preferences = createPreferences(storage);
+		preferences.setSavedSurfaceTemplates([{ id: "saved-1", title: "My Terminal", templateId: "terminal" }]);
+		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([{ id: "saved-1", title: "My Terminal", templateId: "terminal" }]);
+
+		storage.setItem("alignment.saved-surface-templates", JSON.stringify([{ id: "", title: "x", templateId: "y" }, { id: 7 }]));
+		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([]);
+	});
+
 	it("persists only the Alignment namespace", () => {
 		const storage = memoryStorage();
 		const preferences = createPreferences(storage);
