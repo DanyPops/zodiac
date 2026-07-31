@@ -3,13 +3,17 @@ import {
 	activeWindow,
 	addWindow,
 	createFirstSliceWorkspace,
+	dockChat,
 	dockSurface,
 	hideChat,
+	isChatDocked,
 	nextWindow,
 	previousWindow,
+	scrollWindow,
 	selectWindow,
 	showChat,
 	toggleChat,
+	undockChatToFloating,
 	undockSurface,
 	withConversation,
 	type DockedSurfaceInstance,
@@ -22,6 +26,7 @@ export interface WorkspaceHandle {
 	activeWindow: WorkspaceWindow;
 	nextWindow: () => void;
 	previousWindow: () => void;
+	scrollWindow: (direction: 1 | -1) => void;
 	selectWindow: (index: number) => void;
 	addWindow: () => void;
 	dockSurface: (templateId: string, title: string) => DockedSurfaceInstance;
@@ -29,6 +34,9 @@ export interface WorkspaceHandle {
 	showChat: () => void;
 	hideChat: () => void;
 	toggleChat: () => void;
+	isChatDocked: boolean;
+	dockChat: (title: string) => DockedSurfaceInstance;
+	undockChatToFloating: () => void;
 }
 
 /**
@@ -55,11 +63,18 @@ export function useWorkspace(conversationId: string): WorkspaceHandle {
 		return result.instance;
 	}
 
+	function dockChatSurface(title: string): DockedSurfaceInstance {
+		const result = dockChat(workspace, title);
+		setWorkspace(result.workspace);
+		return result.instance;
+	}
+
 	return {
 		workspace,
 		activeWindow: activeWindow(workspace),
 		nextWindow: () => setWorkspace(nextWindow),
 		previousWindow: () => setWorkspace(previousWindow),
+		scrollWindow: (direction) => setWorkspace((current) => scrollWindow(current, direction)),
 		selectWindow: (index) => setWorkspace((current) => selectWindow(current, index)),
 		addWindow: () => setWorkspace(addWindow),
 		dockSurface: dock,
@@ -67,5 +82,8 @@ export function useWorkspace(conversationId: string): WorkspaceHandle {
 		showChat: () => setWorkspace(showChat),
 		hideChat: () => setWorkspace(hideChat),
 		toggleChat: () => setWorkspace(toggleChat),
+		isChatDocked: isChatDocked(workspace),
+		dockChat: dockChatSurface,
+		undockChatToFloating: () => setWorkspace(undockChatToFloating),
 	};
 }

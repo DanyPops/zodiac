@@ -17,7 +17,9 @@ test("Chat is a hidden-by-default floating overlay, summoned by keymap or the bo
 	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0);
 
 	await revealChat(page);
-	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("Please read the readme");
+	// Starts collapsed (peek): only the last reply, not the full transcript.
+	await expect(page.getByText("You're welcome!")).toBeVisible();
+	await expect(page.getByText("Please read the readme")).toHaveCount(0);
 
 	// The keymap toggles: pressing it again hides Chat.
 	await page.keyboard.press("Control+.");
@@ -29,10 +31,44 @@ test("Chat is a hidden-by-default floating overlay, summoned by keymap or the bo
 	await expect(page.getByRole("dialog", { name: "Chat" })).toBeVisible();
 });
 
+test("clicking the Chat peek area expands to the full transcript", async ({ page }) => {
+	await revealChat(page);
+	await page.getByRole("button", { name: "Expand chat to the full conversation" }).click();
+	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("Please read the readme");
+	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("You're welcome!");
+
+	await page.getByRole("button", { name: "Collapse to the last reply" }).click();
+	await expect(page.getByRole("log", { name: "AI conversation" })).toHaveCount(0);
+	await expect(page.getByText("You're welcome!")).toBeVisible();
+});
+
 test("Chat auto-hides after inactivity once unfocused and un-hovered", async ({ page }) => {
 	await revealChat(page);
 	await page.mouse.move(400, 200); // away from the panel and the bottom edge
 	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0, { timeout: 4000 });
+});
+
+test("Chat is dockable: docking it hides the floating overlay, and it becomes aware of its sibling docked Surfaces", async ({ page }) => {
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+	await expect(page.getByText("Workspace activity")).toBeVisible();
+
+	await revealChat(page);
+	await page.getByRole("button", { name: "Dock Chat into the active Window" }).click();
+
+	// The floating overlay is gone -- Chat now lives in the Window as a docked panel.
+	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0);
+	await expect(page.getByText("Aware of: Activity")).toBeVisible();
+	await expect(page.getByRole("textbox", { name: "Message Alef" })).toBeVisible();
+});
+
+test("undocking Chat (the Float control) returns it to the floating overlay", async ({ page }) => {
+	await revealChat(page);
+	await page.getByRole("button", { name: "Dock Chat into the active Window" }).click();
+	await expect(page.getByText("Aware of: nothing else docked here")).toBeVisible();
+
+	await page.getByRole("button", { name: "Undock Chat back to the floating overlay" }).click();
+	await expect(page.getByRole("dialog", { name: "Chat" })).toBeVisible();
+	await expect(page.getByText("Aware of:")).toHaveCount(0);
 });
 
 test("the Window Carousel starts with one empty Window and an empty docking watermark", async ({ page }) => {
@@ -60,17 +96,34 @@ test("Window Carousel: clicking a Window index switches to an independent dockin
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 });
 
-test("Window Carousel wraps around on wheel scroll past either end", async ({ page }) => {
+test("wheel-scrolling past either end of the Window Carousel opens exactly one empty Window, never a second one accumulating", async ({ page }) => {
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
-	await page.getByRole("button", { name: "New Window" }).click();
-	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+	await expect(page.getByText("Workspace activity")).toBeVisible();
 
 	await carousel.hover();
-	await page.mouse.wheel(0, 100); // forward, past the last Window
-	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
-
-	await page.mouse.wheel(0, -100); // backward, wraps before the first
+	await page.mouse.wheel(0, 100); // forward, past the only (now "used") Window -- opens a new empty one
 	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
+	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toBeVisible();
+
+	await page.mouse.wheel(0, 100); // still nothing docked in window 1 -- scrolling further replaces it, doesn't add a second empty Window
+	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
+	await expect(carousel.getByRole("button", { name: "2" })).toHaveCount(0);
+});
+
+test("scrolling back from an unused ephemeral Window to a used one removes the ephemeral Window", async ({ page }) => {
+	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+	await expect(page.getByText("Workspace activity")).toBeVisible();
+
+	await carousel.hover();
+	await page.mouse.wheel(0, 100); // opens empty window 1
+	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
+
+	await page.mouse.wheel(0, -100); // back to window 0 (used) -- window 1 (still empty) is dropped
+	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
+	await expect(carousel.getByRole("button", { name: "1" })).toHaveCount(0);
+	await expect(page.getByText("Workspace activity")).toBeVisible();
 });
 
 test("the Surface Templates keyboard flow: filter, select, and choose a placement", async ({ page }) => {
@@ -116,6 +169,12 @@ test("dragging a Surface Template from the pillar onto the empty Window docks it
 	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
 	await glyph.dispatchEvent("dragstart", { dataTransfer });
 	await target.dispatchEvent("dragenter", { dataTransfer });
+	// Two samples at the same (implicit) position: the debounce policy needs a
+	// confirmed low-velocity comparison before accepting a drop target at all,
+	// which any real drag satisfies (a native drag fires dragover continuously
+	// while hovering, even for a near-instant release) but a single synthetic
+	// dragover does not.
+	await target.dispatchEvent("dragover", { dataTransfer });
 	await target.dispatchEvent("dragover", { dataTransfer });
 	await target.dispatchEvent("drop", { dataTransfer });
 	await glyph.dispatchEvent("dragend", { dataTransfer });
@@ -139,6 +198,12 @@ test("dragging a template onto the left edge of an already-docked Surface splits
 	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
 	await glyph.dispatchEvent("dragstart", { dataTransfer });
 	await target.dispatchEvent("dragenter", { dataTransfer, clientX: edgeX, clientY: midY });
+	// Two samples at the same position: the debounce policy requires a
+	// confirmed low-velocity comparison before showing anything, so a real
+	// (if brief) hover -- which fires several native dragover events even
+	// without the pointer moving -- is what a single unbroken dragover
+	// never is.
+	await target.dispatchEvent("dragover", { dataTransfer, clientX: edgeX, clientY: midY });
 	await target.dispatchEvent("dragover", { dataTransfer, clientX: edgeX, clientY: midY });
 	await expect(page.locator(".dv-drop-target-edge, .dv-drop-target-selection, .dv-drop-target-dropzone").first()).toBeVisible(); // the split preview overlay is showing before release
 	await target.dispatchEvent("drop", { dataTransfer, clientX: edgeX, clientY: midY });
@@ -218,7 +283,7 @@ test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and sh
 	await revealChat(page);
 	await page.getByRole("textbox", { name: "Message Alef" }).fill("Run the first slice");
 	await page.keyboard.press("Control+Enter");
-	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("Run the first slice");
+	await expect(page.getByText("Run the first slice")).toBeVisible(); // now the peek's own last-reply preview
 	await expect(page.getByRole("textbox", { name: "Message Alef" })).toHaveValue("");
 
 	await expect(page.getByRole("button", { name: "Cycle color theme" })).toHaveAttribute("aria-keyshortcuts", "Control+Alt+L");

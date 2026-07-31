@@ -11,7 +11,7 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderCarousel(windowCount: number, activeIndex: number, onSelect: (index: number) => void) {
+function renderCarousel(windowCount: number, activeIndex: number, onSelect: (index: number) => void, onScroll: (direction: 1 | -1) => void = vi.fn()) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "window.previous", title: "Previous Window", description: "d", execute: vi.fn() },
@@ -22,7 +22,7 @@ function renderCarousel(windowCount: number, activeIndex: number, onSelect: (ind
 	});
 	return render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<WindowCarousel windowCount={windowCount} activeIndex={activeIndex} onSelect={onSelect} />
+			<WindowCarousel windowCount={windowCount} activeIndex={activeIndex} onSelect={onSelect} onScroll={onScroll} />
 		</CommandProvider>,
 	);
 }
@@ -41,31 +41,33 @@ describe("WindowCarousel", () => {
 		expect(onSelect).toHaveBeenCalledWith(2);
 	});
 
-	it("wheel scrolling forward advances by one and wraps past the last Window", () => {
+	it("wheel scrolling forward calls onScroll(1), not onSelect -- the wheel creates/moves via scrollWindow, it doesn't wrap by index", () => {
 		const onSelect = vi.fn();
-		renderCarousel(3, 2, onSelect);
+		const onScroll = vi.fn();
+		renderCarousel(3, 2, onSelect, onScroll);
 		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaY: 100 });
-		expect(onSelect).toHaveBeenCalledWith(0);
+		expect(onScroll).toHaveBeenCalledWith(1);
+		expect(onSelect).not.toHaveBeenCalled();
 	});
 
-	it("wheel scrolling backward retreats by one and wraps before the first Window", () => {
-		const onSelect = vi.fn();
-		renderCarousel(3, 0, onSelect);
+	it("wheel scrolling backward calls onScroll(-1)", () => {
+		const onScroll = vi.fn();
+		renderCarousel(3, 0, vi.fn(), onScroll);
 		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaY: -100 });
-		expect(onSelect).toHaveBeenCalledWith(2);
+		expect(onScroll).toHaveBeenCalledWith(-1);
 	});
 
-	it("a dominant horizontal (trackpad) delta drives the same wrap-around logic", () => {
-		const onSelect = vi.fn();
-		renderCarousel(3, 2, onSelect);
+	it("a dominant horizontal (trackpad) delta drives the same onScroll direction logic", () => {
+		const onScroll = vi.fn();
+		renderCarousel(3, 2, vi.fn(), onScroll);
 		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaX: 100, deltaY: 1 });
-		expect(onSelect).toHaveBeenCalledWith(0);
+		expect(onScroll).toHaveBeenCalledWith(1);
 	});
 
 	it("a zero delta does nothing", () => {
-		const onSelect = vi.fn();
-		renderCarousel(3, 0, onSelect);
+		const onScroll = vi.fn();
+		renderCarousel(3, 0, vi.fn(), onScroll);
 		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaY: 0, deltaX: 0 });
-		expect(onSelect).not.toHaveBeenCalled();
+		expect(onScroll).not.toHaveBeenCalled();
 	});
 });

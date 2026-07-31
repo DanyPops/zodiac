@@ -22,7 +22,7 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 				<nav
 					ref={selectionRef}
 					aria-label="Workspace selection"
-					className="absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col border-r border-gray-200 bg-gray-50 shadow-xl dark:border-gray-700 dark:bg-gray-900 md:relative md:shadow-none"
+					className="absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-2xl bg-gray-50 shadow-xl dark:bg-gray-900 md:relative md:shadow-none"
 				>
 					<div className="flex h-12 items-center gap-2 border-b border-gray-200 px-3 dark:border-gray-700">
 						<div className="grid size-7 place-items-center rounded-md bg-accent text-xs font-bold text-white">A</div>
@@ -74,7 +74,7 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 				</nav>
 			)}
 			{collapsed && (
-				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-900">
 					<CollapsedToggle />
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
 						{conversations.map((conversation) => {

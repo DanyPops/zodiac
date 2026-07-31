@@ -89,6 +89,27 @@
 	}
 }
 
+/*
+ * dockview-core's own "Spaced" light theme (themeLightSpaced) sets its tab
+ * text color to rgb(104, 107, 130) on a rgb(237, 237, 240)/rgb(249, 249, 250)
+ * tab background -- a real WCAG 2 AA contrast failure (4.47:1, needs 4.5:1),
+ * caught live by an automated accessibility scan, not assumed. The dark
+ * "Spaced" variant (themeAbyssSpaced) doesn't have this problem (white/light
+ * text on a dark tab background comfortably clears AA) so only light needs
+ * the override.
+ *
+ * !important is required here, not just higher specificity: dockview's own
+ * theme CSS for a lazy-loaded chunk (WindowDockview.tsx's dynamic import)
+ * is injected into <head> only once that chunk actually loads, landing
+ * *after* this file's own <link> regardless of source/specificity -- a
+ * later same-specificity declaration always wins the cascade otherwise,
+ * confirmed live (the override was silently losing) before adding this.
+ */
+.dockview-theme-light-spaced {
+	--dv-activegroup-visiblepanel-tab-color: #1f2937 !important;
+	--dv-inactivegroup-visiblepanel-tab-color: #1f2937 !important;
+}
+
 @media (forced-colors: active) {
 	button:focus-visible,
 	[tabindex]:focus-visible {

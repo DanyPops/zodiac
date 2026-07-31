@@ -11,6 +11,7 @@ import { createPreferences } from "../platform/preferences.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
 import { useTheme } from "../theme-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
+import { CHAT_TEMPLATE_ID } from "../workspace/model.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -59,6 +60,20 @@ export function App(): React.JSX.Element {
 	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string): void {
 		const instance = workspace.dockSurface(templateId, title);
 		setPendingDock({ instanceId: instance.id, position, referenceGroupId });
+	}
+
+	function dockChatSurface(): void {
+		const instance = workspace.dockChat("Chat");
+		setPendingDock({ instanceId: instance.id, position: undefined });
+	}
+
+	function handlePanelClosed(instanceId: string): void {
+		const closed = workspace.activeWindow.dockedSurfaces.find((surface) => surface.id === instanceId);
+		if (closed?.templateId === CHAT_TEMPLATE_ID) {
+			workspace.undockChatToFloating();
+			return;
+		}
+		workspace.undockSurface(instanceId);
 	}
 
 	const activeTemplateId = workspace.activeWindow.dockedSurfaces.find((surface) => surface.id === activeDockedInstanceId)?.templateId;
@@ -116,7 +131,7 @@ export function App(): React.JSX.Element {
 
 	return (
 		<CommandProvider registry={registry} activeContexts={contexts.effectiveContexts}>
-			<div className="relative flex h-dvh min-h-[32rem] overflow-hidden" data-workspace-id={workspace.workspace.id}>
+			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace.id}>
 				<WorkspaceSelection
 					collapsed={selection.collapsed}
 					conversations={conversationWorkspace.conversations}
@@ -130,8 +145,8 @@ export function App(): React.JSX.Element {
 					}}
 				/>
 
-				<div className="flex min-w-0 flex-1 flex-col">
-					<WindowCarousel windowCount={workspace.workspace.windows.length} activeIndex={workspace.workspace.activeWindowIndex} onSelect={workspace.selectWindow} />
+				<div className="flex min-w-0 flex-1 flex-col gap-2">
+					<WindowCarousel windowCount={workspace.workspace.windows.length} activeIndex={workspace.workspace.activeWindowIndex} onSelect={workspace.selectWindow} onScroll={workspace.scrollWindow} />
 					<section
 						ref={canvasRef}
 						tabIndex={-1}
@@ -139,7 +154,7 @@ export function App(): React.JSX.Element {
 							if (event.currentTarget === event.target) contexts.enterCanvas();
 						}}
 						aria-label="Window view"
-						className="min-h-0 flex-1 bg-gray-100 outline-none dark:bg-gray-950"
+						className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-gray-100 outline-none dark:bg-gray-900"
 					>
 						<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 							<WindowDockview
@@ -147,13 +162,20 @@ export function App(): React.JSX.Element {
 								dockedSurfaces={workspace.activeWindow.dockedSurfaces}
 								pendingDock={pendingDock}
 								onPendingDockConsumed={() => setPendingDock(undefined)}
-								onPanelClosed={workspace.undockSurface}
+								onPanelClosed={handlePanelClosed}
 								onExternalTemplateDrop={(templateId, position, referenceGroupId) => {
 									const template = findSurfaceTemplate(templateId);
 									if (template) dockTemplate(templateId, template.title, position, referenceGroupId);
 								}}
 								onActivePanelChange={setActiveDockedInstanceId}
 								isDark={theme.isDark}
+								conversationItems={conversationWorkspace.conversationItems}
+								conversationLoading={conversationWorkspace.conversationLoading}
+								conversationError={conversationWorkspace.conversationError}
+								draft={draft}
+								onDraftChange={setDraft}
+								onComposerFocus={contexts.enterTextInput}
+								onUndockChat={workspace.undockChatToFloating}
 							/>
 						</Suspense>
 					</section>
@@ -180,6 +202,7 @@ export function App(): React.JSX.Element {
 					draft={draft}
 					onDraftChange={setDraft}
 					onComposerFocus={contexts.enterTextInput}
+					onDock={dockChatSurface}
 				/>
 
 				<CommandDialog

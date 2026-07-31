@@ -24,33 +24,46 @@ export function ConversationSurface({ items, loading, error, draft, onDraftChang
 					))}
 				</div>
 			</div>
-			<div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-				<p className="mx-auto mb-1.5 max-w-3xl text-[10px] text-gray-600 dark:text-gray-300">Fixture preview — Alef write path is not connected.</p>
-				<div className="mx-auto flex max-w-3xl items-end gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
-					<textarea
-						aria-label="Message Alef"
-						rows={2}
-						value={draft}
-						onFocus={onComposerFocus}
-						onChange={(event) => onDraftChange(event.target.value)}
-						placeholder="Message Alef"
-						className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 dark:text-gray-100 dark:placeholder:text-gray-400"
-					/>
-					<CommandButton
-						commandId="conversation.send"
-						label="Send message"
-						disabled={!draft.trim()}
-						className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-white hover:bg-accent-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45"
-					>
-						<Send aria-hidden="true" size={16} />
-					</CommandButton>
-				</div>
+			<Composer draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} />
+		</div>
+	);
+}
+
+interface ComposerProps {
+	readonly draft: string;
+	readonly onDraftChange: (value: string) => void;
+	readonly onComposerFocus: () => void;
+}
+
+/** The prompt box, extracted so the Chat Surface's collapsed "peek" state (last reply + composer, no full transcript) can reuse it without duplicating markup. */
+export function Composer({ draft, onDraftChange, onComposerFocus }: ComposerProps): React.JSX.Element {
+	return (
+		<div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+			<p className="mx-auto mb-1.5 max-w-3xl text-[10px] text-gray-600 dark:text-gray-300">Fixture preview — Alef write path is not connected.</p>
+			<div className="mx-auto flex max-w-3xl items-end gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
+				<textarea
+					aria-label="Message Alef"
+					rows={2}
+					value={draft}
+					onFocus={onComposerFocus}
+					onChange={(event) => onDraftChange(event.target.value)}
+					placeholder="Message Alef"
+					className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 dark:text-gray-100 dark:placeholder:text-gray-400"
+				/>
+				<CommandButton
+					commandId="conversation.send"
+					label="Send message"
+					disabled={!draft.trim()}
+					className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-white hover:bg-accent-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45"
+				>
+					<Send aria-hidden="true" size={16} />
+				</CommandButton>
 			</div>
 		</div>
 	);
 }
 
-function ConversationRow({ item }: { readonly item: ConversationItem }): React.JSX.Element {
+export function ConversationRow({ item }: { readonly item: ConversationItem }): React.JSX.Element {
 	if (item.kind === "message") {
 		const user = item.role === "user";
 		return (

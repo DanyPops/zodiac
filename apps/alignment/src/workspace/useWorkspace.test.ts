@@ -63,6 +63,32 @@ describe("useWorkspace", () => {
 		expect(result.current.workspace.chatVisible).toBe(true);
 	});
 
+	it("scrollWindow drives the Window Carousel's mouse-wheel policy (create-past-edge, prune-on-leave)", () => {
+		const { result } = renderHook(() => useWorkspace("fixture"));
+		const firstWindowId = result.current.workspace.windows[0]?.id;
+
+		act(() => result.current.scrollWindow(1));
+		expect(result.current.workspace.windows).toHaveLength(1);
+		expect(result.current.workspace.windows[0]?.id).not.toBe(firstWindowId);
+	});
+
+	it("dockChat/isChatDocked/undockChatToFloating drive Chat between floating and docked", () => {
+		const { result } = renderHook(() => useWorkspace("fixture"));
+		expect(result.current.isChatDocked).toBe(false);
+
+		let instanceId = "";
+		act(() => {
+			instanceId = result.current.dockChat("Chat").id;
+		});
+		expect(result.current.isChatDocked).toBe(true);
+		expect(result.current.workspace.chatVisible).toBe(false);
+		expect(result.current.activeWindow.dockedSurfaces.map((surface) => surface.id)).toEqual([instanceId]);
+
+		act(() => result.current.undockChatToFloating());
+		expect(result.current.isChatDocked).toBe(false);
+		expect(result.current.workspace.chatVisible).toBe(true);
+	});
+
 	it("rebinds to a new conversation without resetting Windows or Chat visibility", () => {
 		const { result, rerender } = renderHook(({ conversationId }) => useWorkspace(conversationId), {
 			initialProps: { conversationId: "fixture" },

@@ -1,8 +1,11 @@
-import { DockviewReact, positionToDirection, themeDark, themeLight, type DockviewReadyEvent, type IDockviewPanelProps, type Position } from "dockview-react";
+import { DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewReadyEvent, type IDockviewPanelProps, type Position } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
+import { PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { ConversationSurface } from "../conversation/ConversationSurface.js";
+import type { ConversationItem } from "../conversation/projector.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
-import type { DockedSurfaceInstance } from "./model.js";
+import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { findSurfaceTemplate } from "./surface-templates.js";
 
 // The debounced/idle-gated drop-preview policy the redesign settled on: a
@@ -21,7 +24,38 @@ function SurfaceTemplatePanel(props: IDockviewPanelProps<{ readonly templateId: 
 	return <>{template.render()}</>;
 }
 
-const PANEL_COMPONENTS = { surfaceTemplate: SurfaceTemplatePanel };
+/** Params for the docked Chat Surface -- unlike an ordinary template, it needs live conversation data and, per the redesign, awareness of its sibling docked Surfaces in the same Window. */
+export interface DockedChatParams {
+	readonly conversationItems: readonly ConversationItem[];
+	readonly conversationLoading: boolean;
+	readonly conversationError?: string;
+	readonly draft: string;
+	readonly onDraftChange: (value: string) => void;
+	readonly onComposerFocus: () => void;
+	readonly siblingTitles: readonly string[];
+	readonly onUndock: () => void;
+}
+
+// eslint-disable-next-line sonarjs/prefer-read-only-props -- see SurfaceTemplatePanel above
+function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JSX.Element {
+	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock } = props.params;
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<div className="flex h-8 shrink-0 items-center gap-2 border-b border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
+				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
+				<button type="button" onClick={onUndock} aria-label="Undock Chat back to the floating overlay" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
+					<PanelLeftOpen aria-hidden="true" size={12} />
+					Float
+				</button>
+			</div>
+			<div className="min-h-0 flex-1">
+				<ConversationSurface items={conversationItems} loading={conversationLoading} error={conversationError} draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} />
+			</div>
+		</div>
+	);
+}
+
+const PANEL_COMPONENTS = { surfaceTemplate: SurfaceTemplatePanel, chatSurface: DockedChatPanel };
 
 /** A domain-docked instance still awaiting placement in the docking engine -- carries the split direction (or `undefined` for the engine's own default) a keyboard or drag placement chose. */
 export interface PendingDock {
@@ -36,27 +70,65 @@ interface WindowDockviewProps {
 	readonly dockedSurfaces: readonly DockedSurfaceInstance[];
 	readonly pendingDock?: PendingDock;
 	readonly onPendingDockConsumed: () => void;
-	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too. */
+	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too (or float it, for Chat). */
 	readonly onPanelClosed: (instanceId: string) => void;
 	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined) => void;
 	/** The active panel's docked-Surface instance id, or undefined when the Window is empty -- lets a caller (e.g. "save as template") know what's currently focused without reaching into dockview's own panel model. */
 	readonly onActivePanelChange: (instanceId: string | undefined) => void;
 	readonly isDark: boolean;
+	/** Conversation data/actions, threaded through only for a docked Chat panel (see DockedChatParams). */
+	readonly conversationItems: readonly ConversationItem[];
+	readonly conversationLoading: boolean;
+	readonly conversationError?: string;
+	readonly draft: string;
+	readonly onDraftChange: (value: string) => void;
+	readonly onComposerFocus: () => void;
+	readonly onUndockChat: () => void;
 }
 
-export function WindowDockview({ windowId, dockedSurfaces, pendingDock, onPendingDockConsumed, onPanelClosed, onExternalTemplateDrop, onActivePanelChange, isDark }: WindowDockviewProps): React.JSX.Element {
+export function WindowDockview({
+	windowId,
+	dockedSurfaces,
+	pendingDock,
+	onPendingDockConsumed,
+	onPanelClosed,
+	onExternalTemplateDrop,
+	onActivePanelChange,
+	isDark,
+	conversationItems,
+	conversationLoading,
+	conversationError,
+	draft,
+	onDraftChange,
+	onComposerFocus,
+	onUndockChat,
+}: WindowDockviewProps): React.JSX.Element {
 	const apiRef = useRef<DockviewReadyEvent["api"]>(undefined);
 	const mountedIdsRef = useRef<Set<string>>(new Set());
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
+	function chatParams(instance: DockedSurfaceInstance): DockedChatParams {
+		return {
+			conversationItems,
+			conversationLoading,
+			conversationError,
+			draft,
+			onDraftChange,
+			onComposerFocus,
+			siblingTitles: dockedSurfaces.filter((surface) => surface.id !== instance.id).map((surface) => surface.title),
+			onUndock: onUndockChat,
+		};
+	}
+
 	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string): void {
 		const api = apiRef.current;
 		if (!api) return;
+		const isChat = instance.templateId === CHAT_TEMPLATE_ID;
 		api.addPanel({
 			id: instance.id,
-			component: "surfaceTemplate",
+			component: isChat ? "chatSurface" : "surfaceTemplate",
 			title: instance.title,
-			params: { templateId: instance.templateId },
+			params: isChat ? chatParams(instance) : { templateId: instance.templateId },
 			position: position ? { direction: positionToDirection(position), referenceGroup: referenceGroupId } : undefined,
 		});
 		mountedIdsRef.current.add(instance.id);
@@ -91,13 +163,24 @@ export function WindowDockview({ windowId, dockedSurfaces, pendingDock, onPendin
 			const point = overlayEvent.nativeEvent instanceof DragEvent || overlayEvent.nativeEvent instanceof PointerEvent ? { x: overlayEvent.nativeEvent.clientX, y: overlayEvent.nativeEvent.clientY, t: Date.now() } : null;
 			const last = lastMoveRef.current;
 			if (point) lastMoveRef.current = point;
-			if (!point || !last) return;
+			// No native point to measure, or no prior sample to compare against yet
+			// (the very first dragover of a drag): suppress rather than allow.
+			// With the "Spaced" theme's absolute-mounted overlay anchor, an
+			// unsuppressed first frame stays visible (the anchor persists across
+			// frames) even while every later frame in a fast pass correctly gets
+			// suppressed -- confirmed live, not assumed. The policy is "wait for
+			// confirmed low velocity before showing", not "show until proven fast".
+			if (!point || !last) {
+				overlayEvent.preventDefault();
+				return;
+			}
 			const elapsedMs = Math.max(1, point.t - last.t);
 			const velocity = Math.hypot(point.x - last.x, point.y - last.y) / elapsedMs;
 			if (velocity > DRAG_HINT_IDLE_VELOCITY_PX_PER_MS) overlayEvent.preventDefault();
 		});
 	}
 
+	// Mount newly-docked instances / unmount removed ones.
 	useEffect(() => {
 		if (!apiRef.current) return;
 		for (const instance of dockedSurfaces) {
@@ -113,14 +196,41 @@ export function WindowDockview({ windowId, dockedSurfaces, pendingDock, onPendin
 			apiRef.current.getPanel(mountedId)?.api.close();
 			mountedIdsRef.current.delete(mountedId);
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- mountPanel is a stable closure over apiRef/mountedIdsRef, not reactive state
 	}, [dockedSurfaces, pendingDock, onPendingDockConsumed]);
 
+	// A docked Chat panel's awareness of its siblings, and the live
+	// conversation data it renders, can change independently of the
+	// mount/unmount effect above (a sibling gets docked/undocked, or the
+	// draft/transcript updates) -- keep it live via updateParameters rather
+	// than only setting it once at mount time.
+	useEffect(() => {
+		const api = apiRef.current;
+		if (!api) return;
+		const chatInstance = dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+		if (!chatInstance || !mountedIdsRef.current.has(chatInstance.id)) return;
+		api.getPanel(chatInstance.id)?.api.updateParameters(chatParams(chatInstance));
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- chatParams is a stable closure over the same props already listed
+	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat]);
+
 	return (
+		// themeLightSpaced/themeDarkSpaced (not themeLight/themeDark +
+		// dockview-spaced as a separate class): the "Spaced" theme variants
+		// merge the rounded/gapped layout mixin into the *same* CSS class as
+		// the theme itself. That matters because dockview-core's base theme
+		// mixin re-declares --dv-border-radius: 0px on the theme class
+		// (.dv-shell.dockview-theme-light), which sits *inside* wherever our
+		// own className would land (DockviewOptions.className is also a dead
+		// end here -- dockview-core's gridview construction hard-resets that
+		// element's className outright). A later-nested 0px redeclaration wins
+		// over any outer ancestor's inherited 12px, confirmed by inspecting
+		// the rendered DOM's computed --dv-border-radius, not assumed.
 		<DockviewReact
 			key={windowId}
 			className="h-full"
 			components={PANEL_COMPONENTS}
-			theme={isDark ? themeDark : themeLight}
+			// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
+			theme={isDark ? themeAbyssSpaced : themeLightSpaced}
 			onReady={onReady}
 			onDidDrop={(event) => {
 				const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;

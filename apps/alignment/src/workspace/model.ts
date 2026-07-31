@@ -94,6 +94,41 @@ export function addWindow(workspace: Workspace): Workspace {
 	return { ...workspace, windows, activeWindowIndex: windows.length - 1 };
 }
 
+/**
+ * The mouse-wheel policy on the Window Carousel: distinct from nextWindow/
+ * previousWindow's wrap-around (still used by the keyboard commands).
+ * Scrolling within existing Windows just moves by one. Scrolling past
+ * either end creates exactly one new empty Window there and moves into it
+ * -- never more than one such "ephemeral" Window exists at a time, and any
+ * empty Window left behind (not the active one, nothing docked into it) is
+ * dropped in the same step. A Window with docked Surfaces is never pruned.
+ */
+export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace {
+	const targetIndex = workspace.activeWindowIndex + direction;
+	let windows = workspace.windows;
+	let activeWindowIndex: number;
+
+	if (targetIndex >= 0 && targetIndex < windows.length) {
+		activeWindowIndex = targetIndex;
+	} else if (direction > 0) {
+		windows = [...windows, { id: nextInstanceId("window"), dockedSurfaces: [] }];
+		activeWindowIndex = windows.length - 1;
+	} else {
+		windows = [{ id: nextInstanceId("window"), dockedSurfaces: [] }, ...windows];
+		activeWindowIndex = 0;
+	}
+
+	return pruneAbandonedEmptyWindows({ ...workspace, windows, activeWindowIndex });
+}
+
+/** Drops every empty, inactive Window -- the cleanup half of scrollWindow's ephemeral-Window policy. */
+function pruneAbandonedEmptyWindows(workspace: Workspace): Workspace {
+	const activeId = workspace.windows[workspace.activeWindowIndex]?.id;
+	const kept = workspace.windows.filter((window) => window.id === activeId || window.dockedSurfaces.length > 0);
+	if (kept.length === workspace.windows.length) return workspace;
+	return { ...workspace, windows: kept, activeWindowIndex: kept.findIndex((window) => window.id === activeId) };
+}
+
 /** Docks a new Surface instance of `templateId` into the active Window. Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
 export function dockSurface(workspace: Workspace, templateId: string, title: string): { workspace: Workspace; instance: DockedSurfaceInstance } {
 	const instance: DockedSurfaceInstance = { id: nextInstanceId(templateId), templateId, title };
@@ -105,6 +140,30 @@ export function dockSurface(workspace: Workspace, templateId: string, title: str
 export function undockSurface(workspace: Workspace, surfaceInstanceId: string): Workspace {
 	const windows = workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.id !== surfaceInstanceId) }));
 	return { ...workspace, windows };
+}
+
+/** The Conversation Chat Surface's reserved templateId when docked -- see dockChat/undockChatToFloating. */
+export const CHAT_TEMPLATE_ID = "chat";
+
+export function isChatDocked(workspace: Workspace): boolean {
+	return workspace.windows.some((window) => window.dockedSurfaces.some((surface) => surface.templateId === CHAT_TEMPLATE_ID));
+}
+
+/**
+ * Docks the Chat Surface into the active Window, turning off its floating
+ * overlay. Chat is a singleton -- docking it again (from a different Window,
+ * or the same one) moves it rather than creating a second instance.
+ */
+export function dockChat(workspace: Workspace, title: string): { workspace: Workspace; instance: DockedSurfaceInstance } {
+	const withoutExistingChat = { ...workspace, windows: workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) })) };
+	const { workspace: docked, instance } = dockSurface(withoutExistingChat, CHAT_TEMPLATE_ID, title);
+	return { workspace: { ...docked, chatVisible: false }, instance };
+}
+
+/** Removes Chat from wherever it's docked (a no-op if it isn't) and returns it to the floating overlay, visible. */
+export function undockChatToFloating(workspace: Workspace): Workspace {
+	const windows = workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) }));
+	return { ...workspace, windows, chatVisible: true };
 }
 
 export function showChat(workspace: Workspace): Workspace {

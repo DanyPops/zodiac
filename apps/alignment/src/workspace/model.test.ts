@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeWindow, addWindow, createFirstSliceWorkspace, createWorkspace, dockSurface, hideChat, nextWindow, previousWindow, selectWindow, showChat, toggleChat, undockSurface, withConversation } from "./model.js";
+import { activeWindow, addWindow, CHAT_TEMPLATE_ID, createFirstSliceWorkspace, createWorkspace, dockChat, dockSurface, hideChat, isChatDocked, nextWindow, previousWindow, scrollWindow, selectWindow, showChat, toggleChat, undockChatToFloating, undockSurface, withConversation } from "./model.js";
 
 describe("Workspace window and Surface docking", () => {
 	it("creates one empty Window, active by index 0, Chat hidden by default", () => {
@@ -42,6 +42,98 @@ describe("Workspace window and Surface docking", () => {
 			const workspace = createFirstSliceWorkspace("fixture");
 			expect(nextWindow(workspace).activeWindowIndex).toBe(0);
 			expect(previousWindow(workspace).activeWindowIndex).toBe(0);
+		});
+	});
+
+	describe("scrollWindow: the Window Carousel's mouse-wheel policy", () => {
+		it("moves by one within existing Windows, pruning the empty Window left behind", () => {
+			let workspace = createFirstSliceWorkspace("fixture");
+			workspace = dockSurface(workspace, "activity", "Activity").workspace; // window 0 is now "used"
+			workspace = addWindow(workspace); // window 1, active, empty
+
+			workspace = scrollWindow(workspace, -1);
+			expect(workspace.activeWindowIndex).toBe(0);
+			expect(workspace.windows).toHaveLength(1); // window 1 (empty, now inactive) was pruned on the way out
+		});
+
+		it("moving within existing Windows never prunes a Window that has real content, even while inactive", () => {
+			let workspace = dockSurface(createFirstSliceWorkspace("fixture"), "activity", "Activity").workspace;
+			workspace = addWindow(workspace); // window 1, active, empty
+			workspace = dockSurface(workspace, "activity", "Second").workspace; // window 1 now used too
+			workspace = addWindow(workspace); // window 2, active, empty
+
+			workspace = scrollWindow(workspace, -1); // to window 1 (used)
+			expect(workspace.windows).toHaveLength(2); // window 0 (used) and window 1 (used) both survive; window 2 (empty) pruned
+		});
+
+		it("scrolling forward past the last Window creates exactly one new empty Window and moves into it", () => {
+			const workspace = createFirstSliceWorkspace("fixture"); // one empty Window, active
+			const scrolled = scrollWindow(workspace, 1);
+
+			expect(scrolled.windows).toHaveLength(1); // the old empty active Window was pruned on the way out
+			expect(scrolled.activeWindowIndex).toBe(0);
+			expect(scrolled.windows[0]?.id).not.toBe(workspace.windows[0]?.id); // it's a genuinely new Window, not the same one
+		});
+
+		it("scrolling backward before the first Window creates exactly one new empty Window and moves into it", () => {
+			const workspace = createFirstSliceWorkspace("fixture");
+			const scrolled = scrollWindow(workspace, -1);
+
+			expect(scrolled.windows).toHaveLength(1);
+			expect(scrolled.activeWindowIndex).toBe(0);
+			expect(scrolled.windows[0]?.id).not.toBe(workspace.windows[0]?.id);
+		});
+
+		it("an empty Window with real content docked into it survives being left", () => {
+			let workspace = dockSurface(createFirstSliceWorkspace("fixture"), "activity", "Activity").workspace;
+			workspace = scrollWindow(workspace, 1); // creates window 1 (empty), moves into it
+			expect(workspace.windows).toHaveLength(2);
+
+			workspace = scrollWindow(workspace, -1); // back to window 0 (used) -- window 1 (empty, now inactive) is pruned
+			expect(workspace.windows).toHaveLength(1);
+			expect(workspace.windows[0]?.dockedSurfaces).toHaveLength(1);
+		});
+
+		it("scrolling past an edge a second time reuses the still-empty ephemeral Window rather than creating a second one", () => {
+			let workspace = createFirstSliceWorkspace("fixture");
+			workspace = scrollWindow(workspace, 1); // window A created
+			const afterFirst = workspace.windows[0]?.id;
+			workspace = scrollWindow(workspace, 1); // still only one Window to move within/past
+			expect(workspace.windows).toHaveLength(1);
+			expect(workspace.windows[0]?.id).not.toBe(afterFirst); // scrolling forward again past the (still sole, empty) Window creates a fresh one, not two
+		});
+	});
+
+	describe("Chat Surface docking", () => {
+		it("dockChat docks into the active Window as a singleton, hiding the floating overlay", () => {
+			let workspace = showChat(createFirstSliceWorkspace("fixture"));
+			const docked = dockChat(workspace, "Chat");
+			workspace = docked.workspace;
+
+			expect(workspace.chatVisible).toBe(false);
+			expect(isChatDocked(workspace)).toBe(true);
+			expect(activeWindow(workspace).dockedSurfaces).toEqual([docked.instance]);
+			expect(docked.instance.templateId).toBe(CHAT_TEMPLATE_ID);
+		});
+
+		it("dockChat moves an already-docked Chat rather than creating a second instance", () => {
+			let workspace = dockChat(createFirstSliceWorkspace("fixture"), "Chat").workspace;
+			workspace = addWindow(workspace); // window 1, active
+
+			const redocked = dockChat(workspace, "Chat");
+			expect(redocked.workspace.windows[0]?.dockedSurfaces).toEqual([]);
+			expect(activeWindow(redocked.workspace).dockedSurfaces).toEqual([redocked.instance]);
+		});
+
+		it("undockChatToFloating removes it from wherever it's docked and shows the floating overlay", () => {
+			const workspace = undockChatToFloating(dockChat(createFirstSliceWorkspace("fixture"), "Chat").workspace);
+			expect(isChatDocked(workspace)).toBe(false);
+			expect(workspace.chatVisible).toBe(true);
+		});
+
+		it("undockChatToFloating is a safe no-op-shaped call when Chat isn't docked", () => {
+			const workspace = createFirstSliceWorkspace("fixture");
+			expect(isChatDocked(undockChatToFloating(workspace))).toBe(false);
 		});
 	});
 
