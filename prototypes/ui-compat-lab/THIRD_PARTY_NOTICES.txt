@@ -1,0 +1,13 @@
+AI Elements
+Copyright 2023 Vercel, Inc.
+https://github.com/vercel/ai-elements
+
+Conversation.tsx and Message.tsx adapt AI Elements registry components licensed under the Apache License 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+
+Perses
+Copyright The Perses Authors
+https://github.com/perses/perses
+
+The prototype depends on published Perses packages licensed under the Apache License 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
