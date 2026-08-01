@@ -26,7 +26,7 @@ export function WispCursor({ visible, target }: WispCursorProps): React.JSX.Elem
 			className="pointer-events-none absolute bottom-2 left-1/2 z-50 grid size-6 -translate-x-1/2 place-items-center rounded-full bg-accent text-white shadow-lg transition-transform duration-500 ease-out motion-reduce:transition-none"
 			style={{ opacity: style.opacity, transform: `translateX(-50%) ${style.transform}` }}
 		>
-			<Sparkle aria-hidden="true" size={12} className={style.idle ? "animate-pulse" : undefined} />
+			<Sparkle aria-hidden="true" size={12} className={style.idle ? "animate-pulse motion-reduce:animate-none" : undefined} />
 		</div>
 	);
 }

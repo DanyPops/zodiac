@@ -34,6 +34,17 @@ describe("WindowCarousel", () => {
 		expect(screen.getByRole("button", { name: "0" })).not.toHaveAttribute("aria-current");
 	});
 
+	it("breathes continuously on the active Window, and only on hover/keyboard-focus for every other one", () => {
+		renderCarousel(3, 1, vi.fn());
+		const active = screen.getByRole("button", { name: "1" });
+		expect(active).toHaveClass("animate-pulse");
+		const inactive = screen.getByRole("button", { name: "0" });
+		expect(inactive.className).not.toMatch(/(?<!:)animate-pulse/);
+		expect(inactive).toHaveClass("hover:animate-pulse");
+		expect(inactive).toHaveClass("focus-visible:animate-pulse");
+		expect(inactive).toHaveClass("motion-reduce:animate-none");
+	});
+
 	it("clicking a Window index selects it directly", () => {
 		const onSelect = vi.fn();
 		renderCarousel(3, 0, onSelect);

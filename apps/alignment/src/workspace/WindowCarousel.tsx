@@ -112,7 +112,10 @@ function WindowButton({ index, activeIndex, windowCount, onSelect }: WindowButto
 				onClick={() => onSelect(index)}
 				aria-current={isActive ? "true" : undefined}
 				style={{ opacity: computeWindowFadeOpacity(delta) }}
-				className={cn("grid size-7 place-items-center rounded-md text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent", isActive ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800")}
+				className={cn(
+					"grid size-7 place-items-center rounded-md text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-pulse focus-visible:animate-pulse",
+					isActive ? "animate-pulse bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800",
+				)}
 			>
 				{index}
 			</button>

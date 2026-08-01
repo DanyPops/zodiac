@@ -142,8 +142,8 @@ function ExpandedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceFo
 				label={entry.title}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
-					"mb-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-accent",
-					selected ? "bg-white text-gray-950 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800/70",
+					"mb-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-pulse focus-visible:animate-pulse",
+					selected ? "animate-pulse bg-white text-gray-950 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800/70",
 				)}
 			>
 				<entry.icon aria-hidden="true" size={16} className="shrink-0" />
@@ -167,8 +167,8 @@ function CollapsedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceF
 				tooltip={false}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
-					"grid size-9 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-accent",
-					selected ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
+					"grid size-9 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-pulse focus-visible:animate-pulse",
+					selected ? "animate-pulse bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
 				)}
 			>
 				<entry.icon aria-hidden="true" size={18} />

@@ -77,4 +77,15 @@ describe("collapsed Workspace quick selection", () => {
 		const inactive = screen.getByRole("button", { name: WORKSPACE_CATALOG[1]!.title });
 		expect(inactive).not.toHaveAttribute("aria-current");
 	});
+
+	it("breathes continuously on the active Workspace, and only on hover/keyboard-focus for every other one", () => {
+		renderCollapsed();
+		const active = screen.getByRole("button", { name: WORKSPACE_CATALOG[0]!.title });
+		expect(active).toHaveClass("animate-pulse");
+		const inactive = screen.getByRole("button", { name: WORKSPACE_CATALOG[1]!.title });
+		expect(inactive.className).not.toMatch(/(?<!:)animate-pulse/);
+		expect(inactive).toHaveClass("hover:animate-pulse");
+		expect(inactive).toHaveClass("focus-visible:animate-pulse");
+		expect(inactive).toHaveClass("motion-reduce:animate-none");
+	});
 });
