@@ -50,61 +50,57 @@ describe("Workspace window and Surface docking", () => {
 	});
 
 	describe("scrollWindow: the Window Carousel's mouse-wheel policy", () => {
-		it("moves by one within existing Windows, pruning the empty Window left behind", () => {
+		it("is the exact same wrap-around ring as nextWindow/previousWindow, not a separate policy", () => {
 			let workspace = fixtureWorkspace();
-			workspace = dockSurface(workspace, "activity", "Activity").workspace; // window 0 is now "used"
-			workspace = addWindow(workspace); // window 1, active, empty
+			workspace = addWindow(workspace); // window 1
+			workspace = addWindow(workspace); // window 2
+			workspace = selectWindow(workspace, 0);
 
-			workspace = scrollWindow(workspace, -1);
-			expect(workspace.activeWindowIndex).toBe(0);
-			expect(workspace.windows).toHaveLength(1); // window 1 (empty, now inactive) was pruned on the way out
+			expect(scrollWindow(workspace, 1)).toEqual(nextWindow(workspace));
+			expect(scrollWindow(workspace, -1)).toEqual(previousWindow(workspace));
 		});
 
-		it("moving within existing Windows never prunes a Window that has real content, even while inactive", () => {
-			let workspace = dockSurface(fixtureWorkspace(), "activity", "Activity").workspace;
-			workspace = addWindow(workspace); // window 1, active, empty
-			workspace = dockSurface(workspace, "activity", "Second").workspace; // window 1 now used too
-			workspace = addWindow(workspace); // window 2, active, empty
+		it("wraps from the last Window back to the first when scrolling forward, without creating or pruning anything", () => {
+			let workspace = fixtureWorkspace();
+			workspace = addWindow(workspace); // window 1
+			workspace = addWindow(workspace); // window 2, active
 
-			workspace = scrollWindow(workspace, -1); // to window 1 (used)
-			expect(workspace.windows).toHaveLength(2); // window 0 (used) and window 1 (used) both survive; window 2 (empty) pruned
-		});
-
-		it("scrolling forward past the last Window creates exactly one new empty Window and moves into it", () => {
-			const workspace = fixtureWorkspace(); // one empty Window, active
 			const scrolled = scrollWindow(workspace, 1);
-
-			expect(scrolled.windows).toHaveLength(1); // the old empty active Window was pruned on the way out
 			expect(scrolled.activeWindowIndex).toBe(0);
-			expect(scrolled.windows[0]?.id).not.toBe(workspace.windows[0]?.id); // it's a genuinely new Window, not the same one
+			expect(scrolled.windows).toHaveLength(3);
 		});
 
-		it("scrolling backward before the first Window creates exactly one new empty Window and moves into it", () => {
-			const workspace = fixtureWorkspace();
-			const scrolled = scrollWindow(workspace, -1);
-
-			expect(scrolled.windows).toHaveLength(1);
-			expect(scrolled.activeWindowIndex).toBe(0);
-			expect(scrolled.windows[0]?.id).not.toBe(workspace.windows[0]?.id);
-		});
-
-		it("an empty Window with real content docked into it survives being left", () => {
-			let workspace = dockSurface(fixtureWorkspace(), "activity", "Activity").workspace;
-			workspace = scrollWindow(workspace, 1); // creates window 1 (empty), moves into it
-			expect(workspace.windows).toHaveLength(2);
-
-			workspace = scrollWindow(workspace, -1); // back to window 0 (used) -- window 1 (empty, now inactive) is pruned
-			expect(workspace.windows).toHaveLength(1);
-			expect(workspace.windows[0]?.dockedSurfaces).toHaveLength(1);
-		});
-
-		it("scrolling past an edge a second time reuses the still-empty ephemeral Window rather than creating a second one", () => {
+		it("wraps from the first Window back to the last when scrolling backward, without creating or pruning anything", () => {
 			let workspace = fixtureWorkspace();
-			workspace = scrollWindow(workspace, 1); // window A created
-			const afterFirst = workspace.windows[0]?.id;
-			workspace = scrollWindow(workspace, 1); // still only one Window to move within/past
-			expect(workspace.windows).toHaveLength(1);
-			expect(workspace.windows[0]?.id).not.toBe(afterFirst); // scrolling forward again past the (still sole, empty) Window creates a fresh one, not two
+			workspace = addWindow(workspace); // window 1
+			workspace = addWindow(workspace); // window 2
+			workspace = selectWindow(workspace, 0);
+
+			const scrolled = scrollWindow(workspace, -1);
+			expect(scrolled.activeWindowIndex).toBe(2);
+			expect(scrolled.windows).toHaveLength(3);
+		});
+
+		it("never creates or prunes a Window -- scrolling through several empty Windows leaves every one of them intact", () => {
+			// Several pre-existing empty Windows (e.g. the mock demo catalog's
+			// starting state): scrolling used to spawn a new ephemeral Window past
+			// either edge and prune whichever one was left behind empty -- a real
+			// bug ("mouse scrolling doesn't work": one wheel notch could collapse
+			// nearly every empty Window at once). Scrolling is now pure
+			// navigation, identical to the click/keyboard ring.
+			let workspace = fixtureWorkspace();
+			workspace = addWindow(workspace); // window 1
+			workspace = addWindow(workspace); // window 2
+			workspace = addWindow(workspace); // window 3
+			workspace = selectWindow(workspace, 2);
+
+			workspace = scrollWindow(workspace, 1); // to window 3
+			expect(workspace.windows).toHaveLength(4); // every Window survives
+			expect(workspace.activeWindowIndex).toBe(3);
+
+			workspace = scrollWindow(workspace, 1); // wraps to window 0
+			expect(workspace.windows).toHaveLength(4);
+			expect(workspace.activeWindowIndex).toBe(0);
 		});
 	});
 

@@ -97,6 +97,50 @@ test("the Window Carousel starts with several mock Windows, centered and fading 
 	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toBeVisible();
 });
 
+test("the Window Carousel is an infinite loop: the Window right before the first is the last one, not maximally far away", async ({ page }) => {
+	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
+	const buttons = windowButtons(carousel);
+	const count = await buttons.count();
+	const lastIndex = count - 1;
+
+	// Jump directly to the first Window (index 0) -- a flat, dead-ended strip
+	// would render the last Window maximally faded (it's numerically far from
+	// 0); a real loop renders it one step away, same as index 1.
+	await buttons.nth(0).click();
+	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
+	await expect(buttons.nth(0)).toHaveCSS("opacity", "1");
+	const lastOpacity = Number(await buttons.nth(lastIndex).evaluate((element) => getComputedStyle(element).opacity));
+	const secondOpacity = Number(await buttons.nth(1).evaluate((element) => getComputedStyle(element).opacity));
+	expect(lastOpacity).toBeGreaterThan(0); // visible, not faded into nothing
+	expect(lastOpacity).toBeCloseTo(secondOpacity, 5); // symmetric: one step away on either side of 0
+
+	// window.next from the last Window wraps to the first -- the domain model
+	// already did this (nextWindow's modulo); this asserts the visual carousel
+	// reflects it, not just the underlying index.
+	await buttons.nth(lastIndex).click();
+	await page.getByRole("button", { name: "Next Window" }).click();
+	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
+});
+
+test("a real mouse wheel scroll over the Window Carousel moves exactly one Window, without disturbing the others", async ({ page }) => {
+	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
+	const originalCount = await windowButtons(carousel).count();
+	const startIndex = await activeWindowIndex(carousel);
+
+	// A real physical scroll: move the mouse over the Carousel first (not a
+	// locator-scoped synthetic dispatch), then wheel -- this is what "mouse
+	// scrolling doesn't work" turned out to mean live: a single wheel notch
+	// was collapsing nearly every mock Window at once instead of moving one
+	// step (scrollWindow's prune used to sweep every empty Window in the
+	// array, not just the one just left -- see workspace/model.ts).
+	const box = (await carousel.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.wheel(0, 50);
+
+	await expect(carousel.getByRole("button", { name: String(startIndex + 1) })).toHaveAttribute("aria-current", "true");
+	await expect(windowButtons(carousel)).toHaveCount(originalCount); // moving within existing Windows disturbs nothing
+});
+
 test("clicking a Surface Template glyph docks it into the active Window", async ({ page }) => {
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
@@ -119,47 +163,26 @@ test("Window Carousel: clicking a Window index switches to an independent dockin
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 });
 
-test("wheel-scrolling past either end of the Window Carousel opens exactly one empty Window, never a second one accumulating", async ({ page }) => {
+test("wheel-scrolling forward past the last Window wraps to the first, without creating or pruning any Window", async ({ page }) => {
+	// Scrolling used to spawn a brand-new empty Window past either edge and
+	// prune whichever one was left behind -- reversed after live feedback
+	// ("the carousel should be infinity looping"): the wheel is now the
+	// exact same wrap-around ring as click/keyboard navigation.
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
-	// Jump to the last existing mock Window and dock into it, so scrolling
-	// forward from there must create a brand-new ephemeral Window --
-	// exercising scrollWindow's edge-creation path. scrollWindow also prunes
-	// every OTHER empty, inactive Window in the same step (model.ts's
-	// pruneAbandonedEmptyWindows applies to any abandoned Window, not just
-	// the one immediately left), so the remaining mock Windows disappear the
-	// moment the wheel is used at all -- only the docked one and the fresh
-	// ephemeral one are left.
-	const lastMockIndex = (await windowButtons(carousel).count()) - 1;
+	const originalCount = await windowButtons(carousel).count();
+	const lastMockIndex = originalCount - 1;
 	await carousel.getByRole("button", { name: String(lastMockIndex) }).click();
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 
 	await carousel.hover();
-	await page.mouse.wheel(0, 100); // forward, past the last (now "used") Window -- opens a new empty one
-	await expect(windowButtons(carousel)).toHaveCount(2);
-	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
-	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toBeVisible();
-
-	await page.mouse.wheel(0, 100); // still nothing docked in the new Window -- scrolling further replaces it, doesn't add a second empty Window
-	await expect(windowButtons(carousel)).toHaveCount(2);
-	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
-});
-
-test("scrolling back from an unused ephemeral Window to a used one removes the ephemeral Window", async ({ page }) => {
-	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
-	const lastMockIndex = (await windowButtons(carousel).count()) - 1;
-	await carousel.getByRole("button", { name: String(lastMockIndex) }).click();
-	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
-	await expect(page.getByText("Workspace activity")).toBeVisible();
-
-	await carousel.hover();
-	await page.mouse.wheel(0, 100); // opens the empty ephemeral Window (and prunes the other unused mock Windows in the same step)
-	await expect(windowButtons(carousel)).toHaveCount(2);
-	await expect(carousel.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");
-
-	await page.mouse.wheel(0, -100); // back to the docked Window (used) -- the ephemeral one is dropped
-	await expect(windowButtons(carousel)).toHaveCount(1);
+	await page.mouse.wheel(0, 100); // forward, past the last Window -- wraps to the first, nothing created or pruned
+	await expect(windowButtons(carousel)).toHaveCount(originalCount);
 	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
+
+	await page.mouse.wheel(0, -100); // backward from the first -- wraps back to the last (still docked) Window
+	await expect(windowButtons(carousel)).toHaveCount(originalCount);
+	await expect(carousel.getByRole("button", { name: String(lastMockIndex) })).toHaveAttribute("aria-current", "true");
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 });
 

@@ -1,13 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { computeWindowFadeOpacity, computeWindowTrackOffsetPx, WINDOW_FADE_DISTANCE, WINDOW_ITEM_HALF_WIDTH_PX, WINDOW_ITEM_STEP_PX } from "./window-carousel-fade.js";
+import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx, WINDOW_FADE_DISTANCE, WINDOW_ITEM_STEP_PX } from "./window-carousel-fade.js";
 
-describe("computeWindowTrackOffsetPx", () => {
-	it("offsets by exactly half an item's width when the active Window is first", () => {
-		expect(computeWindowTrackOffsetPx(0)).toBe(WINDOW_ITEM_HALF_WIDTH_PX);
+describe("circularWindowDelta", () => {
+	it("is 0 for the active Window itself", () => {
+		expect(circularWindowDelta(3, 3, 7)).toBe(0);
 	});
 
-	it("adds one full item step per Window before the active one", () => {
-		expect(computeWindowTrackOffsetPx(3)).toBe(3 * WINDOW_ITEM_STEP_PX + WINDOW_ITEM_HALF_WIDTH_PX);
+	it("is a plain signed difference when nowhere near the wrap boundary", () => {
+		expect(circularWindowDelta(4, 3, 7)).toBe(1);
+		expect(circularWindowDelta(1, 3, 7)).toBe(-2);
+	});
+
+	it("wraps: the last Window is one step *before* the first, not maximally far away", () => {
+		expect(circularWindowDelta(6, 0, 7)).toBe(-1);
+	});
+
+	it("wraps: the first Window is one step *after* the last", () => {
+		expect(circularWindowDelta(0, 6, 7)).toBe(1);
+	});
+
+	it("is symmetric: swapping index and activeIndex negates the delta", () => {
+		expect(circularWindowDelta(6, 0, 7)).toBe(-circularWindowDelta(0, 6, 7));
+	});
+
+	it("returns 0 for a non-positive Window count -- nothing to wrap around", () => {
+		expect(circularWindowDelta(0, 0, 0)).toBe(0);
+	});
+});
+
+describe("computeWindowOffsetPx", () => {
+	it("is 0 at the active Window (delta 0)", () => {
+		expect(computeWindowOffsetPx(0)).toBe(0);
+	});
+
+	it("scales linearly with delta, signed", () => {
+		expect(computeWindowOffsetPx(2)).toBe(2 * WINDOW_ITEM_STEP_PX);
+		expect(computeWindowOffsetPx(-1)).toBe(-WINDOW_ITEM_STEP_PX);
 	});
 });
 

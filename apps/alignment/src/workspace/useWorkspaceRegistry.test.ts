@@ -93,13 +93,13 @@ describe("useWorkspaceRegistry", () => {
 		expect(result.current.workspace.chatVisible).toBe(true);
 	});
 
-	it("scrollWindow drives the Window Carousel's mouse-wheel policy (create-past-edge, prune-on-leave)", () => {
+	it("scrollWindow drives the Window Carousel's mouse-wheel policy -- the same wrap-around ring as nextWindow/previousWindow", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		const firstWindowId = result.current.workspace.windows[0]?.id;
 
-		act(() => result.current.scrollWindow(1));
+		act(() => result.current.scrollWindow(1)); // a single Window wraps to itself -- nothing created or pruned
 		expect(result.current.workspace.windows).toHaveLength(1);
-		expect(result.current.workspace.windows[0]?.id).not.toBe(firstWindowId);
+		expect(result.current.workspace.windows[0]?.id).toBe(firstWindowId);
 	});
 
 	it("dockChat/isChatDocked/undockChatToFloating drive Chat between floating and docked", () => {

@@ -92,38 +92,22 @@ export function addWindow(workspace: Workspace): Workspace {
 }
 
 /**
- * The mouse-wheel policy on the Window Carousel: distinct from nextWindow/
- * previousWindow's wrap-around (still used by the keyboard commands).
- * Scrolling within existing Windows just moves by one. Scrolling past
- * either end creates exactly one new empty Window there and moves into it
- * -- never more than one such "ephemeral" Window exists at a time, and any
- * empty Window left behind (not the active one, nothing docked into it) is
- * dropped in the same step. A Window with docked Surfaces is never pruned.
+ * The mouse-wheel policy on the Window Carousel -- the exact same
+ * wrap-around ring as nextWindow/previousWindow, not a separate policy.
+ * This used to spawn a brand-new empty Window when scrolled past either
+ * edge and prune whichever Window was left behind empty; that was a
+ * deliberate divergence from the click/keyboard wrap policy, but it was
+ * reversed after live feedback ("the carousel should be infinity
+ * looping", and the old policy's pruning had a real bug: with several
+ * pre-existing empty Windows in play -- e.g. the mock demo catalog -- a
+ * single wheel notch could collapse nearly all of them at once instead of
+ * moving one step, which is what "mouse scrolling doesn't work" turned
+ * out to mean when reported live). Explicit Window creation still exists
+ * -- window.new / the New Window button, addWindow above -- it's just no
+ * longer implicitly tied to scrolling past an edge.
  */
 export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace {
-	const targetIndex = workspace.activeWindowIndex + direction;
-	let windows = workspace.windows;
-	let activeWindowIndex: number;
-
-	if (targetIndex >= 0 && targetIndex < windows.length) {
-		activeWindowIndex = targetIndex;
-	} else if (direction > 0) {
-		windows = [...windows, { id: nextInstanceId("window"), dockedSurfaces: [] }];
-		activeWindowIndex = windows.length - 1;
-	} else {
-		windows = [{ id: nextInstanceId("window"), dockedSurfaces: [] }, ...windows];
-		activeWindowIndex = 0;
-	}
-
-	return pruneAbandonedEmptyWindows({ ...workspace, windows, activeWindowIndex });
-}
-
-/** Drops every empty, inactive Window -- the cleanup half of scrollWindow's ephemeral-Window policy. */
-function pruneAbandonedEmptyWindows(workspace: Workspace): Workspace {
-	const activeId = workspace.windows[workspace.activeWindowIndex]?.id;
-	const kept = workspace.windows.filter((window) => window.id === activeId || window.dockedSurfaces.length > 0);
-	if (kept.length === workspace.windows.length) return workspace;
-	return { ...workspace, windows: kept, activeWindowIndex: kept.findIndex((window) => window.id === activeId) };
+	return direction > 0 ? nextWindow(workspace) : previousWindow(workspace);
 }
 
 /** Docks a new Surface instance of `templateId` into the active Window. Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
