@@ -3,20 +3,14 @@ import type { ReactNode } from "react";
 
 /**
  * A hover/focus-revealed tooltip wrapping a glyph-pillar trigger -- shared
- * by every glyph-pillar control (Workspace Selection on the left, Surface
- * Templates on the right) instead of each repeating the same positioning
- * markup with only the anchor side differing.
+ * by every glyph-pillar control (Workspace Selection, Surface Templates)
+ * instead of each repeating the same positioning markup.
  *
- * Renders through Radix's own Tooltip.Portal (the same mechanism
- * CommandButton's own built-in tooltip already uses), not a CSS-`absolute`
- * box positioned relative to a `group relative` ancestor: a scrollable
- * pillar list (`overflow-auto`, many entries) measures an absolutely
- * positioned descendant's box for its own scrollable content area even
- * while that descendant is invisible (`opacity-0` doesn't remove it from
- * layout) -- a real, live bug found this way: a wide tooltip box sized for
- * its label text, sitting just past a 56px collapsed pillar's right edge,
- * silently produced a horizontal scrollbar on the pillar itself. A portal
- * escapes that ancestor's overflow box entirely, by construction.
+ * Renders through Radix's Tooltip.Portal (same mechanism as CommandButton's
+ * own built-in tooltip), not a CSS-`absolute` box inside the scrollable
+ * pillar list: a positioned-but-invisible descendant still counts toward
+ * its scrollable ancestor's overflow, which can produce a phantom
+ * scrollbar. A portal escapes that ancestor's overflow box by construction.
  */
 export function PillarTooltip({ side, label, shortcut, children }: { readonly side: "left" | "right"; readonly label: string; readonly shortcut?: string; readonly children: ReactNode }): React.JSX.Element {
 	return (

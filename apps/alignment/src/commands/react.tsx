@@ -69,13 +69,10 @@ export const CommandButton = forwardRef<HTMLButtonElement, CommandButtonProps>(f
 	const shortcut = binding ? formatForDisplay(binding.keys) : "Unbound";
 	const ariaShortcut = binding ? toAriaKeyShortcut(binding.keys) : undefined;
 
-	// Composed, not overwritten by a later `{...props}` spread: wrapping this
-	// button in Tooltip.Trigger's `asChild` (see PillarTooltip.tsx) clones an
-	// onClick onto it at runtime (Radix's own tooltip-close behavior) that TS
-	// can't see coming, since Slot cloning bypasses prop types entirely. A
-	// plain `onClick={...} {...props}` ordering let that runtime-injected
-	// handler silently replace command execution -- a real, live bug this
-	// composition fixes, not just this one call site's workaround.
+	// Composed, not overwritten by `{...props}`: Tooltip.Trigger's `asChild`
+	// (see PillarTooltip.tsx) clones its own onClick onto this button at
+	// runtime, bypassing prop types (Slot cloning). Composing here means any
+	// externally-supplied onClick still runs alongside command execution.
 	const button = (
 		<button
 			ref={ref}

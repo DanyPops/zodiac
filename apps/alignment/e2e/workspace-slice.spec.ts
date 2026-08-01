@@ -12,7 +12,7 @@ async function revealChat(page: Page): Promise<void> {
 	await expect(page.getByRole("dialog", { name: "Chat" })).toBeVisible();
 }
 
-/** Each mock Workspace starts pre-seeded with several demo Windows (workspace-catalog.ts's createDemoWorkspace) to show the Carousel's centered/fading layout -- so tests read the real starting count/active index off the DOM rather than assuming "one Window at index 0". */
+/** Mock Workspaces start pre-seeded with several demo Windows (workspace-catalog.ts's createDemoWorkspace) -- tests read the real starting count/active index off the DOM rather than assuming "one Window at index 0". */
 function windowButtons(carousel: Locator): Locator {
 	return carousel.getByRole("button", { name: /^\d+$/ });
 }
@@ -103,9 +103,6 @@ test("the Window Carousel is an infinite loop: the Window right before the first
 	const count = await buttons.count();
 	const lastIndex = count - 1;
 
-	// Jump directly to the first Window (index 0) -- a flat, dead-ended strip
-	// would render the last Window maximally faded (it's numerically far from
-	// 0); a real loop renders it one step away, same as index 1.
 	await buttons.nth(0).click();
 	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
 	await expect(buttons.nth(0)).toHaveCSS("opacity", "1");
@@ -114,9 +111,6 @@ test("the Window Carousel is an infinite loop: the Window right before the first
 	expect(lastOpacity).toBeGreaterThan(0); // visible, not faded into nothing
 	expect(lastOpacity).toBeCloseTo(secondOpacity, 5); // symmetric: one step away on either side of 0
 
-	// window.next from the last Window wraps to the first -- the domain model
-	// already did this (nextWindow's modulo); this asserts the visual carousel
-	// reflects it, not just the underlying index.
 	await buttons.nth(lastIndex).click();
 	await page.getByRole("button", { name: "Next Window" }).click();
 	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
@@ -127,18 +121,28 @@ test("a real mouse wheel scroll over the Window Carousel moves exactly one Windo
 	const originalCount = await windowButtons(carousel).count();
 	const startIndex = await activeWindowIndex(carousel);
 
-	// A real physical scroll: move the mouse over the Carousel first (not a
-	// locator-scoped synthetic dispatch), then wheel -- this is what "mouse
-	// scrolling doesn't work" turned out to mean live: a single wheel notch
-	// was collapsing nearly every mock Window at once instead of moving one
-	// step (scrollWindow's prune used to sweep every empty Window in the
-	// array, not just the one just left -- see workspace/model.ts).
+	// A real physical scroll: move the mouse first, then wheel -- not a
+	// locator-scoped synthetic dispatch.
 	const box = (await carousel.boundingBox())!;
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 	await page.mouse.wheel(0, 50);
 
 	await expect(carousel.getByRole("button", { name: String(startIndex + 1) })).toHaveAttribute("aria-current", "true");
 	await expect(windowButtons(carousel)).toHaveCount(originalCount); // moving within existing Windows disturbs nothing
+});
+
+test("a burst of small, rapid wheel events (a real trackpad gesture) never triggers a passive-listener preventDefault error", async ({ page }) => {
+	const consoleErrors: string[] = [];
+	page.on("console", (message) => {
+		if (message.type() === "error") consoleErrors.push(message.text());
+	});
+
+	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
+	const box = (await carousel.boundingBox())!;
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	for (let i = 0; i < 30; i++) await page.mouse.wheel(0, 4); // small deltas, no waits
+
+	expect(consoleErrors.filter((text) => text.includes("preventDefault"))).toEqual([]);
 });
 
 test("clicking a Surface Template glyph docks it into the active Window", async ({ page }) => {
@@ -164,10 +168,6 @@ test("Window Carousel: clicking a Window index switches to an independent dockin
 });
 
 test("wheel-scrolling forward past the last Window wraps to the first, without creating or pruning any Window", async ({ page }) => {
-	// Scrolling used to spawn a brand-new empty Window past either edge and
-	// prune whichever one was left behind -- reversed after live feedback
-	// ("the carousel should be infinity looping"): the wheel is now the
-	// exact same wrap-around ring as click/keyboard navigation.
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
 	const originalCount = await windowButtons(carousel).count();
 	const lastMockIndex = originalCount - 1;

@@ -118,20 +118,14 @@
 }
 
 /*
- * dockview-core's own "Spaced" light theme (themeLightSpaced) sets its tab
- * text color to rgb(104, 107, 130) on a rgb(237, 237, 240)/rgb(249, 249, 250)
- * tab background -- a real WCAG 2 AA contrast failure (4.47:1, needs 4.5:1),
- * caught live by an automated accessibility scan, not assumed. The dark
- * "Spaced" variant (themeAbyssSpaced) doesn't have this problem (white/light
- * text on a dark tab background comfortably clears AA) so only light needs
- * the override.
+ * dockview-core's "Spaced" light theme sets its tab text color to
+ * rgb(104, 107, 130) on a rgb(237-249) tab background -- WCAG AA fails
+ * (4.47:1, needs 4.5:1). Only the light variant needs this; dark's
+ * light-on-dark tab text already clears AA.
  *
- * !important is required here, not just higher specificity: dockview's own
- * theme CSS for a lazy-loaded chunk (WindowDockview.tsx's dynamic import)
- * is injected into <head> only once that chunk actually loads, landing
- * *after* this file's own <link> regardless of source/specificity -- a
- * later same-specificity declaration always wins the cascade otherwise,
- * confirmed live (the override was silently losing) before adding this.
+ * !important is required: dockview's theme CSS ships in a lazy-loaded
+ * chunk, injected into <head> after this file's own <link> regardless of
+ * specificity, so a later same-specificity rule always wins otherwise.
  */
 .dockview-theme-light-spaced {
 	--dv-activegroup-visiblepanel-tab-color: #262626 !important;
@@ -139,16 +133,12 @@
 }
 
 /*
- * Corner Sharpness (see platform/visual-dna.ts) extends to docked Surfaces
- * too -- they're part of the same rounded visual language as the pillars
- * and Window Carousel, not a separate look. Same !important requirement as
- * the contrast override above (dockview's lazy-loaded theme CSS wins
- * ordinary specificity ties), same live-cascade trick as the fix below (the
- * variable *reference*, not a literal value, is what makes a runtime slider
- * change actually repaint dockview -- --app-corner-radius updates on :root
- * and these derived variables recompute automatically). --dv-sash-border-radius
- * (the drag-handle strip between split panels) is deliberately left alone --
- * it's a thin functional affordance, not part of the shape language.
+ * Corner Sharpness (platform/visual-dna.ts) extends to docked Surfaces --
+ * same rounded visual language as the pillars and Window Carousel. A
+ * variable reference, not a literal, so a slider drag repaints dockview
+ * immediately (--app-corner-radius updates on :root, these recompute).
+ * --dv-sash-border-radius (the drag-handle strip) is left alone -- a
+ * functional affordance, not part of the shape language.
  */
 .dockview-theme-light-spaced,
 .dockview-theme-abyss-spaced {
@@ -158,22 +148,12 @@
 }
 
 /*
- * "Abyss" is dockview-core's own name for this theme, and its actual root
- * colors earn it -- read directly from dockview-core's own stylesheet, not
- * eyeballed: --dv-color-abyss-dark: rgb(11, 6, 17) (near-black navy),
- * --dv-color-abyss: #16121f (the tabs-and-actions container AND the
- * content-container background -- easy to miss, since it's a bare
- * `--dv-color-abyss`, not one of the hyphenated `-dark`/`-light`/`-lighter`
- * siblings, and a first pass here searched only the hyphenated pattern and
- * silently missed it, confirmed live by sampling the actual rendered pixel
- * color, not assumed from the variable list alone), --dv-color-abyss-light:
- * #201d2b, --dv-color-abyss-lighter: #2a2837 -- all blue-purple. Every
- * group/tab/content background in the dark theme derives from these four
- * via var(), so overriding just the roots (not each derived variable
- * individually) re-neutralizes the whole theme in one place. Matched to
- * this file's own neutral-800/900/950 rather than left as dockview's
- * defaults, so docked Surfaces read as the same true grayscale as the rest
- * of the dark shell, not a bluer dark next to it.
+ * dockview-core's "Abyss" dark theme is navy/purple at its color roots:
+ * --dv-color-abyss-dark: rgb(11,6,17), --dv-color-abyss: #16121f (bare, not
+ * one of the -dark/-light/-lighter siblings -- easy to miss), plus
+ * -light/-lighter. Every group/tab/content background derives from these
+ * four via var(), so overriding just the roots re-neutralizes the theme.
+ * Matched to this file's own neutral-800/900/950.
  */
 .dockview-theme-abyss-spaced {
 	--dv-color-abyss-dark: #0a0a0a !important;
@@ -185,14 +165,10 @@
 }
 
 /*
- * Two more literal-blue defaults, present in *both* themes, not just Abyss --
- * dodgerblue for a paneview's active outline (every built-in theme ships this
- * literally, not derived from any theme's own color roots) and, for Abyss
- * specifically, --dv-color-abyss-accent (rgb(91, 30, 207), purple) driving
- * the active resize-sash color while a split is being dragged. Matched to
- * this app's own --color-accent (#737373) so the one "live interaction"
- * highlight color in the docking engine is the same neutral used everywhere
- * else, not a leftover hue.
+ * Two more literal-color defaults, present in every built-in theme, not
+ * derived from any theme's own root variables: dodgerblue for a paneview's
+ * active outline, and (Abyss only) a purple active-resize-sash color.
+ * Matched to this app's own --color-accent (#737373).
  */
 .dockview-theme-light-spaced,
 .dockview-theme-abyss-spaced {

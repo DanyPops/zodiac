@@ -163,13 +163,12 @@ export function WindowDockview({
 			const point = overlayEvent.nativeEvent instanceof DragEvent || overlayEvent.nativeEvent instanceof PointerEvent ? { x: overlayEvent.nativeEvent.clientX, y: overlayEvent.nativeEvent.clientY, t: Date.now() } : null;
 			const last = lastMoveRef.current;
 			if (point) lastMoveRef.current = point;
-			// No native point to measure, or no prior sample to compare against yet
-			// (the very first dragover of a drag): suppress rather than allow.
-			// With the "Spaced" theme's absolute-mounted overlay anchor, an
-			// unsuppressed first frame stays visible (the anchor persists across
-			// frames) even while every later frame in a fast pass correctly gets
-			// suppressed -- confirmed live, not assumed. The policy is "wait for
-			// confirmed low velocity before showing", not "show until proven fast".
+			// No native point to measure, or no prior sample yet (the first
+			// dragover of a drag): suppress rather than allow. The "Spaced" theme's
+			// overlay anchor persists across frames once shown, so an unsuppressed
+			// first frame stays visible through the rest of a fast pass even if
+			// every later frame is correctly suppressed. Policy: wait for confirmed
+			// low velocity before showing, not "show until proven fast".
 			if (!point || !last) {
 				overlayEvent.preventDefault();
 				return;

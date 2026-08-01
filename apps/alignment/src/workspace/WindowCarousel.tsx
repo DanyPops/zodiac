@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import type { WheelEvent } from "react";
+import { useEffect, useRef } from "react";
 import { CommandButton } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx } from "./window-carousel-fade.js";
@@ -8,39 +8,48 @@ interface WindowCarouselProps {
 	readonly windowCount: number;
 	readonly activeIndex: number;
 	readonly onSelect: (index: number) => void;
-	/** The mouse-wheel policy (workspace/model.ts's scrollWindow): move within existing Windows, or create one past either edge -- distinct from onSelect's direct-jump-by-index and from the keyboard commands' wrap-around. */
+	/** Same wrap-around ring as onSelect/nextWindow/previousWindow (workspace/model.ts's scrollWindow). */
 	readonly onScroll: (direction: 1 | -1) => void;
 }
 
 /**
- * The Window Carousel: a Workspace's numbered Windows, left (0) to right
- * (last). Direct clicks and the keyboard commands (window.next/window.previous)
- * wrap at both ends; the mouse wheel instead creates a new empty Window past
- * either edge -- see workspace/model.ts's scrollWindow, which this only
- * drives, never reimplements.
+ * A Workspace's numbered Windows. Clicks, keyboard, and the wheel all share
+ * one wrap-around ring (workspace/model.ts). Visually the active Window
+ * sits centered (a coverflow effect); neighbors fade with circular
+ * distance (window-carousel-fade.ts) so the ring reads as a loop, not a
+ * dead-ended strip.
  *
- * Visually, the active Window always sits centered in the track (a real
- * coverflow effect, not a left-aligned scrollable list) -- its neighbors
- * fade out with distance until fully invisible, and the sequence loops:
- * the Window right before index 0 is the last one, not "maximally far
- * away", matching nextWindow/previousWindow's own wrap-around ring. All
- * computed by window-carousel-fade.ts's pure formulas, not a CSS mask
- * trick or a duplicated-DOM-nodes illusion.
+ * The wheel listener is attached natively via ref/effect, not React's
+ * `onWheel` prop: React attaches wheel listeners as passive, so
+ * `preventDefault()` inside `onWheel` is silently ignored and the
+ * browser's own default scroll still fires alongside ours. `{ passive:
+ * false }` is the only way around that; there's no React prop for it.
  */
 export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }: WindowCarouselProps): React.JSX.Element {
-	function handleWheel(event: WheelEvent<HTMLDivElement>): void {
-		// Whichever axis moved further decides direction -- a plain mouse wheel
-		// only ever reports deltaY, but a trackpad's horizontal swipe (deltaX)
-		// is at least as natural for a left-to-right carousel and should drive
-		// it the same way.
-		const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-		if (delta === 0) return;
-		event.preventDefault();
-		onScroll(delta > 0 ? 1 : -1);
-	}
+	const navRef = useRef<HTMLElement>(null);
+	// Ref, not a dependency: onScroll is a fresh closure every render, and
+	// this effect only needs to run once to attach the listener.
+	const onScrollRef = useRef(onScroll);
+	onScrollRef.current = onScroll;
+
+	useEffect(() => {
+		const nav = navRef.current;
+		if (!nav) return;
+
+		function handleWheel(event: WheelEvent): void {
+			// A trackpad's horizontal swipe is as natural as a wheel's vertical one.
+			const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+			if (delta === 0) return;
+			event.preventDefault();
+			onScrollRef.current(delta > 0 ? 1 : -1);
+		}
+
+		nav.addEventListener("wheel", handleWheel, { passive: false });
+		return () => nav.removeEventListener("wheel", handleWheel);
+	}, []);
 
 	return (
-		<nav aria-label="Window Carousel" className="flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] bg-gray-50 px-2 dark:bg-gray-900" onWheel={handleWheel}>
+		<nav ref={navRef} aria-label="Window Carousel" className="flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] bg-gray-50 px-2 dark:bg-gray-900">
 			<CommandButton commandId="window.previous" label="Previous Window" className="grid size-7 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
 				<ChevronLeft aria-hidden="true" size={15} />
 			</CommandButton>
@@ -68,14 +77,7 @@ interface WindowButtonProps {
 	readonly onSelect: (index: number) => void;
 }
 
-/**
- * One Window's own glyph in the track -- its own component so the
- * fade/active/position styling (real, non-trivial rules) lives in exactly
- * one place, not repeated inline in every map callsite that lists Windows.
- * Positioned individually (not flowed in sequence) so the *circular*
- * delta from the active Window -- not its raw index -- decides where it
- * sits: what makes the carousel loop instead of dead-ending at either end.
- */
+/** One Window's glyph, positioned by its circular delta from the active Window (not raw index), so it can sit on either side of a wrap boundary. */
 function WindowButton({ index, activeIndex, windowCount, onSelect }: WindowButtonProps): React.JSX.Element {
 	const isActive = index === activeIndex;
 	const delta = circularWindowDelta(index, activeIndex, windowCount);

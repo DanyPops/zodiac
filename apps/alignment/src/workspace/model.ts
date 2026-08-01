@@ -92,19 +92,10 @@ export function addWindow(workspace: Workspace): Workspace {
 }
 
 /**
- * The mouse-wheel policy on the Window Carousel -- the exact same
- * wrap-around ring as nextWindow/previousWindow, not a separate policy.
- * This used to spawn a brand-new empty Window when scrolled past either
- * edge and prune whichever Window was left behind empty; that was a
- * deliberate divergence from the click/keyboard wrap policy, but it was
- * reversed after live feedback ("the carousel should be infinity
- * looping", and the old policy's pruning had a real bug: with several
- * pre-existing empty Windows in play -- e.g. the mock demo catalog -- a
- * single wheel notch could collapse nearly all of them at once instead of
- * moving one step, which is what "mouse scrolling doesn't work" turned
- * out to mean when reported live). Explicit Window creation still exists
- * -- window.new / the New Window button, addWindow above -- it's just no
- * longer implicitly tied to scrolling past an edge.
+ * The mouse-wheel policy on the Window Carousel -- the same wrap-around
+ * ring as nextWindow/previousWindow, not a separate policy. Never
+ * creates or prunes a Window; explicit creation is still available via
+ * addWindow/window.new, just not implicitly tied to scrolling an edge.
  */
 export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace {
 	return direction > 0 ? nextWindow(workspace) : previousWindow(workspace);

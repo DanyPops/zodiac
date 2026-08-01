@@ -82,12 +82,6 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("never creates or prunes a Window -- scrolling through several empty Windows leaves every one of them intact", () => {
-			// Several pre-existing empty Windows (e.g. the mock demo catalog's
-			// starting state): scrolling used to spawn a new ephemeral Window past
-			// either edge and prune whichever one was left behind empty -- a real
-			// bug ("mouse scrolling doesn't work": one wheel notch could collapse
-			// nearly every empty Window at once). Scrolling is now pure
-			// navigation, identical to the click/keyboard ring.
 			let workspace = fixtureWorkspace();
 			workspace = addWindow(workspace); // window 1
 			workspace = addWindow(workspace); // window 2
