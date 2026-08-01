@@ -28,15 +28,25 @@
 	--color-gray-900: #171717;
 	--color-gray-950: #0a0a0a;
 
-	--color-accent-10: #e0f0ff;
-	--color-accent-20: #b9dafc;
-	--color-accent-30: #92c5f9;
-	--color-accent-40: #4394e5;
-	--color-accent-50: #0066cc;
-	--color-accent-60: #004d99;
-	--color-accent-70: #003366;
-	--color-accent-80: #032142;
-	--color-accent: #0066cc;
+	/*
+	 * Black & white only, for now -- no hue at all, not even the brand blue.
+	 * The same neutral family as --color-gray-*, not a separate hue: --color-
+	 * accent (base, #737373 == neutral-500) is chosen specifically so a single
+	 * fixed value stays visibly distinct from both a light page (>=4.3:1) and
+	 * a dark one (>=3.2:1) without a dark: variant -- the two call sites that
+	 * use it bare (focus-visible:outline-accent, focus:border-accent) never
+	 * had one, unlike every bg/text pairing below, which does and was chosen
+	 * per-pairing instead.
+	 */
+	--color-accent-10: #f5f5f5;
+	--color-accent-20: #e5e5e5;
+	--color-accent-30: #d4d4d4;
+	--color-accent-40: #a3a3a3;
+	--color-accent-50: #737373;
+	--color-accent-60: #525252;
+	--color-accent-70: #404040;
+	--color-accent-80: #262626;
+	--color-accent: #737373;
 
 	--color-success-10: #e9f7df;
 	--color-success-50: #63993d;
@@ -172,6 +182,25 @@
 	--dv-color-abyss-lighter: #262626 !important;
 	/* Also blue-purple in the original (rgb(148, 151, 169)) -- its own inactive-tab-text role, not an accent. */
 	--dv-color-abyss-secondary-text: #a3a3a3 !important;
+}
+
+/*
+ * Two more literal-blue defaults, present in *both* themes, not just Abyss --
+ * dodgerblue for a paneview's active outline (every built-in theme ships this
+ * literally, not derived from any theme's own color roots) and, for Abyss
+ * specifically, --dv-color-abyss-accent (rgb(91, 30, 207), purple) driving
+ * the active resize-sash color while a split is being dragged. Matched to
+ * this app's own --color-accent (#737373) so the one "live interaction"
+ * highlight color in the docking engine is the same neutral used everywhere
+ * else, not a leftover hue.
+ */
+.dockview-theme-light-spaced,
+.dockview-theme-abyss-spaced {
+	--dv-paneview-active-outline-color: #737373 !important;
+}
+
+.dockview-theme-abyss-spaced {
+	--dv-active-sash-color: #737373 !important;
 }
 
 @media (forced-colors: active) {

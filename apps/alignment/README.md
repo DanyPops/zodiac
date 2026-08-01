@@ -75,9 +75,15 @@ The floating Chat Surface starts collapsed ("peek") each time it's summoned: onl
 
 Chat can also be docked into the active Window like any other Surface (a header control on the floating overlay), rather than always floating. Once docked, it renders an "Aware of: ..." line naming its sibling docked Surfaces in the same Window, kept live via `dockview`'s `updateParameters` as Surfaces are docked/undocked around it -- not a one-time snapshot. Closing its docked panel (or its own "Float" control) returns it to the floating overlay rather than discarding it.
 
-## Dark mode: true grayscale, not blue-tinted
+## Black & white only, for now
 
-Dark mode uses Tailwind's achromatic "neutral" palette (every `--color-gray-*` swatch is exactly R=G=B), not Tailwind's default "gray" (cool-toned -- its 900 is `#111827`, where the blue channel visibly leads red and green). The docking engine's dark theme needed the same fix independently: dockview-core's "Abyss" theme is literally navy/purple at its color roots (`#000c18`, `#1c1c2a`, `#2b2b4a`), overridden in `styles.css` to the same neutral values. `src/palette.test.ts` reads `styles.css` directly and asserts every relevant swatch is achromatic, so this can't silently regress.
+The shell has no color highlight at all right now, by explicit request -- not just a dark-mode fix, the brand accent itself. `--color-gray-*` uses Tailwind's achromatic "neutral" palette (every swatch is exactly R=G=B), not Tailwind's default "gray" (cool-toned -- its 900 is `#111827`, where the blue channel visibly leads red and green). `--color-accent*` (previously a blue, `#0066cc`) is now the same neutral family: a single fixed `#737373` (chosen for >=4.3:1 contrast against light surfaces and >=3.2:1 against dark ones, so the two call sites that use it without a `dark:` variant -- the focus-visible outline and the focused-input border -- stay visible in both themes without one), with the bg/text tint-and-shade pairs around it picked per-pairing for real contrast (verified, not eyeballed).
+
+The docking engine needed the same fix independently, twice: dockview-core's "Abyss" dark theme is literally navy/purple at its color roots (`#000c18`, `#1c1c2a`, `#2b2b4a`), and *every* built-in theme (including the light one) ships a literal `dodgerblue` for a paneview's active outline, plus Abyss's own purple active-resize-sash color. All overridden in `styles.css` to the same neutral `#737373`/neutral-scale values used everywhere else.
+
+The Activity Surface's semantic status colors (success/danger/warning/info in `graph/observability-graph.ts`) are left as real color -- they carry actual meaning (event outcome), not decoration, and are a separate concern from this scoping. Its graph-edge line colors, which *are* meant to read as plain neutral connectors, were fixed the same way (`#a3a3a3`/`#d4d4d4`, not the old cool-toned `#9ca3af`/`#d1d5db`).
+
+`src/palette.test.ts` reads `styles.css` directly and asserts every `--color-gray-*` and `--color-accent*` swatch, plus dockview's overridden defaults, are achromatic -- so this can't silently regress back to a hue.
 
 ## Visual DNA: Vibe and Corner Sharpness
 

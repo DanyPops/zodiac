@@ -141,7 +141,8 @@ function styleEdge(renderGraph: Graph, edgeId: string): void {
 	const relation: unknown = renderGraph.getEdgeAttribute(edgeId, "relation");
 	const isCorrelates = relation === "correlates";
 	renderGraph.setEdgeAttribute(edgeId, "size", isCorrelates ? 2 : 1);
-	renderGraph.setEdgeAttribute(edgeId, "color", isCorrelates ? "#9ca3af" : "#d1d5db");
+	// Neutral connectors, not a status color: Tailwind's achromatic neutral-400/300, not its cool-toned gray-400/300.
+	renderGraph.setEdgeAttribute(edgeId, "color", isCorrelates ? "#a3a3a3" : "#d4d4d4");
 }
 
 export function buildRenderGraph(sourceGraph: Graph): Graph {
