@@ -5,8 +5,9 @@ import type { NormalizedEvent } from "../ingest/types.js";
  * Node kinds in the trace graph.
  *
  * Corrected against real Alef session data (not the initial assumption):
- * `correlationId` groups a WHOLE turn's exchange (dialog.message -> llm.result
- * -> tool calls -> dialog.message), not a single motor/sense pair. The
+ * `correlationId` groups a WHOLE turn's exchange (llm.input -> llm.result
+ * -> tool calls -> llm.response; older sessions used dialog.message instead),
+ * not a single motor/sense pair. The
  * finer-grained pairing key for one tool call's request/response is
  * `payload.toolCallId`. This graph models both: Turn nodes group by
  * correlationId, ToolCall nodes group by toolCallId.

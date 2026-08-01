@@ -10,14 +10,15 @@ export interface NormalizedEvent {
 	sourceId: string;
 	/** Which session this event belongs to. */
 	sessionId: string;
-	/** Alef bus channel: "motor" | "sense" | "signal" | "debug" (observed values; not a closed enum — new buses may appear). */
+	/** Alef bus channel: "motor" | "sense" | "signal" | "debug" | "internal" (observed values; not a closed enum — new buses may appear). */
 	bus: string;
-	/** Event type, e.g. "dialog.message", "llm.result", "fs.read". */
+	/** Event type, e.g. "llm.input", "llm.response", "llm.result", "fs.read". */
 	type: string;
 	/**
 	 * Groups the whole request/response exchange this event belongs to
-	 * (observed: shared across an entire turn's dialog.message -> llm.result
-	 * -> tool calls -> dialog.message chain, NOT a single motor/sense pair).
+	 * (observed: shared across an entire turn's llm.input -> llm.result
+	 * -> tool calls -> llm.response chain, NOT a single motor/sense pair).
+	 * Older sessions used dialog.message instead of llm.input/llm.response; both are recognized.
 	 */
 	correlationId: string;
 	/** Event-specific data; shape varies by (bus, type). */
