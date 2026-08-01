@@ -9,17 +9,24 @@
 	--color-transparent: transparent;
 	--color-current: currentColor;
 
-	--color-gray-50: #f9fafb;
-	--color-gray-100: #f3f4f6;
-	--color-gray-200: #e5e7eb;
-	--color-gray-300: #d1d5db;
-	--color-gray-400: #9ca3af;
-	--color-gray-500: #6b7280;
-	--color-gray-600: #4b5563;
-	--color-gray-700: #374151;
-	--color-gray-800: #1f2937;
-	--color-gray-900: #111827;
-	--color-gray-950: #030712;
+	/*
+	 * Tailwind's own "neutral" scale (verified against its published palette),
+	 * not "gray" (which is cool/blue-tinted -- e.g. its 900 is #111827, where
+	 * the blue channel (39) clearly leads red (17) and green (24)). Every swatch
+	 * here is exactly R=G=B: true achromatic gray, no color cast, in light mode
+	 * or dark.
+	 */
+	--color-gray-50: #fafafa;
+	--color-gray-100: #f5f5f5;
+	--color-gray-200: #e5e5e5;
+	--color-gray-300: #d4d4d4;
+	--color-gray-400: #a3a3a3;
+	--color-gray-500: #737373;
+	--color-gray-600: #525252;
+	--color-gray-700: #404040;
+	--color-gray-800: #262626;
+	--color-gray-900: #171717;
+	--color-gray-950: #0a0a0a;
 
 	--color-accent-10: #e0f0ff;
 	--color-accent-20: #b9dafc;
@@ -117,8 +124,8 @@
  * confirmed live (the override was silently losing) before adding this.
  */
 .dockview-theme-light-spaced {
-	--dv-activegroup-visiblepanel-tab-color: #1f2937 !important;
-	--dv-inactivegroup-visiblepanel-tab-color: #1f2937 !important;
+	--dv-activegroup-visiblepanel-tab-color: #262626 !important;
+	--dv-inactivegroup-visiblepanel-tab-color: #262626 !important;
 }
 
 /*
@@ -138,6 +145,33 @@
 	--dv-border-radius: var(--app-corner-radius) !important;
 	--dv-tab-border-radius: var(--app-corner-radius) !important;
 	--dv-dropdown-border-radius: var(--app-corner-radius) !important;
+}
+
+/*
+ * "Abyss" is dockview-core's own name for this theme, and its actual root
+ * colors earn it -- read directly from dockview-core's own stylesheet, not
+ * eyeballed: --dv-color-abyss-dark: rgb(11, 6, 17) (near-black navy),
+ * --dv-color-abyss: #16121f (the tabs-and-actions container AND the
+ * content-container background -- easy to miss, since it's a bare
+ * `--dv-color-abyss`, not one of the hyphenated `-dark`/`-light`/`-lighter`
+ * siblings, and a first pass here searched only the hyphenated pattern and
+ * silently missed it, confirmed live by sampling the actual rendered pixel
+ * color, not assumed from the variable list alone), --dv-color-abyss-light:
+ * #201d2b, --dv-color-abyss-lighter: #2a2837 -- all blue-purple. Every
+ * group/tab/content background in the dark theme derives from these four
+ * via var(), so overriding just the roots (not each derived variable
+ * individually) re-neutralizes the whole theme in one place. Matched to
+ * this file's own neutral-800/900/950 rather than left as dockview's
+ * defaults, so docked Surfaces read as the same true grayscale as the rest
+ * of the dark shell, not a bluer dark next to it.
+ */
+.dockview-theme-abyss-spaced {
+	--dv-color-abyss-dark: #0a0a0a !important;
+	--dv-color-abyss: #171717 !important;
+	--dv-color-abyss-light: #171717 !important;
+	--dv-color-abyss-lighter: #262626 !important;
+	/* Also blue-purple in the original (rgb(148, 151, 169)) -- its own inactive-tab-text role, not an accent. */
+	--dv-color-abyss-secondary-text: #a3a3a3 !important;
 }
 
 @media (forced-colors: active) {

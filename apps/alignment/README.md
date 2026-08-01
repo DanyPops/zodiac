@@ -75,6 +75,10 @@ The floating Chat Surface starts collapsed ("peek") each time it's summoned: onl
 
 Chat can also be docked into the active Window like any other Surface (a header control on the floating overlay), rather than always floating. Once docked, it renders an "Aware of: ..." line naming its sibling docked Surfaces in the same Window, kept live via `dockview`'s `updateParameters` as Surfaces are docked/undocked around it -- not a one-time snapshot. Closing its docked panel (or its own "Float" control) returns it to the floating overlay rather than discarding it.
 
+## Dark mode: true grayscale, not blue-tinted
+
+Dark mode uses Tailwind's achromatic "neutral" palette (every `--color-gray-*` swatch is exactly R=G=B), not Tailwind's default "gray" (cool-toned -- its 900 is `#111827`, where the blue channel visibly leads red and green). The docking engine's dark theme needed the same fix independently: dockview-core's "Abyss" theme is literally navy/purple at its color roots (`#000c18`, `#1c1c2a`, `#2b2b4a`), overridden in `styles.css` to the same neutral values. `src/palette.test.ts` reads `styles.css` directly and asserts every relevant swatch is achromatic, so this can't silently regress.
+
 ## Visual DNA: Vibe and Corner Sharpness
 
 A gear icon in the Workspace Selection footer (both expanded and collapsed) opens **Visual DNA** (`Mod+Shift+,`): two sliders that reshape the shell's own chrome, inspired directly by Excalidraw's sloppiness/roundness controls (`packages/excalidraw/components/Range.tsx`, `actionChangeSloppiness`) but re-scoped for a real, interactive application rather than freehand-drawn shapes.
