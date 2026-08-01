@@ -13,7 +13,8 @@ import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useVisualDna } from "../visual-dna-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
-import { CHAT_TEMPLATE_ID } from "../workspace/model.js";
+import { CHAT_TEMPLATE_ID, isChatDocked } from "../workspace/model.js";
+import { WispCursor } from "../workspace/WispCursor.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -183,6 +184,8 @@ export function App(): React.JSX.Element {
 							/>
 						</Suspense>
 					</section>
+
+					<WispCursor visible={!isChatDocked(workspace.workspace)} />
 
 					<ChatOverlay
 						visible={workspace.workspace.chatVisible}
