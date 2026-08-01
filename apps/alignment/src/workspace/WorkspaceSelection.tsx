@@ -1,21 +1,28 @@
 import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Settings } from "lucide-react";
 import type { RefObject } from "react";
-import type { ConversationSummary } from "../conversation/client.js";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { PillarTooltip } from "./PillarTooltip.js";
+import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
 interface WorkspaceSelectionProps {
 	readonly collapsed: boolean;
-	readonly conversations: readonly ConversationSummary[];
-	readonly selectedConversationId?: string;
-	readonly loading: boolean;
+	readonly catalog: readonly WorkspaceCatalogEntry[];
+	readonly activeWorkspaceId: string;
 	readonly selectionRef: RefObject<HTMLElement | null>;
 	readonly selectedButtonRef: RefObject<HTMLButtonElement | null>;
-	readonly onConversationFocus: (conversationId: string) => void;
+	readonly onWorkspaceFocus: () => void;
 }
 
-/** The only shell sidebar, for choosing which Workspace (Conversation) is active -- nothing else. Surface docking lives in the Window Carousel/center/Surface Templates pillar instead. */
-export function WorkspaceSelection({ collapsed, conversations, selectedConversationId, loading, selectionRef, selectedButtonRef, onConversationFocus }: WorkspaceSelectionProps): React.JSX.Element {
+/**
+ * The only shell sidebar, for choosing which Workspace is active -- nothing
+ * else. A Workspace is its own independent Canvas (Windows, docked
+ * Surfaces, Chat visibility), never a Conversation: a Conversation is a
+ * Surface that may float globally, float inside a Workspace, or dock into
+ * one (see ChatOverlay/workspace/model.ts's dockChat) -- it never appears
+ * in this list. Surface docking itself lives in the Window Carousel/center/
+ * Surface Templates pillar instead.
+ */
+export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus }: WorkspaceSelectionProps): React.JSX.Element {
 	return (
 		<>
 			{!collapsed && (
@@ -36,31 +43,25 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 						</CommandButton>
 					</div>
 					<div className="border-b-[length:var(--app-line-width)] border-gray-200 px-3 py-2 dark:border-gray-700">
-						<p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-600 dark:text-gray-300">Conversations</p>
+						<p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-600 dark:text-gray-300">Workspaces</p>
 					</div>
-					<ul aria-label="Alef conversations" className="min-h-0 flex-1 overflow-auto p-2">
-						{loading && <li><p className="px-2 py-3 text-xs text-gray-600 dark:text-gray-300">Loading…</p></li>}
-						{!loading && conversations.length === 0 && <li><p className="px-2 py-3 text-xs text-gray-600 dark:text-gray-300">No local conversations found.</p></li>}
-						{conversations.map((conversation) => {
-							const selected = conversation.id === selectedConversationId;
-							const title = conversation.name ?? `Untitled — ${conversation.latestSessionId}`;
+					<ul aria-label="Workspaces" className="min-h-0 flex-1 overflow-auto p-2">
+						{catalog.map((entry) => {
+							const selected = entry.id === activeWorkspaceId;
 							return (
-								<li key={conversation.id}>
+								<li key={entry.id}>
 									<CommandButton
 										ref={selected ? selectedButtonRef : undefined}
-										commandId="conversation.open"
-										commandArgs={[conversation.id]}
-										data-conversation-id={conversation.id}
-										onFocus={() => onConversationFocus(conversation.id)}
-										label={`${title}, ${conversation.totalTurns} turns`}
+										commandId="workspace.select"
+										commandArgs={[entry.id]}
+										data-workspace-catalog-id={entry.id}
+										onFocus={onWorkspaceFocus}
+										label={entry.title}
 										aria-current={selected ? "page" : undefined}
-										className={`mb-1 w-full rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-accent ${selected ? "bg-white text-gray-950 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800/70"}`}
+										className={`mb-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-accent ${selected ? "bg-white text-gray-950 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800/70"}`}
 									>
-										<span className="block truncate text-xs font-medium">{title}</span>
-										<span className="mt-0.5 flex gap-2 text-[10px] text-gray-600 dark:text-gray-300">
-											<span>{conversation.totalTurns} turns</span>
-											<span>{relativeTime(conversation.lastActiveAt)}</span>
-										</span>
+										<entry.icon aria-hidden="true" size={16} className="shrink-0" />
+										<span className="truncate text-xs font-medium">{entry.title}</span>
 									</CommandButton>
 								</li>
 							);
@@ -78,27 +79,24 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
 					<CollapsedToggle />
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
-						{conversations.map((conversation) => {
-							const selected = conversation.id === selectedConversationId;
-							const title = conversation.name ?? `Untitled — ${conversation.latestSessionId}`;
-							const initial = title.trim().charAt(0).toUpperCase() || "?";
+						{catalog.map((entry) => {
+							const selected = entry.id === activeWorkspaceId;
 							return (
-								<div key={conversation.id} className="group relative">
+								<PillarTooltip key={entry.id} side="right" label={entry.title}>
 									<CommandButton
 										ref={selected ? selectedButtonRef : undefined}
-										commandId="conversation.open"
-										commandArgs={[conversation.id]}
-										data-conversation-id={conversation.id}
-										onFocus={() => onConversationFocus(conversation.id)}
-										label={title}
+										commandId="workspace.select"
+										commandArgs={[entry.id]}
+										data-workspace-catalog-id={entry.id}
+										onFocus={onWorkspaceFocus}
+										label={entry.title}
 										tooltip={false}
 										aria-current={selected ? "page" : undefined}
-										className={`grid size-9 place-items-center rounded-md text-xs font-semibold focus-visible:outline-2 focus-visible:outline-accent ${selected ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"}`}
+										className={`grid size-9 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-accent ${selected ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"}`}
 									>
-										{initial}
+										<entry.icon aria-hidden="true" size={18} />
 									</CommandButton>
-									<PillarTooltip side="right" label={title} />
-								</div>
+								</PillarTooltip>
 							);
 						})}
 					</div>
@@ -118,32 +116,30 @@ function CollapsedToggle(): React.JSX.Element {
 	const label = "Expand workspace selection";
 	const shortcut = useCommandShortcut("workspace.toggleSelection");
 	return (
-		<div className="group relative shrink-0">
+		<PillarTooltip side="right" label={label} shortcut={shortcut}>
 			<CommandButton
 				commandId="workspace.toggleSelection"
 				label={label}
 				tooltip={false}
-				className="grid h-12 w-14 place-items-center border-b-[length:var(--app-line-width)] border-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700"
+				className="group grid h-12 w-14 shrink-0 place-items-center border-b-[length:var(--app-line-width)] border-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700"
 			>
 				<span className="relative grid size-7 place-items-center rounded-md bg-accent text-white">
 					<span aria-hidden="true" className="text-xs font-bold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">A</span>
 					<ChevronsRight aria-hidden="true" size={16} className="absolute opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" />
 				</span>
 			</CommandButton>
-			<PillarTooltip side="right" label={label} shortcut={shortcut} />
-		</div>
+		</PillarTooltip>
 	);
 }
 
 function PillarCommand({ commandId, label, icon }: { readonly commandId: string; readonly label: string; readonly icon: React.ReactNode }): React.JSX.Element {
 	const shortcut = useCommandShortcut(commandId);
 	return (
-		<div className="group relative">
+		<PillarTooltip side="right" label={label} shortcut={shortcut}>
 			<CommandButton commandId={commandId} label={label} tooltip={false} className="grid size-9 place-items-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-950 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
 				{icon}
 			</CommandButton>
-			<PillarTooltip side="right" label={label} shortcut={shortcut} />
-		</div>
+		</PillarTooltip>
 	);
 }
 
@@ -157,13 +153,4 @@ function FooterCommand({ commandId, label, icon }: { readonly commandId: string;
 			{icon}
 		</CommandButton>
 	);
-}
-
-function relativeTime(iso: string): string {
-	const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
-	if (minutes < 1) return "now";
-	if (minutes < 60) return `${minutes}m`;
-	const hours = Math.round(minutes / 60);
-	if (hours < 24) return `${hours}h`;
-	return `${Math.round(hours / 24)}d`;
 }

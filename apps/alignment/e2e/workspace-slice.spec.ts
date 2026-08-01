@@ -295,12 +295,12 @@ test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and sh
 	await page.reload();
 
 	await page.keyboard.press("Control+1");
-	await expect(page.getByRole("navigation", { name: "Workspace selection" })).toContainText("Fixture conversation");
-	await expect(page.getByRole("button", { name: /^Fixture conversation/ })).toBeFocused();
+	await expect(page.getByRole("navigation", { name: "Workspace selection" })).toContainText("Bug");
+	await expect(page.getByRole("button", { name: "Bug" })).toBeFocused();
 	await page.keyboard.press("ArrowDown");
-	await expect(page.getByRole("button", { name: /^Secondary fixture conversation/ })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Metrics" })).toBeFocused();
 	await page.keyboard.press("ArrowUp");
-	await expect(page.getByRole("button", { name: /^Fixture conversation/ })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Bug" })).toBeFocused();
 
 	await page.keyboard.press("Control+2");
 	await expect(page.getByRole("region", { name: "Window view" })).toBeFocused();

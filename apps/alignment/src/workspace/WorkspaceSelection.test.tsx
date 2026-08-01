@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommandProvider } from "../commands/react.js";
 import { createCommandRegistry } from "../commands/registry.js";
 import { WorkspaceSelection } from "./WorkspaceSelection.js";
+import { WORKSPACE_CATALOG } from "./workspace-catalog.js";
 
 afterEach(() => {
 	cleanup();
@@ -16,10 +17,11 @@ function renderCollapsed(execute = vi.fn()) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "workspace.toggleSelection", title: "Toggle workspace selection", description: "", execute },
-			{ id: "conversation.open", title: "Open selected conversation", description: "", execute: vi.fn() },
+			{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() },
 			{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
 			{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
 			{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
+			{ id: "appearance.open", title: "Open Visual DNA", description: "", execute: vi.fn() },
 		],
 		bindings: [{ commandId: "workspace.toggleSelection", keys: "Mod+B", context: "global" }],
 	});
@@ -27,11 +29,11 @@ function renderCollapsed(execute = vi.fn()) {
 		<CommandProvider registry={registry} activeContexts={["global"]}>
 			<WorkspaceSelection
 				collapsed
-				conversations={[]}
-				loading={false}
+				catalog={WORKSPACE_CATALOG}
+				activeWorkspaceId={WORKSPACE_CATALOG[0]!.id}
 				selectionRef={createRef()}
 				selectedButtonRef={createRef()}
-				onConversationFocus={vi.fn()}
+				onWorkspaceFocus={vi.fn()}
 			/>
 		</CommandProvider>,
 	);
@@ -58,5 +60,21 @@ describe("collapsed Workspace quick selection", () => {
 		renderCollapsed();
 		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });
 		expect(toggle).toHaveAttribute("aria-keyshortcuts", "Control+B");
+	});
+
+	it("shows every catalog Workspace as its own glyph, distinct from a Conversation-derived initial", () => {
+		renderCollapsed();
+		for (const entry of WORKSPACE_CATALOG) {
+			const button = screen.getByRole("button", { name: entry.title });
+			expect(button.querySelector("svg")).not.toBeNull();
+		}
+	});
+
+	it("marks the active Workspace via aria-current", () => {
+		renderCollapsed();
+		const active = screen.getByRole("button", { name: WORKSPACE_CATALOG[0]!.title });
+		expect(active).toHaveAttribute("aria-current", "page");
+		const inactive = screen.getByRole("button", { name: WORKSPACE_CATALOG[1]!.title });
+		expect(inactive).not.toHaveAttribute("aria-current");
 	});
 });

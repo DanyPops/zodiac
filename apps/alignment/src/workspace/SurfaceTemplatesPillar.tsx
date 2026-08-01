@@ -24,16 +24,15 @@ export function SurfaceTemplatesPillar({ entries, onDockDefault, canSaveCurrent,
 
 	return (
 		<nav aria-label="Surface Templates" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
-			<div className="group relative shrink-0 border-b border-gray-200 dark:border-gray-700">
-				<CommandButton commandId="templates.open" label="Browse Surface Templates" tooltip={false} className="grid h-12 w-14 place-items-center text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+			<PillarTooltip side="left" label="Browse Surface Templates" shortcut={openPickerShortcut}>
+				<CommandButton commandId="templates.open" label="Browse Surface Templates" tooltip={false} className="grid h-12 w-14 shrink-0 place-items-center border-b border-gray-200 text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
 					<Plus aria-hidden="true" size={18} />
 				</CommandButton>
-				<PillarTooltip side="left" label="Browse Surface Templates" shortcut={openPickerShortcut} />
-			</div>
+			</PillarTooltip>
 
 			<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
 				{entries.map((entry) => (
-					<div key={entry.id} className="group relative">
+					<PillarTooltip key={entry.id} side="left" label={entry.saved ? `${entry.title} (saved)` : entry.title}>
 						<button
 							type="button"
 							draggable
@@ -44,25 +43,32 @@ export function SurfaceTemplatesPillar({ entries, onDockDefault, canSaveCurrent,
 						>
 							<entry.icon aria-hidden="true" size={17} />
 						</button>
-						<PillarTooltip side="left" label={entry.saved ? `${entry.title} (saved)` : entry.title} />
-					</div>
+					</PillarTooltip>
 				))}
 			</div>
 
 			<div className="flex flex-col items-center gap-1 border-t border-gray-200 p-2 dark:border-gray-700">
-				{savingTitle === null && (
-					<div className="group relative">
+				{savingTitle === null && !canSaveCurrent && (
+					<button
+						type="button"
+						disabled
+						aria-label="Save the active docked Surface as a new template"
+						className="grid size-9 place-items-center rounded-md text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300"
+					>
+						<span aria-hidden="true" className="text-sm font-semibold">+T</span>
+					</button>
+				)}
+				{savingTitle === null && canSaveCurrent && (
+					<PillarTooltip side="left" label="Save active Surface as a template">
 						<button
 							type="button"
-							disabled={!canSaveCurrent}
 							onClick={() => setSavingTitle("")}
 							aria-label="Save the active docked Surface as a new template"
-							className="grid size-9 place-items-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-950 focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+							className="grid size-9 place-items-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-950 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
 						>
 							<span aria-hidden="true" className="text-sm font-semibold">+T</span>
 						</button>
-						{canSaveCurrent && <PillarTooltip side="left" label="Save active Surface as a template" />}
-					</div>
+					</PillarTooltip>
 				)}
 				{savingTitle !== null && (
 					<form

@@ -53,6 +53,32 @@ describe("CommandButton", () => {
 		expect(await screen.findByRole("tooltip")).toHaveTextContent("Ctrl+B");
 	});
 
+	it("composes an externally-supplied onClick with command execution rather than one silently replacing the other", async () => {
+		// Regression test: wrapping a CommandButton in Radix's Tooltip.Trigger
+		// asChild (see PillarTooltip.tsx) clones an onClick handler onto it at
+		// runtime, bypassing CommandButtonProps' own type -- a plain
+		// `onClick={...} {...props}` ordering let that runtime-injected handler
+		// silently replace command execution. An explicit onClick prop is the
+		// same collision, reproducible without pulling in Radix at all.
+		const user = userEvent.setup();
+		const execute = vi.fn();
+		const externalOnClick = vi.fn();
+		const registry = createCommandRegistry({
+			commands: [{ id: "test.command", title: "Test command", description: "", execute }],
+			bindings: [],
+		});
+		render(
+			<CommandProvider registry={registry} activeContexts={["global"]}>
+				<CommandButton commandId="test.command" label="Run test command" onClick={externalOnClick}>
+					Run
+				</CommandButton>
+			</CommandProvider>,
+		);
+		await user.click(screen.getByRole("button", { name: "Run test command" }));
+		expect(externalOnClick).toHaveBeenCalledOnce();
+		expect(execute).toHaveBeenCalledOnce();
+	});
+
 	it("keeps modifier commands active while a text input owns focus", async () => {
 		const user = userEvent.setup();
 		const { execute } = renderCommandControl("Mod+Alt+L");

@@ -51,7 +51,7 @@ export function useCommandShortcut(commandId: string): string {
 	return binding ? formatForDisplay(binding.keys) : "Unbound";
 }
 
-interface CommandButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick"> {
+interface CommandButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 	commandId: string;
 	commandArgs?: unknown[];
 	label: string;
@@ -61,7 +61,7 @@ interface CommandButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 export const CommandButton = forwardRef<HTMLButtonElement, CommandButtonProps>(function CommandButton(
-	{ commandId, commandArgs = [], label, children, className = "", tooltip = true, tooltipLayout = "inline", tooltipSide = "top", ...props },
+	{ commandId, commandArgs = [], label, children, className = "", tooltip = true, tooltipLayout = "inline", tooltipSide = "top", onClick, ...props },
 	ref,
 ): React.JSX.Element {
 	const { registry, activeContexts } = useCommandEnvironment();
@@ -69,6 +69,13 @@ export const CommandButton = forwardRef<HTMLButtonElement, CommandButtonProps>(f
 	const shortcut = binding ? formatForDisplay(binding.keys) : "Unbound";
 	const ariaShortcut = binding ? toAriaKeyShortcut(binding.keys) : undefined;
 
+	// Composed, not overwritten by a later `{...props}` spread: wrapping this
+	// button in Tooltip.Trigger's `asChild` (see PillarTooltip.tsx) clones an
+	// onClick onto it at runtime (Radix's own tooltip-close behavior) that TS
+	// can't see coming, since Slot cloning bypasses prop types entirely. A
+	// plain `onClick={...} {...props}` ordering let that runtime-injected
+	// handler silently replace command execution -- a real, live bug this
+	// composition fixes, not just this one call site's workaround.
 	const button = (
 		<button
 			ref={ref}
@@ -76,7 +83,10 @@ export const CommandButton = forwardRef<HTMLButtonElement, CommandButtonProps>(f
 			aria-label={label}
 			aria-keyshortcuts={ariaShortcut}
 			className={className}
-			onClick={() => registry.execute(commandId, ...commandArgs)}
+			onClick={(event) => {
+				onClick?.(event);
+				registry.execute(commandId, ...commandArgs);
+			}}
 			{...props}
 		>
 			{children}

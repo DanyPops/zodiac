@@ -1,0 +1,111 @@
+import { useState } from "react";
+import {
+	activeWindow,
+	addWindow,
+	createWorkspace,
+	dockChat,
+	dockSurface,
+	hideChat,
+	isChatDocked,
+	nextWindow,
+	previousWindow,
+	scrollWindow,
+	selectWindow,
+	showChat,
+	toggleChat,
+	undockChatToFloating,
+	undockSurface,
+	type DockedSurfaceInstance,
+	type Workspace,
+	type WorkspaceWindow,
+} from "./model.js";
+import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
+
+export interface WorkspaceRegistryHandle {
+	/** Every known Workspace, in catalog order -- for rendering the left pillar. */
+	catalog: readonly WorkspaceCatalogEntry[];
+	activeWorkspaceId: string;
+	selectWorkspace: (id: string) => void;
+	workspace: Workspace;
+	activeWindow: WorkspaceWindow;
+	nextWindow: () => void;
+	previousWindow: () => void;
+	scrollWindow: (direction: 1 | -1) => void;
+	selectWindow: (index: number) => void;
+	addWindow: () => void;
+	dockSurface: (templateId: string, title: string) => DockedSurfaceInstance;
+	undockSurface: (surfaceInstanceId: string) => void;
+	showChat: () => void;
+	hideChat: () => void;
+	toggleChat: () => void;
+	isChatDocked: boolean;
+	dockChat: (title: string) => DockedSurfaceInstance;
+	undockChatToFloating: () => void;
+}
+
+/**
+ * Owns *every* Workspace's lifecycle, keyed by catalog id -- not one
+ * Workspace rebound to whatever Conversation happens to be selected. A
+ * Workspace is its own independent Canvas (Windows, docked Surfaces, Chat
+ * visibility); a Conversation is a Surface that may float globally, float
+ * inside a Workspace, or dock into one, never the same thing as a
+ * Workspace. Switching the active Workspace here only changes *which*
+ * Workspace's own state the rest of the UI reads/writes -- every other
+ * Workspace keeps its own Windows/docking/Chat state exactly as it was.
+ */
+export function useWorkspaceRegistry(catalog: readonly WorkspaceCatalogEntry[]): WorkspaceRegistryHandle {
+	const [workspaces, setWorkspaces] = useState<Record<string, Workspace>>(() => {
+		const initial: Record<string, Workspace> = {};
+		for (const entry of catalog) initial[entry.id] = createWorkspace({ id: entry.id, title: entry.title });
+		return initial;
+	});
+	const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => catalog[0]?.id ?? "");
+
+	const maybeWorkspace = workspaces[activeWorkspaceId];
+	if (!maybeWorkspace) throw new Error(`useWorkspaceRegistry: no Workspace registered for id "${activeWorkspaceId}"`);
+	// A fresh binding, not the destructured lookup above: TS can't carry a
+	// `Workspace | undefined` narrowing through into the closures below, since
+	// they could (as far as the type system can tell) run after activeWorkspaceId
+	// changes -- a plain const assigned once here has no such ambiguity.
+	const workspace: Workspace = maybeWorkspace;
+
+	function update(transform: (current: Workspace) => Workspace): void {
+		setWorkspaces((current) => {
+			const target = current[activeWorkspaceId];
+			return target ? { ...current, [activeWorkspaceId]: transform(target) } : current;
+		});
+	}
+
+	function dock(templateId: string, title: string): DockedSurfaceInstance {
+		const result = dockSurface(workspace, templateId, title);
+		setWorkspaces((current) => ({ ...current, [activeWorkspaceId]: result.workspace }));
+		return result.instance;
+	}
+
+	function dockChatSurface(title: string): DockedSurfaceInstance {
+		const result = dockChat(workspace, title);
+		setWorkspaces((current) => ({ ...current, [activeWorkspaceId]: result.workspace }));
+		return result.instance;
+	}
+
+	return {
+		catalog,
+		activeWorkspaceId,
+		selectWorkspace: setActiveWorkspaceId,
+		workspace,
+		activeWindow: activeWindow(workspace),
+		nextWindow: () => update(nextWindow),
+		previousWindow: () => update(previousWindow),
+		scrollWindow: (direction) => update((current) => scrollWindow(current, direction)),
+		selectWindow: (index) => update((current) => selectWindow(current, index)),
+		addWindow: () => update(addWindow),
+		dockSurface: dock,
+		undockSurface: (surfaceInstanceId) => update((current) => undockSurface(current, surfaceInstanceId)),
+		showChat: () => update(showChat),
+		hideChat: () => update(hideChat),
+		toggleChat: () => update(toggleChat),
+		isChatDocked: isChatDocked(workspace),
+		dockChat: dockChatSurface,
+		undockChatToFloating: () => update(undockChatToFloating),
+	};
+}

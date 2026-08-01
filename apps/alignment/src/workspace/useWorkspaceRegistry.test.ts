@@ -1,18 +1,48 @@
 /** @vitest-environment jsdom */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useWorkspace } from "./useWorkspace.js";
+import { useWorkspaceRegistry } from "./useWorkspaceRegistry.js";
+import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
-describe("useWorkspace", () => {
-	it("creates the first-slice Workspace bound to the given conversation, one empty Window, Chat hidden", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
-		expect(result.current.workspace.conversationId).toBe("fixture");
+const CATALOG: readonly WorkspaceCatalogEntry[] = [
+	{ id: "bug", title: "Bug", icon: () => null },
+	{ id: "metrics", title: "Metrics", icon: () => null },
+];
+
+describe("useWorkspaceRegistry", () => {
+	it("creates one Workspace per catalog entry, active on the first, one empty Window each, Chat hidden", () => {
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+		expect(result.current.activeWorkspaceId).toBe("bug");
+		expect(result.current.workspace.id).toBe("bug");
 		expect(result.current.activeWindow.dockedSurfaces).toEqual([]);
 		expect(result.current.workspace.chatVisible).toBe(false);
 	});
 
-	it("nextWindow/previousWindow/addWindow drive the active Window forward, backward, and to a fresh one", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
+	it("selectWorkspace switches which Workspace's state the rest of the handle reads, without resetting it", () => {
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+
+		act(() => {
+			result.current.dockSurface("activity", "Activity");
+			result.current.showChat();
+		});
+		expect(result.current.activeWindow.dockedSurfaces).toHaveLength(1);
+		expect(result.current.workspace.chatVisible).toBe(true);
+
+		act(() => result.current.selectWorkspace("metrics"));
+		expect(result.current.activeWorkspaceId).toBe("metrics");
+		expect(result.current.workspace.id).toBe("metrics");
+		// A different Workspace: its own independent, untouched state.
+		expect(result.current.activeWindow.dockedSurfaces).toEqual([]);
+		expect(result.current.workspace.chatVisible).toBe(false);
+
+		act(() => result.current.selectWorkspace("bug"));
+		// Switching back: "bug"'s own earlier state survived the switch away, not reset.
+		expect(result.current.activeWindow.dockedSurfaces).toHaveLength(1);
+		expect(result.current.workspace.chatVisible).toBe(true);
+	});
+
+	it("nextWindow/previousWindow/addWindow drive the active Workspace's active Window forward, backward, and to a fresh one", () => {
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 
 		act(() => result.current.addWindow());
 		expect(result.current.workspace.activeWindowIndex).toBe(1);
@@ -28,7 +58,7 @@ describe("useWorkspace", () => {
 	});
 
 	it("selectWindow jumps directly to an index", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		act(() => result.current.addWindow());
 		act(() => result.current.addWindow());
 		expect(result.current.workspace.activeWindowIndex).toBe(2);
@@ -38,7 +68,7 @@ describe("useWorkspace", () => {
 	});
 
 	it("dockSurface adds to the active Window and returns the created instance; undockSurface removes it", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 
 		let instanceId = "";
 		act(() => {
@@ -51,7 +81,7 @@ describe("useWorkspace", () => {
 	});
 
 	it("showChat/hideChat/toggleChat drive Chat Surface visibility", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 
 		act(() => result.current.showChat());
 		expect(result.current.workspace.chatVisible).toBe(true);
@@ -64,7 +94,7 @@ describe("useWorkspace", () => {
 	});
 
 	it("scrollWindow drives the Window Carousel's mouse-wheel policy (create-past-edge, prune-on-leave)", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		const firstWindowId = result.current.workspace.windows[0]?.id;
 
 		act(() => result.current.scrollWindow(1));
@@ -73,7 +103,7 @@ describe("useWorkspace", () => {
 	});
 
 	it("dockChat/isChatDocked/undockChatToFloating drive Chat between floating and docked", () => {
-		const { result } = renderHook(() => useWorkspace("fixture"));
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		expect(result.current.isChatDocked).toBe(false);
 
 		let instanceId = "";
@@ -87,21 +117,5 @@ describe("useWorkspace", () => {
 		act(() => result.current.undockChatToFloating());
 		expect(result.current.isChatDocked).toBe(false);
 		expect(result.current.workspace.chatVisible).toBe(true);
-	});
-
-	it("rebinds to a new conversation without resetting Windows or Chat visibility", () => {
-		const { result, rerender } = renderHook(({ conversationId }) => useWorkspace(conversationId), {
-			initialProps: { conversationId: "fixture" },
-		});
-		act(() => result.current.showChat());
-		act(() => {
-			result.current.dockSurface("activity", "Activity");
-		});
-
-		rerender({ conversationId: "other-conversation" });
-
-		expect(result.current.workspace.conversationId).toBe("other-conversation");
-		expect(result.current.workspace.chatVisible).toBe(true);
-		expect(result.current.activeWindow.dockedSurfaces).toHaveLength(1);
 	});
 });

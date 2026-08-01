@@ -25,7 +25,6 @@ export interface WorkspaceWindow {
 export interface Workspace {
 	id: string;
 	title: string;
-	conversationId: string;
 	windows: WorkspaceWindow[];
 	/** Index into `windows`, always in bounds -- see nextWindow/previousWindow for the wrap-around policy. */
 	activeWindowIndex: number;
@@ -40,7 +39,6 @@ export interface Workspace {
 export interface WorkspaceDefinition {
 	id: string;
 	title: string;
-	conversationId: string;
 }
 
 let instanceCounter = 0;
@@ -55,7 +53,6 @@ export function createWorkspace(definition: WorkspaceDefinition): Workspace {
 	return {
 		id: definition.id,
 		title: definition.title,
-		conversationId: definition.conversationId,
 		windows: [{ id: nextInstanceId("window"), dockedSurfaces: [] }],
 		activeWindowIndex: 0,
 		chatVisible: false,
@@ -178,12 +175,4 @@ export function toggleChat(workspace: Workspace): Workspace {
 	return { ...workspace, chatVisible: !workspace.chatVisible };
 }
 
-/** Rebinds a Workspace to a different Conversation without disturbing its Windows or Chat visibility. */
-export function withConversation(workspace: Workspace, conversationId: string): Workspace {
-	if (workspace.conversationId === conversationId) return workspace;
-	return { ...workspace, conversationId };
-}
 
-export function createFirstSliceWorkspace(conversationId: string): Workspace {
-	return createWorkspace({ id: "alignment", title: "Alignment", conversationId });
-}

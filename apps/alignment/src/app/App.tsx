@@ -18,12 +18,13 @@ import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
 import { useChatVisibility } from "../workspace/useChatVisibility.js";
-import { useConversationListNavigation } from "../workspace/useConversationListNavigation.js";
 import { useSurfaceTemplates } from "../workspace/useSurfaceTemplates.js";
-import { useWorkspace } from "../workspace/useWorkspace.js";
+import { useWorkspaceListNavigation } from "../workspace/useWorkspaceListNavigation.js";
+import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
+import { WORKSPACE_CATALOG } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 
 const conversationClient = createHttpConversationClient();
@@ -43,7 +44,7 @@ export function App(): React.JSX.Element {
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
 	const conversationWorkspace = useConversationWorkspace(conversationClient);
-	const workspace = useWorkspace(conversationWorkspace.selectedConversationId ?? "pending");
+	const workspace = useWorkspaceRegistry(WORKSPACE_CATALOG);
 	const surfaceTemplates = useSurfaceTemplates(preferences);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
@@ -54,9 +55,9 @@ export function App(): React.JSX.Element {
 	const selectedButtonRef = useRef<HTMLButtonElement>(null);
 	const selectionRef = useRef<HTMLElement>(null);
 	const canvasRef = useRef<HTMLElement>(null);
-	const conversationNavigation = useConversationListNavigation(selectionRef);
+	const workspaceNavigation = useWorkspaceListNavigation(selectionRef);
 
-	function focusSelectedConversationButton(): void {
+	function focusSelectedWorkspaceButton(): void {
 		requestAnimationFrame(() => selectedButtonRef.current?.focus());
 	}
 
@@ -89,21 +90,24 @@ export function App(): React.JSX.Element {
 					return;
 				}
 				contexts.enterWorkspaceSelection();
-				focusSelectedConversationButton();
+				focusSelectedWorkspaceButton();
 			},
 			focusWorkspaceSelection() {
 				selection.expand();
 				contexts.enterWorkspaceSelection();
-				focusSelectedConversationButton();
+				focusSelectedWorkspaceButton();
 			},
 			focusCanvas() {
 				canvasRef.current?.focus();
 				contexts.enterCanvas();
 			},
-			focusPreviousConversation: conversationNavigation.focusPrevious,
-			focusNextConversation: conversationNavigation.focusNext,
-			focusFirstConversation: conversationNavigation.focusFirst,
-			focusLastConversation: conversationNavigation.focusLast,
+			selectPreviousWorkspace: workspaceNavigation.focusPrevious,
+			selectNextWorkspace: workspaceNavigation.focusNext,
+			selectFirstWorkspace: workspaceNavigation.focusFirst,
+			selectLastWorkspace: workspaceNavigation.focusLast,
+			selectWorkspace(workspaceId) {
+				if (typeof workspaceId === "string") workspace.selectWorkspace(workspaceId);
+			},
 			cycleTheme: theme.cycleTheme,
 			sendMessage() {
 				const text = draft.trim();
@@ -138,15 +142,11 @@ export function App(): React.JSX.Element {
 			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace.id}>
 				<WorkspaceSelection
 					collapsed={selection.collapsed}
-					conversations={conversationWorkspace.conversations}
-					selectedConversationId={conversationWorkspace.selectedConversationId}
-					loading={conversationWorkspace.conversationsLoading}
+					catalog={workspace.catalog}
+					activeWorkspaceId={workspace.activeWorkspaceId}
 					selectionRef={selectionRef}
 					selectedButtonRef={selectedButtonRef}
-					onConversationFocus={(id) => {
-						conversationWorkspace.notifyConversationFocused(id);
-						contexts.enterWorkspaceSelection();
-					}}
+					onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
 				/>
 
 				<div className="flex min-w-0 flex-1 flex-col gap-2">

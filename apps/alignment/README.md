@@ -1,6 +1,14 @@
 # Alignment application
 
-The React 19 client for Alignment. A Workspace is its Canvas: a numbered, wrap-around **Window Carousel** (top) holds independent docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a floating overlay hidden by default -- summoned by the bottom screen edge or a keymap, not a docked tab.
+The React 19 client for Alignment. A **Workspace** is its own independent Canvas -- never the same thing as a Conversation (see "Workspace vs. Conversation" below): a numbered, wrap-around **Window Carousel** (top) holds that Workspace's independent docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a floating overlay hidden by default -- summoned by the bottom screen edge or a keymap, not a docked tab.
+
+## Workspace vs. Conversation
+
+A Workspace is not a Conversation, and the left **Workspace Selection** pillar lists Workspaces, not Conversations -- a real distinction, not naming pedantry. A Conversation is a Surface (the Chat Surface) that can be **global** (floating, independent of any Workspace -- its default), **scoped inside a specific Workspace** while still floating there, or **docked** into one of that Workspace's Windows alongside its other Surfaces (`dockChat`/`undockChatToFloating`/`isChatDocked` in `workspace/model.ts`). Conflating the two was a real, live bug this codebase had: `Workspace` used to carry a `conversationId` field and there was only ever one Workspace, silently rebound to whichever Conversation happened to be selected -- the left pillar's list of "conversations" was really a Conversation picker standing in for a Workspace picker, which is why every unnamed Conversation showed the same undifferentiated "U" glyph (see the Doc `Alignment: Workspace is not a Conversation` for the full incident).
+
+`workspace/workspace-catalog.tsx` is a **mock** Workspace registry, for now -- four entries (Bug, Metrics, Chat, PRs) with distinct glyph icons, each backed by its own independent `Workspace` (own Windows, own docking, own Chat visibility) via `useWorkspaceRegistry`. Switching which one is active in the pillar never resets another's state -- verified directly, not just claimed (`useWorkspaceRegistry.test.ts`). A real, persisted, user-creatable Workspace registry is future work; "Chat" here is a Workspace whose own primary docked content happens to be conversational, not the floating Conversation Chat Surface itself (that stays global and can hover over, or dock into, any of these four, "Chat" included).
+
+**Known gap, disclosed rather than silently dropped**: the left pillar used to double as a Conversation picker; it no longer does, since it now lists Workspaces. There is currently no dedicated UI to choose which Conversation the global floating Chat shows besides the app's own auto-selected default (the first one loaded) -- `conversation.open` still exists as a command (invocable via the Command Palette with an explicit id) but has no bound key or visible picker surface right now.
 
 ## Development
 
@@ -60,6 +68,12 @@ Default bindings include:
 | Cycle theme | `Mod+Alt+L` |
 
 Pulling a Surface Template into the center by mouse is one path, not the only one: `Mod+Shift+K` opens a keyboard-native, launcher-style flow -- filter the catalog by typing, pick a template, then pick where it docks (as a tab, or split in a direction), the same choice a drag on to an edge or a tab strip makes.
+
+## Pillar tooltips: real portals, not CSS-absolute boxes
+
+`PillarTooltip.tsx` wraps a glyph-pillar trigger in Radix's own `Tooltip.Root`/`Tooltip.Portal` (the same mechanism `CommandButton`'s own built-in tooltip already used) instead of a hand-rolled `position: absolute` box positioned relative to a `group relative` ancestor. That hand-rolled version had a real, live bug: a scrollable pillar list (`overflow-auto`, many entries) measures an absolutely positioned descendant's box for its own scrollable content area even while that descendant is invisible (`opacity-0` doesn't remove it from layout) -- a tooltip box sized for its label text, sitting just past the 56px collapsed pillar's right edge, silently produced a horizontal scrollbar on the pillar itself. A portal escapes that ancestor's overflow box entirely, by construction, not by tuning `overflow-x`.
+
+Fixing this also surfaced a second, independent, pre-existing bug in `CommandButton` itself: wrapping it in `Tooltip.Trigger asChild` clones an `onClick` handler onto it at runtime (Radix's own tooltip-close behavior), bypassing `CommandButtonProps`' type entirely (Slot cloning isn't visible to TypeScript). The button's own `onClick={...execute...} {...props}` ordering let that runtime-injected handler silently *replace* command execution rather than compose with it -- the same collision any caller passing an explicit `onClick` prop would have hit. Fixed by destructuring `onClick` and composing it (call the incoming handler, then execute), matching Radix's own convention; a regression test in `CommandButton.test.tsx` reproduces the collision directly (an explicit `onClick` prop, no Radix involved) and was confirmed to fail without the fix before being trusted.
 
 ## Docking engine
 

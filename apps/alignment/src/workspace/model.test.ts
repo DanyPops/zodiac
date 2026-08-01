@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { activeWindow, addWindow, CHAT_TEMPLATE_ID, createFirstSliceWorkspace, createWorkspace, dockChat, dockSurface, hideChat, isChatDocked, nextWindow, previousWindow, scrollWindow, selectWindow, showChat, toggleChat, undockChatToFloating, undockSurface, withConversation } from "./model.js";
+import { activeWindow, addWindow, CHAT_TEMPLATE_ID, createWorkspace, dockChat, dockSurface, hideChat, isChatDocked, nextWindow, previousWindow, scrollWindow, selectWindow, showChat, toggleChat, undockChatToFloating, undockSurface, type Workspace } from "./model.js";
+
+/** A Workspace is its own independent thing -- never bound to a Conversation, which is a Surface that may or may not exist inside one. This fixture stands in for whichever catalog entry a test needs. */
+function fixtureWorkspace(): Workspace {
+	return createWorkspace({ id: "fixture", title: "Fixture" });
+}
 
 describe("Workspace window and Surface docking", () => {
 	it("creates one empty Window, active by index 0, Chat hidden by default", () => {
-		const workspace = createFirstSliceWorkspace("fixture");
+		const workspace = fixtureWorkspace();
 
-		expect(workspace.conversationId).toBe("fixture");
 		expect(workspace.windows).toHaveLength(1);
 		expect(workspace.activeWindowIndex).toBe(0);
 		expect(workspace.chatVisible).toBe(false);
@@ -13,13 +17,13 @@ describe("Workspace window and Surface docking", () => {
 	});
 
 	it("activeWindow throws for an out-of-bounds index rather than returning undefined silently", () => {
-		const workspace = { ...createFirstSliceWorkspace("fixture"), activeWindowIndex: 5 };
+		const workspace = { ...fixtureWorkspace(), activeWindowIndex: 5 };
 		expect(() => activeWindow(workspace)).toThrow(/out-of-bounds/i);
 	});
 
 	describe("nextWindow / previousWindow wrap-around", () => {
 		it("wraps past the last Window back to the first", () => {
-			let workspace = createFirstSliceWorkspace("fixture");
+			let workspace = fixtureWorkspace();
 			workspace = addWindow(workspace); // index 1
 			workspace = addWindow(workspace); // index 2, active
 			expect(workspace.activeWindowIndex).toBe(2);
@@ -29,7 +33,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("wraps before the first Window back to the last", () => {
-			let workspace = createFirstSliceWorkspace("fixture");
+			let workspace = fixtureWorkspace();
 			workspace = addWindow(workspace); // index 1
 			workspace = previousWindow(workspace); // back to index 0
 			expect(workspace.activeWindowIndex).toBe(0);
@@ -39,7 +43,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("a single-Window Workspace wraps to itself", () => {
-			const workspace = createFirstSliceWorkspace("fixture");
+			const workspace = fixtureWorkspace();
 			expect(nextWindow(workspace).activeWindowIndex).toBe(0);
 			expect(previousWindow(workspace).activeWindowIndex).toBe(0);
 		});
@@ -47,7 +51,7 @@ describe("Workspace window and Surface docking", () => {
 
 	describe("scrollWindow: the Window Carousel's mouse-wheel policy", () => {
 		it("moves by one within existing Windows, pruning the empty Window left behind", () => {
-			let workspace = createFirstSliceWorkspace("fixture");
+			let workspace = fixtureWorkspace();
 			workspace = dockSurface(workspace, "activity", "Activity").workspace; // window 0 is now "used"
 			workspace = addWindow(workspace); // window 1, active, empty
 
@@ -57,7 +61,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("moving within existing Windows never prunes a Window that has real content, even while inactive", () => {
-			let workspace = dockSurface(createFirstSliceWorkspace("fixture"), "activity", "Activity").workspace;
+			let workspace = dockSurface(fixtureWorkspace(), "activity", "Activity").workspace;
 			workspace = addWindow(workspace); // window 1, active, empty
 			workspace = dockSurface(workspace, "activity", "Second").workspace; // window 1 now used too
 			workspace = addWindow(workspace); // window 2, active, empty
@@ -67,7 +71,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("scrolling forward past the last Window creates exactly one new empty Window and moves into it", () => {
-			const workspace = createFirstSliceWorkspace("fixture"); // one empty Window, active
+			const workspace = fixtureWorkspace(); // one empty Window, active
 			const scrolled = scrollWindow(workspace, 1);
 
 			expect(scrolled.windows).toHaveLength(1); // the old empty active Window was pruned on the way out
@@ -76,7 +80,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("scrolling backward before the first Window creates exactly one new empty Window and moves into it", () => {
-			const workspace = createFirstSliceWorkspace("fixture");
+			const workspace = fixtureWorkspace();
 			const scrolled = scrollWindow(workspace, -1);
 
 			expect(scrolled.windows).toHaveLength(1);
@@ -85,7 +89,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("an empty Window with real content docked into it survives being left", () => {
-			let workspace = dockSurface(createFirstSliceWorkspace("fixture"), "activity", "Activity").workspace;
+			let workspace = dockSurface(fixtureWorkspace(), "activity", "Activity").workspace;
 			workspace = scrollWindow(workspace, 1); // creates window 1 (empty), moves into it
 			expect(workspace.windows).toHaveLength(2);
 
@@ -95,7 +99,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("scrolling past an edge a second time reuses the still-empty ephemeral Window rather than creating a second one", () => {
-			let workspace = createFirstSliceWorkspace("fixture");
+			let workspace = fixtureWorkspace();
 			workspace = scrollWindow(workspace, 1); // window A created
 			const afterFirst = workspace.windows[0]?.id;
 			workspace = scrollWindow(workspace, 1); // still only one Window to move within/past
@@ -106,7 +110,7 @@ describe("Workspace window and Surface docking", () => {
 
 	describe("Chat Surface docking", () => {
 		it("dockChat docks into the active Window as a singleton, hiding the floating overlay", () => {
-			let workspace = showChat(createFirstSliceWorkspace("fixture"));
+			let workspace = showChat(fixtureWorkspace());
 			const docked = dockChat(workspace, "Chat");
 			workspace = docked.workspace;
 
@@ -117,7 +121,7 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("dockChat moves an already-docked Chat rather than creating a second instance", () => {
-			let workspace = dockChat(createFirstSliceWorkspace("fixture"), "Chat").workspace;
+			let workspace = dockChat(fixtureWorkspace(), "Chat").workspace;
 			workspace = addWindow(workspace); // window 1, active
 
 			const redocked = dockChat(workspace, "Chat");
@@ -126,20 +130,20 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("undockChatToFloating removes it from wherever it's docked and shows the floating overlay", () => {
-			const workspace = undockChatToFloating(dockChat(createFirstSliceWorkspace("fixture"), "Chat").workspace);
+			const workspace = undockChatToFloating(dockChat(fixtureWorkspace(), "Chat").workspace);
 			expect(isChatDocked(workspace)).toBe(false);
 			expect(workspace.chatVisible).toBe(true);
 		});
 
 		it("undockChatToFloating is a safe no-op-shaped call when Chat isn't docked", () => {
-			const workspace = createFirstSliceWorkspace("fixture");
+			const workspace = fixtureWorkspace();
 			expect(isChatDocked(undockChatToFloating(workspace))).toBe(false);
 		});
 	});
 
 	describe("selectWindow", () => {
 		it("jumps directly to a Window by index", () => {
-			let workspace = createFirstSliceWorkspace("fixture");
+			let workspace = fixtureWorkspace();
 			workspace = addWindow(addWindow(workspace)); // 3 windows, active index 2
 
 			workspace = selectWindow(workspace, 0);
@@ -147,14 +151,14 @@ describe("Workspace window and Surface docking", () => {
 		});
 
 		it("throws for an out-of-bounds index", () => {
-			const workspace = createFirstSliceWorkspace("fixture");
+			const workspace = fixtureWorkspace();
 			expect(() => selectWindow(workspace, 1)).toThrow(/no Window at index/i);
 			expect(() => selectWindow(workspace, -1)).toThrow(/no Window at index/i);
 		});
 	});
 
 	it("addWindow appends at the end and switches to it", () => {
-		let workspace = createFirstSliceWorkspace("fixture");
+		let workspace = fixtureWorkspace();
 		workspace = addWindow(workspace);
 
 		expect(workspace.windows).toHaveLength(2);
@@ -162,7 +166,7 @@ describe("Workspace window and Surface docking", () => {
 	});
 
 	it("dockSurface adds an instance to the active Window only, and undockSurface removes it from wherever it is", () => {
-		let workspace = createFirstSliceWorkspace("fixture");
+		let workspace = fixtureWorkspace();
 		workspace = addWindow(workspace); // now on window 1
 
 		const docked = dockSurface(workspace, "activity", "Activity");
@@ -176,12 +180,12 @@ describe("Workspace window and Surface docking", () => {
 	});
 
 	it("undockSurface is a no-op for an id that isn't docked anywhere", () => {
-		const workspace = createFirstSliceWorkspace("fixture");
+		const workspace = fixtureWorkspace();
 		expect(undockSurface(workspace, "does-not-exist")).toEqual(workspace);
 	});
 
 	it("dockSurface issues a distinct id per instance, even for the same template", () => {
-		const workspace = createFirstSliceWorkspace("fixture");
+		const workspace = fixtureWorkspace();
 		const first = dockSurface(workspace, "activity", "Activity");
 		const second = dockSurface(first.workspace, "activity", "Activity");
 		expect(second.instance.id).not.toBe(first.instance.id);
@@ -190,7 +194,7 @@ describe("Workspace window and Surface docking", () => {
 
 	describe("Chat Surface visibility", () => {
 		it("showChat/hideChat/toggleChat are pure and idempotent at their own boundary", () => {
-			const hidden = createFirstSliceWorkspace("fixture");
+			const hidden = fixtureWorkspace();
 			const shown = showChat(hidden);
 			expect(shown.chatVisible).toBe(true);
 			expect(hidden.chatVisible).toBe(false); // original untouched
@@ -203,24 +207,11 @@ describe("Workspace window and Surface docking", () => {
 		});
 	});
 
-	it("withConversation rebinds the conversation without disturbing Windows or Chat visibility", () => {
-		const workspace = showChat(dockSurface(createFirstSliceWorkspace("fixture"), "activity", "Activity").workspace);
-		const rebound = withConversation(workspace, "other-conversation");
-
-		expect(rebound.conversationId).toBe("other-conversation");
-		expect(rebound.chatVisible).toBe(true);
-		expect(activeWindow(rebound).dockedSurfaces).toHaveLength(1);
-	});
-
-	it("withConversation is a no-op (same reference) when the conversation id is unchanged", () => {
-		const workspace = createFirstSliceWorkspace("fixture");
-		expect(withConversation(workspace, "fixture")).toBe(workspace);
-	});
-
-	it("createWorkspace builds the requested id/title with one empty Window", () => {
-		const workspace = createWorkspace({ id: "custom", title: "Custom", conversationId: "fixture" });
+	it("createWorkspace builds the requested id/title with one empty Window, independent of any Conversation", () => {
+		const workspace = createWorkspace({ id: "custom", title: "Custom" });
 		expect(workspace.id).toBe("custom");
 		expect(workspace.title).toBe("Custom");
 		expect(workspace.windows).toHaveLength(1);
+		expect(workspace).not.toHaveProperty("conversationId");
 	});
 });
