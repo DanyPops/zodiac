@@ -70,4 +70,24 @@ describe("WindowCarousel", () => {
 		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaY: 0, deltaX: 0 });
 		expect(onScroll).not.toHaveBeenCalled();
 	});
+
+	it("a burst of small wheel events (a real trackpad gesture) accumulates distance instead of stepping on every event", () => {
+		const onScroll = vi.fn();
+		renderCarousel(7, 3, vi.fn(), onScroll);
+		const carousel = screen.getByLabelText("Window Carousel");
+		// 30 events of 4px each = 120px total -- well under one step per event,
+		// but still enough distance to cross the 50px threshold a few times.
+		for (let i = 0; i < 30; i++) fireEvent.wheel(carousel, { deltaY: 4 });
+		expect(onScroll.mock.calls.length).toBeLessThan(5);
+		expect(onScroll.mock.calls.length).toBeGreaterThan(0);
+		for (const call of onScroll.mock.calls) expect(call).toEqual([1]);
+	});
+
+	it("a single large delta (a real mouse wheel notch) still advances exactly one Window, not several", () => {
+		const onScroll = vi.fn();
+		renderCarousel(7, 3, vi.fn(), onScroll);
+		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaY: 250 });
+		expect(onScroll).toHaveBeenCalledTimes(1);
+		expect(onScroll).toHaveBeenCalledWith(1);
+	});
 });

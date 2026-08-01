@@ -4,6 +4,11 @@ import { CommandButton } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx } from "./window-carousel-fade.js";
 
+/** Pixels of accumulated wheel distance needed to advance one Window. */
+const WHEEL_STEP_THRESHOLD_PX = 50;
+/** A gap this long between wheel events starts a new gesture, discarding any leftover accumulated distance. */
+const WHEEL_GESTURE_IDLE_RESET_MS = 400;
+
 interface WindowCarouselProps {
 	readonly windowCount: number;
 	readonly activeIndex: number;
@@ -36,12 +41,30 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }:
 		const nav = navRef.current;
 		if (!nav) return;
 
+		// A trackpad reports one physical swipe as dozens of small wheel events,
+		// not one big one -- stepping on every raw event spins through several
+		// Windows for a single gentle gesture. Distance accumulates across
+		// events and only advances once WHEEL_STEP_THRESHOLD_PX is crossed,
+		// capped at one step per event so a single large delta (a real mouse
+		// wheel notch) still advances exactly one Window, not several.
+		let accumulatedPx = 0;
+		let lastEventAt = 0;
+
 		function handleWheel(event: WheelEvent): void {
 			// A trackpad's horizontal swipe is as natural as a wheel's vertical one.
 			const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
 			if (delta === 0) return;
 			event.preventDefault();
-			onScrollRef.current(delta > 0 ? 1 : -1);
+
+			const now = performance.now();
+			if (now - lastEventAt > WHEEL_GESTURE_IDLE_RESET_MS) accumulatedPx = 0;
+			lastEventAt = now;
+
+			accumulatedPx += delta;
+			if (Math.abs(accumulatedPx) < WHEEL_STEP_THRESHOLD_PX) return;
+			const direction = accumulatedPx > 0 ? 1 : -1;
+			accumulatedPx -= direction * WHEEL_STEP_THRESHOLD_PX;
+			onScrollRef.current(direction);
 		}
 
 		nav.addEventListener("wheel", handleWheel, { passive: false });
