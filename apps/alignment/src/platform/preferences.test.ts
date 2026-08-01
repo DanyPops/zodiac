@@ -57,6 +57,18 @@ describe("Alignment preferences", () => {
 		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([]);
 	});
 
+	it("round-trips a bounded, clamped Visual DNA and falls back on malformed storage", () => {
+		const storage = memoryStorage();
+		const preferences = createPreferences(storage);
+		expect(preferences.visualDna()).toEqual({ vibe: 100, cornerSharpness: 50 });
+
+		preferences.setVisualDna({ vibe: 150, cornerSharpness: -20 });
+		expect(createPreferences(storage).visualDna()).toEqual({ vibe: 100, cornerSharpness: 0 });
+
+		storage.setItem("alignment.visual-dna", JSON.stringify({ vibe: "oops" }));
+		expect(createPreferences(storage).visualDna()).toEqual({ vibe: 100, cornerSharpness: 50 });
+	});
+
 	it("persists only the Alignment namespace", () => {
 		const storage = memoryStorage();
 		const preferences = createPreferences(storage);

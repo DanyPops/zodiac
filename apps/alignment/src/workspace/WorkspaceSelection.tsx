@@ -1,4 +1,4 @@
-import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Settings } from "lucide-react";
 import type { RefObject } from "react";
 import type { ConversationSummary } from "../conversation/client.js";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
@@ -22,9 +22,9 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 				<nav
 					ref={selectionRef}
 					aria-label="Workspace selection"
-					className="absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-2xl bg-gray-50 shadow-xl dark:bg-gray-900 md:relative md:shadow-none"
+					className="absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 shadow-xl dark:bg-gray-900 md:relative md:shadow-none"
 				>
-					<div className="flex h-12 items-center gap-2 border-b border-gray-200 px-3 dark:border-gray-700">
+					<div className="flex h-12 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
 						<div className="grid size-7 place-items-center rounded-md bg-accent text-xs font-bold text-white">A</div>
 						<h1 className="text-sm font-semibold tracking-tight text-gray-950 dark:text-white">Alignment</h1>
 						<CommandButton
@@ -35,7 +35,7 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 							<ChevronsLeft aria-hidden="true" size={16} />
 						</CommandButton>
 					</div>
-					<div className="border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+					<div className="border-b-[length:var(--app-line-width)] border-gray-200 px-3 py-2 dark:border-gray-700">
 						<p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-600 dark:text-gray-300">Conversations</p>
 					</div>
 					<ul aria-label="Alef conversations" className="min-h-0 flex-1 overflow-auto p-2">
@@ -66,15 +66,16 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 							);
 						})}
 					</ul>
-					<div className="grid grid-cols-3 gap-1 border-t border-gray-200 p-2 dark:border-gray-700">
+					<div className="grid grid-cols-4 gap-1 border-t-[length:var(--app-line-width)] border-gray-200 p-2 dark:border-gray-700">
 						<FooterCommand commandId="palette.open" label="Command palette" icon={<Command aria-hidden="true" size={15} />} />
 						<FooterCommand commandId="shortcuts.open" label="Keyboard shortcuts" icon={<Keyboard aria-hidden="true" size={15} />} />
 						<FooterCommand commandId="theme.cycle" label="Cycle color theme" icon={<MoonStar aria-hidden="true" size={15} />} />
+						<FooterCommand commandId="appearance.open" label="Visual DNA" icon={<Settings aria-hidden="true" size={15} />} />
 					</div>
 				</nav>
 			)}
 			{collapsed && (
-				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-900">
+				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
 					<CollapsedToggle />
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
 						{conversations.map((conversation) => {
@@ -101,10 +102,11 @@ export function WorkspaceSelection({ collapsed, conversations, selectedConversat
 							);
 						})}
 					</div>
-					<div className="flex flex-col items-center gap-1 border-t border-gray-200 py-2 dark:border-gray-700">
+					<div className="flex flex-col items-center gap-1 border-t-[length:var(--app-line-width)] border-gray-200 py-2 dark:border-gray-700">
 						<PillarCommand commandId="palette.open" label="Command palette" icon={<Command aria-hidden="true" size={16} />} />
 						<PillarCommand commandId="shortcuts.open" label="Keyboard shortcuts" icon={<Keyboard aria-hidden="true" size={16} />} />
 						<PillarCommand commandId="theme.cycle" label="Color theme" icon={<MoonStar aria-hidden="true" size={16} />} />
+						<PillarCommand commandId="appearance.open" label="Visual DNA" icon={<Settings aria-hidden="true" size={16} />} />
 					</div>
 				</nav>
 			)}
@@ -121,7 +123,7 @@ function CollapsedToggle(): React.JSX.Element {
 				commandId="workspace.toggleSelection"
 				label={label}
 				tooltip={false}
-				className="grid h-12 w-14 place-items-center border-b border-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700"
+				className="grid h-12 w-14 place-items-center border-b-[length:var(--app-line-width)] border-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700"
 			>
 				<span className="relative grid size-7 place-items-center rounded-md bg-accent text-white">
 					<span aria-hidden="true" className="text-xs font-bold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">A</span>

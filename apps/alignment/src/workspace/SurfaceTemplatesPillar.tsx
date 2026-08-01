@@ -23,7 +23,7 @@ export function SurfaceTemplatesPillar({ entries, onDockDefault, canSaveCurrent,
 	const openPickerShortcut = useCommandShortcut("templates.open");
 
 	return (
-		<nav aria-label="Surface Templates" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-900">
+		<nav aria-label="Surface Templates" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
 			<div className="group relative shrink-0 border-b border-gray-200 dark:border-gray-700">
 				<CommandButton commandId="templates.open" label="Browse Surface Templates" tooltip={false} className="grid h-12 w-14 place-items-center text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
 					<Plus aria-hidden="true" size={18} />

@@ -29,6 +29,7 @@ const ADAPTER_ALLOWLIST = [
 	"src/theme.ts", // ThemeController's own browser adapter factory
 	"src/conversation/client.ts", // ConversationClient's own fetch adapter factory (fetch is its injectable default, never called literally here)
 	"src/platform/pointer.ts", // PointerTracker's own browser adapter factory
+	"src/platform/visual-dna-style.ts", // VisualDnaStyleTarget's own browser adapter factory
 ];
 
 const RESTRICTED_GLOBALS = [

@@ -9,7 +9,9 @@ import { createHttpConversationClient } from "../conversation/client.js";
 import { useConversationWorkspace } from "../conversation/useConversationWorkspace.js";
 import { createPreferences } from "../platform/preferences.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
+import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
+import { useVisualDna } from "../visual-dna-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
 import { CHAT_TEMPLATE_ID } from "../workspace/model.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
@@ -36,6 +38,7 @@ export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
 	const pointerTracker = useMemo(() => createWindowPointerTracker(), []);
 	const theme = useTheme();
+	const visualDna = useVisualDna(preferences);
 	const selection = useWorkspaceSelectionCollapse(preferences);
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
@@ -125,6 +128,7 @@ export function App(): React.JSX.Element {
 				const template = findSurfaceTemplate(templateId);
 				if (template) dockTemplate(templateId, template.title, undefined);
 			},
+			openAppearance: () => contexts.openDialog("appearance"),
 		},
 		keybindings.userBindings,
 	);
@@ -154,7 +158,7 @@ export function App(): React.JSX.Element {
 							if (event.currentTarget === event.target) contexts.enterCanvas();
 						}}
 						aria-label="Window view"
-						className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-gray-100 outline-none dark:bg-gray-900"
+						className="min-h-0 flex-1 overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-100 outline-none dark:bg-gray-900"
 					>
 						<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 							<WindowDockview
@@ -221,6 +225,16 @@ export function App(): React.JSX.Element {
 					}}
 					entries={surfaceTemplates.entries}
 					onDock={(templateId, title, position) => dockTemplate(templateId, title, position)}
+				/>
+				<VisualDnaDialog
+					open={contexts.dialogMode === "appearance"}
+					onClose={() => {
+						contexts.closeDialog();
+						contexts.enterGlobal();
+					}}
+					value={visualDna.value}
+					onVibeChange={visualDna.setVibe}
+					onCornerSharpnessChange={visualDna.setCornerSharpness}
 				/>
 			</div>
 		</CommandProvider>

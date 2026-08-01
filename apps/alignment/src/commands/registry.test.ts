@@ -29,6 +29,7 @@ function fixtureActions(): AlignmentCommandActions {
 		toggleChat: action,
 		openTemplatesPicker: action,
 		dockDefaultTemplate: action,
+		openAppearance: action,
 	};
 }
 
@@ -47,6 +48,7 @@ describe("Alignment command catalog", () => {
 			"window.new",
 			"chat.toggle",
 			"templates.open",
+			"appearance.open",
 		];
 		for (const id of mustBeBound) expect(registry.bindingFor(id)).toBeDefined();
 	});

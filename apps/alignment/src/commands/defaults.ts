@@ -22,6 +22,7 @@ export interface AlignmentCommandActions {
 	toggleChat: () => void;
 	openTemplatesPicker: () => void;
 	dockDefaultTemplate: (templateId?: string) => void;
+	openAppearance: () => void;
 }
 
 export const DEFAULT_BINDINGS: readonly KeybindingDefinition[] = [
@@ -43,6 +44,7 @@ export const DEFAULT_BINDINGS: readonly KeybindingDefinition[] = [
 	{ commandId: "window.new", keys: "Mod+Alt+N", context: "global" },
 	{ commandId: "chat.toggle", keys: "Mod+.", context: "global" },
 	{ commandId: "templates.open", keys: "Mod+Shift+K", context: "global" },
+	{ commandId: "appearance.open", keys: "Mod+Shift+,", context: "global" },
 ];
 
 export function createAlignmentCommandRegistry(actions: AlignmentCommandActions, userBindings: readonly KeybindingDefinition[] = []) {
@@ -65,6 +67,7 @@ export function createAlignmentCommandRegistry(actions: AlignmentCommandActions,
 		define("window.new", "New Window", "Create a new empty Window at the end of the Window Carousel.", actions.newWindow),
 		define("chat.toggle", "Toggle Chat", "Show or hide the floating Conversation Chat Surface.", actions.toggleChat),
 		define("templates.open", "Browse Surface Templates", "Filter Surface Templates by keyboard and choose where to dock one.", actions.openTemplatesPicker),
+		define("appearance.open", "Open Visual DNA", "Adjust the shell's Vibe (line neatness) and Corner Sharpness.", actions.openAppearance),
 		...SURFACE_TEMPLATE_REGISTRY.map((template) => define(template.dockCommandId, template.dockCommandTitle, template.dockCommandDescription, () => actions.dockDefaultTemplate(template.id))),
 	];
 	return createCommandRegistry({ commands, bindings: DEFAULT_BINDINGS, userBindings });

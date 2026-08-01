@@ -49,9 +49,9 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 			onPointerLeave={onPointerLeave}
 			onFocusCapture={onFocusCapture}
 			onBlurCapture={onBlurCapture}
-			className={`pointer-events-auto fixed inset-x-0 bottom-0 z-40 mx-auto flex ${expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]"} w-[min(48rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-t-xl border border-b-0 border-gray-300 bg-white shadow-2xl outline-none transition-transform duration-200 ease-out motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900 ${visible ? "translate-y-0" : "translate-y-full"}`}
+			className={`pointer-events-auto fixed inset-x-0 bottom-0 z-40 mx-auto flex ${expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]"} w-[min(48rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-t-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-b-0 border-gray-300 bg-white shadow-2xl outline-none transition-transform duration-200 ease-out motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900 ${visible ? "translate-y-0" : "translate-y-full"}`}
 		>
-			<div className="flex h-9 shrink-0 items-center gap-2 border-b border-gray-200 px-3 dark:border-gray-700">
+			<div className="flex h-9 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
 				<h2 className="text-xs font-semibold text-gray-950 dark:text-white">Chat</h2>
 				<span className="truncate text-[10px] text-gray-600 dark:text-gray-300">Conversation Surface — summon with the bottom edge or its keymap</span>
 				<button

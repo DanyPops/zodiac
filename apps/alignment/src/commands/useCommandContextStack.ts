@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { CommandContext } from "./registry.js";
 
 /** Every modal dialog Alignment can have open at once -- at most one, per `effectiveContexts` collapsing to `dialog` whenever one is set. */
-export type DialogMode = "palette" | "shortcuts" | "templates" | null;
+export type DialogMode = "palette" | "shortcuts" | "templates" | "appearance" | null;
 
 const WORKSPACE_SELECTION: readonly CommandContext[] = ["workspace-selection", "global"];
 const CANVAS: readonly CommandContext[] = ["canvas", "global"];

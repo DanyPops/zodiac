@@ -153,6 +153,31 @@ test("saving the active docked Surface as a template adds it to the pillar", asy
 	await expect(page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock My Activity View" })).toBeVisible();
 });
 
+test("the gear icon opens Visual DNA: moving a slider re-styles the shell live and survives reload", async ({ page }) => {
+	// A plain CSS locator, not getByRole: Radix's Dialog marks background
+	// content aria-hidden while open, which would make an ARIA-role query for
+	// the Carousel time out even though it's still rendered and stylable.
+	const carousel = page.locator('[aria-label="Window Carousel"]');
+	const cornerRadiusBefore = await carousel.evaluate((element) => getComputedStyle(element).borderRadius);
+
+	await page.getByRole("button", { name: "Visual DNA" }).click();
+	const dialog = page.getByRole("dialog", { name: "Visual DNA" });
+	await expect(dialog).toBeVisible();
+
+	// Square end of the slider: the Window Carousel (part of the same shared
+	// rounded-corner language as docked Surfaces and both pillars) goes flush.
+	await dialog.getByLabel("Corner Sharpness").fill("0");
+	await expect(carousel).toHaveCSS("border-radius", "0px");
+
+	await page.getByRole("button", { name: "Close Visual DNA" }).click();
+	await expect(dialog).not.toBeVisible();
+
+	// Persisted, not just an in-memory slider position.
+	await page.reload();
+	await expect(carousel).toHaveCSS("border-radius", "0px");
+	expect(cornerRadiusBefore).not.toBe("0px");
+});
+
 test("dragging a Surface Template from the pillar onto the empty Window docks it", async ({ page }) => {
 	// Playwright's documented pattern for native HTML5 DnD (mouse-based
 	// dragTo() doesn't fire real drag events, which is what both the pillar's

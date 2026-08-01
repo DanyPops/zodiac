@@ -1,8 +1,10 @@
 import type { CommandContext, KeybindingDefinition } from "../commands/registry.js";
+import { clampVisualDna, DEFAULT_VISUAL_DNA, isVisualDna, type VisualDna } from "./visual-dna.js";
 
 const WORKSPACE_SELECTION_KEY = "alignment.workspace-selection-collapsed";
 const KEYBINDINGS_KEY = "alignment.keybindings";
 const SAVED_SURFACE_TEMPLATES_KEY = "alignment.saved-surface-templates";
+const VISUAL_DNA_KEY = "alignment.visual-dna";
 const LEGACY_SIDEBAR_KEY = "agent-deck-sidebar-collapsed";
 const LEGACY_LAYOUT_KEY = "agent-deck-dashboard-layout";
 const PRESERVED_LAYOUT_KEY = "alignment.workspace-layout.legacy-v1";
@@ -27,6 +29,8 @@ export interface Preferences {
 	setKeybindingOverrides: (bindings: readonly KeybindingDefinition[]) => void;
 	savedSurfaceTemplates: () => SavedSurfaceTemplate[];
 	setSavedSurfaceTemplates: (templates: readonly SavedSurfaceTemplate[]) => void;
+	visualDna: () => VisualDna;
+	setVisualDna: (value: VisualDna) => void;
 }
 
 export function createPreferences(storage: Storage): Preferences {
@@ -85,6 +89,21 @@ export function createPreferences(storage: Storage): Preferences {
 				storage.setItem(SAVED_SURFACE_TEMPLATES_KEY, JSON.stringify(templates.slice(0, MAX_SAVED_SURFACE_TEMPLATES)));
 			} catch {
 				// The active in-memory saved templates remain usable when storage is unavailable.
+			}
+		},
+		visualDna() {
+			try {
+				const value: unknown = JSON.parse(storage.getItem(VISUAL_DNA_KEY) ?? "null");
+				return isVisualDna(value) ? clampVisualDna(value) : DEFAULT_VISUAL_DNA;
+			} catch {
+				return DEFAULT_VISUAL_DNA;
+			}
+		},
+		setVisualDna(value) {
+			try {
+				storage.setItem(VISUAL_DNA_KEY, JSON.stringify(clampVisualDna(value)));
+			} catch {
+				// The active in-memory Visual DNA remains usable when storage is unavailable.
 			}
 		},
 	};

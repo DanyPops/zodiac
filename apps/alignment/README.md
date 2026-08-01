@@ -55,6 +55,7 @@ Default bindings include:
 | New Window | `Mod+Alt+N` |
 | Toggle Chat | `Mod+.` |
 | Browse Surface Templates | `Mod+Shift+K` |
+| Open Visual DNA | `Mod+Shift+,` |
 | Send message | `Mod+Enter` |
 | Cycle theme | `Mod+Alt+L` |
 
@@ -73,6 +74,15 @@ Docked Surfaces, the Workspace Selection/Surface Templates pillars, and the Wind
 The floating Chat Surface starts collapsed ("peek") each time it's summoned: only the composer and the most recent reply, not the full transcript. Clicking the peek area expands to the full conversation; a header control collapses back.
 
 Chat can also be docked into the active Window like any other Surface (a header control on the floating overlay), rather than always floating. Once docked, it renders an "Aware of: ..." line naming its sibling docked Surfaces in the same Window, kept live via `dockview`'s `updateParameters` as Surfaces are docked/undocked around it -- not a one-time snapshot. Closing its docked panel (or its own "Float" control) returns it to the floating overlay rather than discarding it.
+
+## Visual DNA: Vibe and Corner Sharpness
+
+A gear icon in the Workspace Selection footer (both expanded and collapsed) opens **Visual DNA** (`Mod+Shift+,`): two sliders that reshape the shell's own chrome, inspired directly by Excalidraw's sloppiness/roundness controls (`packages/excalidraw/components/Range.tsx`, `actionChangeSloppiness`) but re-scoped for a real, interactive application rather than freehand-drawn shapes.
+
+- **Vibe** (Cartoon to Professional): line/divider weight, from a bold 3px at Cartoon to a crisp 1px at Professional. Scoped to the shell's own dividers (Workspace Selection's header/footer/label borders, the docked Chat panel's header, the floating Chat panel's own border) -- deliberately *not* a literal rough.js-style path jitter applied to real interactive content: warping a button or a line of text with an SVG displacement filter would visibly separate what's rendered from what's actually clickable, which is a real usability risk this feature isn't worth taking on a production tool's own controls.
+- **Corner Sharpness** (Square to Circle): corner radius, 0px at Square up to 32px at Circle -- past half the shortest side of every glyph/button-sized element in the shell, so small elements become true circles (CSS clamps `border-radius` past 50% of a box automatically) while large panels read as generously rounded. Applies to the same set of elements documented as sharing one rounded-corner visual language: both pillars, the Window Carousel, the center "Window view", the floating Chat panel, and docked Surfaces (dockview's own `--dv-border-radius`/`--dv-tab-border-radius`/`--dv-dropdown-border-radius`, overridden the same `!important`-because-lazy-CSS-loads-later way as the contrast fix above, via a live CSS variable reference so a slider drag repaints dockview immediately).
+
+Both values persist through the same Preferences port as everything else (`platform/visual-dna.ts` for the pure formulas/validation, `platform/visual-dna-style.ts` for the one adapter that actually touches `document`, `visual-dna-hooks.ts` for the React-facing hook) and default to exactly the shell's pre-existing look (`vibe: 100` → 1px, `cornerSharpness: 50` → 16px == the old `rounded-2xl`) -- turning the feature on changes nothing until a slider is actually moved.
 
 ## Window Carousel: the mouse-wheel policy
 

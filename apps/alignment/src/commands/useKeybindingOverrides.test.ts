@@ -43,6 +43,7 @@ function fullCommandSet() {
 		toggleChat: noop,
 		openTemplatesPicker: noop,
 		dockDefaultTemplate: noop,
+		openAppearance: noop,
 	};
 	return createAlignmentCommandRegistry(actions).commands();
 }
