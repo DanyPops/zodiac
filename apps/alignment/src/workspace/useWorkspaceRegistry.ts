@@ -53,10 +53,14 @@ export interface WorkspaceRegistryHandle {
  * Workspace's own state the rest of the UI reads/writes -- every other
  * Workspace keeps its own Windows/docking/Chat state exactly as it was.
  */
-export function useWorkspaceRegistry(catalog: readonly WorkspaceCatalogEntry[]): WorkspaceRegistryHandle {
+export function useWorkspaceRegistry(
+	catalog: readonly WorkspaceCatalogEntry[],
+	/** Builds each catalog entry's starting Workspace -- defaults to a plain, single-Window `createWorkspace`. A caller (e.g. App.tsx, for the mock catalog's demo Windows) may pass a different factory without this hook itself knowing or caring that the result is demo data. */
+	createInitialWorkspace: (id: string, title: string) => Workspace = (id, title) => createWorkspace({ id, title }),
+): WorkspaceRegistryHandle {
 	const [workspaces, setWorkspaces] = useState<Record<string, Workspace>>(() => {
 		const initial: Record<string, Workspace> = {};
-		for (const entry of catalog) initial[entry.id] = createWorkspace({ id: entry.id, title: entry.title });
+		for (const entry of catalog) initial[entry.id] = createInitialWorkspace(entry.id, entry.title);
 		return initial;
 	});
 	const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => catalog[0]?.id ?? "");

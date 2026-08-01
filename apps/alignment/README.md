@@ -108,6 +108,23 @@ A gear icon in the Workspace Selection footer (both expanded and collapsed) open
 
 Both values persist through the same Preferences port as everything else (`platform/visual-dna.ts` for the pure formulas/validation, `platform/visual-dna-style.ts` for the one adapter that actually touches `document`, `visual-dna-hooks.ts` for the React-facing hook) and default to exactly the shell's pre-existing look (`vibe: 100` → 1px, `cornerSharpness: 50` → 16px == the old `rounded-2xl`) -- turning the feature on changes nothing until a slider is actually moved.
 
-## Window Carousel: the mouse-wheel policy
 
-Direct clicks on a Window's number, and the keyboard commands (`window.next`/`window.previous`), wrap at both ends of the array. The mouse wheel is deliberately different: scrolling past either end opens exactly one new empty ("ephemeral") Window and moves into it, never a second one accumulating -- and if you scroll away from an empty Window without docking anything into it, it's dropped. A Window with real content docked into it is never pruned, active or not. See `scrollWindow` in `workspace/model.ts`.
+## Window Carousel: centered, fading with distance, and the mouse-wheel policy
+
+The active Window's own button always sits horizontally centered in the Carousel's track (a coverflow effect, computed by the pure `computeWindowTrackOffsetPx` in `workspace/window-carousel-fade.ts` -- a CSS `left-1/2` anchor plus a `translateX` by that offset, not a scroll position). Its neighbors fade out with distance -- `computeWindowFadeOpacity` is a linear falloff from full opacity at the active Window to fully invisible (`opacity: 0`, not just dim) at `WINDOW_FADE_DISTANCE` (3) Windows away or further. Both are plain functions of index, unit-tested without a DOM, so `WindowCarousel.tsx` only wires them into inline `style` on each button.
+
+Each mock Workspace (see "Mock Workspaces" below) starts pre-seeded with 7 empty Windows, centered on the middle one, purely so this effect is visible without first opening several Windows by hand (`createDemoWorkspace` in `workspace/workspace-catalog.tsx`) -- `useWorkspaceRegistry` itself still defaults to a real single-Window `createWorkspace` for any caller that doesn't pass a demo factory.
+
+Direct clicks on a Window's number, and the keyboard commands (`window.next`/`window.previous`), wrap at both ends of the array. The mouse wheel is deliberately different: scrolling past either end opens exactly one new empty ("ephemeral") Window and moves into it, never a second one accumulating -- and if you scroll away from an empty Window without docking anything into it, it's dropped. A Window with real content docked into it is never pruned, active or not. See `scrollWindow` in `workspace/model.ts`. This prune check applies to *every* empty, inactive Window in one pass, not just the one immediately left -- so the mock demo Windows all disappear the first time the wheel is actually used while they're still empty, leaving only whichever Window has real content plus the freshly created one. That's the existing, correct ephemeral-Window policy working as designed; the demo seeding exists to show the Carousel's resting-state visual, not to survive real navigation.
+
+## Chat matches the Carousel's width
+
+The floating Chat overlay is positioned `absolute` inside the same `relative` center column as the Window Carousel and the canvas, not `fixed` to the viewport -- so it inherits that column's exact width (which itself already accounts for both pillars' current expanded/collapsed state) instead of carrying its own separate hardcoded max-width. Previously it used `fixed inset-x-0 bottom-0 mx-auto` with a `w-[min(48rem,...)]` cap, which made its width independent of -- and visually inconsistent with -- the Carousel directly above it.
+
+## Keeping JSX and Tailwind classes readable
+
+A few concrete patterns, applied where the shell's own conditional styling was starting to read as unbroken strings or duplicated map-loop bodies:
+
+- **`platform/cn.ts`** joins conditional Tailwind fragments and resolves conflicting utilities (last one wins), replacing manual `` `base ${condition ? "a" : "b"}` `` template literals. Not a new invention -- the same small `twMerge`-backed helper already used in this workspace's `prototypes/ui-compat-lab`.
+- **Extract a component, not a bigger ternary**: `WindowCarousel.tsx`'s per-index button (`WindowButton`) and `WorkspaceSelection.tsx`'s per-catalog-entry row (`ExpandedCatalogItem`/`CollapsedCatalogItem`) each own their own active/selected styling rule once, instead of that rule (and the whole `.map()` body) being duplicated at every render-list callsite.
+- Early returns and small named booleans (`isActive`, `selected`) ahead of the returned JSX, rather than inlining the condition inside the className expression itself.

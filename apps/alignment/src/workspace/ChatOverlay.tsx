@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, PanelRightOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Composer, ConversationRow, ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
+import { cn } from "../platform/cn.js";
 
 interface ChatOverlayProps {
 	readonly visible: boolean;
@@ -29,6 +30,11 @@ interface ChatOverlayProps {
  * peek area expands to the full transcript. This mirrors a real chat
  * notification pattern -- see enough to react without committing to the
  * whole conversation view.
+ *
+ * Positioned `absolute` within the same `relative` center column as the
+ * Window Carousel and the canvas -- not `fixed` to the viewport -- so it
+ * inherits that column's own width exactly (matching the Carousel above it)
+ * instead of a separate hardcoded max-width of its own.
  */
 export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCapture, onBlurCapture, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onDock }: ChatOverlayProps): React.JSX.Element {
 	const [expanded, setExpanded] = useState(false);
@@ -49,7 +55,11 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 			onPointerLeave={onPointerLeave}
 			onFocusCapture={onFocusCapture}
 			onBlurCapture={onBlurCapture}
-			className={`pointer-events-auto fixed inset-x-0 bottom-0 z-40 mx-auto flex ${expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]"} w-[min(48rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-t-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-b-0 border-gray-300 bg-white shadow-2xl outline-none transition-transform duration-200 ease-out motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900 ${visible ? "translate-y-0" : "translate-y-full"}`}
+			className={cn(
+				"pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex w-full flex-col overflow-hidden rounded-t-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-b-0 border-gray-300 bg-white shadow-2xl outline-none transition-transform duration-200 ease-out motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900",
+				expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]",
+				visible ? "translate-y-0" : "translate-y-full",
+			)}
 		>
 			<div className="flex h-9 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
 				<h2 className="text-xs font-semibold text-gray-950 dark:text-white">Chat</h2>
@@ -58,7 +68,7 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 					type="button"
 					onClick={onDock}
 					aria-label="Dock Chat into the active Window"
-					className={`${expanded ? "" : "ml-auto"} grid size-6 shrink-0 place-items-center rounded-md text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800`}
+					className={cn("grid size-6 shrink-0 place-items-center rounded-md text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800", !expanded && "ml-auto")}
 				>
 					<PanelRightOpen aria-hidden="true" size={13} />
 				</button>

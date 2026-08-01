@@ -24,7 +24,7 @@ import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
-import { WORKSPACE_CATALOG } from "../workspace/workspace-catalog.js";
+import { createDemoWorkspace, WORKSPACE_CATALOG } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 
 const conversationClient = createHttpConversationClient();
@@ -44,7 +44,7 @@ export function App(): React.JSX.Element {
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
 	const conversationWorkspace = useConversationWorkspace(conversationClient);
-	const workspace = useWorkspaceRegistry(WORKSPACE_CATALOG);
+	const workspace = useWorkspaceRegistry(WORKSPACE_CATALOG, createDemoWorkspace);
 	const surfaceTemplates = useSurfaceTemplates(preferences);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
@@ -149,7 +149,7 @@ export function App(): React.JSX.Element {
 					onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
 				/>
 
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
+				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
 					<WindowCarousel windowCount={workspace.workspace.windows.length} activeIndex={workspace.workspace.activeWindowIndex} onSelect={workspace.selectWindow} onScroll={workspace.scrollWindow} />
 					<section
 						ref={canvasRef}
@@ -183,6 +183,21 @@ export function App(): React.JSX.Element {
 							/>
 						</Suspense>
 					</section>
+
+					<ChatOverlay
+						visible={workspace.workspace.chatVisible}
+						onPointerEnter={chatVisibility.onPointerEnter}
+						onPointerLeave={chatVisibility.onPointerLeave}
+						onFocusCapture={chatVisibility.onFocusCapture}
+						onBlurCapture={chatVisibility.onBlurCapture}
+						conversationItems={conversationWorkspace.conversationItems}
+						conversationLoading={conversationWorkspace.conversationLoading}
+						conversationError={conversationWorkspace.conversationError}
+						draft={draft}
+						onDraftChange={setDraft}
+						onComposerFocus={contexts.enterTextInput}
+						onDock={dockChatSurface}
+					/>
 				</div>
 
 				<SurfaceTemplatesPillar
@@ -192,21 +207,6 @@ export function App(): React.JSX.Element {
 					onSaveCurrentAsTemplate={(title) => {
 						if (activeTemplateId) surfaceTemplates.saveAsTemplate(title, activeTemplateId);
 					}}
-				/>
-
-				<ChatOverlay
-					visible={workspace.workspace.chatVisible}
-					onPointerEnter={chatVisibility.onPointerEnter}
-					onPointerLeave={chatVisibility.onPointerLeave}
-					onFocusCapture={chatVisibility.onFocusCapture}
-					onBlurCapture={chatVisibility.onBlurCapture}
-					conversationItems={conversationWorkspace.conversationItems}
-					conversationLoading={conversationWorkspace.conversationLoading}
-					conversationError={conversationWorkspace.conversationError}
-					draft={draft}
-					onDraftChange={setDraft}
-					onComposerFocus={contexts.enterTextInput}
-					onDock={dockChatSurface}
 				/>
 
 				<CommandDialog

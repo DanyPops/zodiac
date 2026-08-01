@@ -1,6 +1,8 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { WheelEvent } from "react";
 import { CommandButton } from "../commands/react.js";
+import { cn } from "../platform/cn.js";
+import { computeWindowFadeOpacity, computeWindowTrackOffsetPx } from "./window-carousel-fade.js";
 
 interface WindowCarouselProps {
 	readonly windowCount: number;
@@ -16,8 +18,15 @@ interface WindowCarouselProps {
  * wrap at both ends; the mouse wheel instead creates a new empty Window past
  * either edge -- see workspace/model.ts's scrollWindow, which this only
  * drives, never reimplements.
+ *
+ * Visually, the active Window always sits centered in the track (a real
+ * coverflow effect, not a left-aligned scrollable list) -- its neighbors
+ * fade out with distance until fully invisible, computed by
+ * window-carousel-fade.ts's pure formulas, not a CSS mask trick.
  */
 export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }: WindowCarouselProps): React.JSX.Element {
+	const trackOffsetPx = computeWindowTrackOffsetPx(activeIndex);
+
 	function handleWheel(event: WheelEvent<HTMLDivElement>): void {
 		// Whichever axis moved further decides direction -- a plain mouse wheel
 		// only ever reports deltaY, but a trackpad's horizontal swipe (deltaX)
@@ -34,20 +43,13 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }:
 			<CommandButton commandId="window.previous" label="Previous Window" className="grid size-7 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
 				<ChevronLeft aria-hidden="true" size={15} />
 			</CommandButton>
-			<ul className="flex flex-1 items-center gap-1 overflow-x-auto" aria-label="Windows">
-				{Array.from({ length: windowCount }, (_, index) => (
-					<li key={index}>
-						<button
-							type="button"
-							onClick={() => onSelect(index)}
-							aria-current={index === activeIndex ? "true" : undefined}
-							className={`grid size-7 place-items-center rounded-md text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent ${index === activeIndex ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800"}`}
-						>
-							{index}
-						</button>
-					</li>
-				))}
-			</ul>
+			<div className="relative h-7 min-w-0 flex-1 overflow-hidden">
+				<ul className="absolute top-0 left-1/2 flex items-center gap-1" style={{ transform: `translateX(-${trackOffsetPx}px)` }} aria-label="Windows">
+					{Array.from({ length: windowCount }, (_, index) => (
+						<WindowButton key={index} index={index} activeIndex={activeIndex} onSelect={onSelect} />
+					))}
+				</ul>
+			</div>
 			<CommandButton commandId="window.next" label="Next Window" className="grid size-7 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
 				<ChevronRight aria-hidden="true" size={15} />
 			</CommandButton>
@@ -55,5 +57,29 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }:
 				<Plus aria-hidden="true" size={15} />
 			</CommandButton>
 		</nav>
+	);
+}
+
+interface WindowButtonProps {
+	readonly index: number;
+	readonly activeIndex: number;
+	readonly onSelect: (index: number) => void;
+}
+
+/** One Window's own glyph in the track -- its own component so the fade/active styling (a real, non-trivial rule) lives in exactly one place, not repeated inline in every map callsite that lists Windows. */
+function WindowButton({ index, activeIndex, onSelect }: WindowButtonProps): React.JSX.Element {
+	const isActive = index === activeIndex;
+	return (
+		<li>
+			<button
+				type="button"
+				onClick={() => onSelect(index)}
+				aria-current={isActive ? "true" : undefined}
+				style={{ opacity: computeWindowFadeOpacity(index - activeIndex) }}
+				className={cn("grid size-7 place-items-center rounded-md text-xs font-medium focus-visible:outline-2 focus-visible:outline-accent", isActive ? "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-800")}
+			>
+				{index}
+			</button>
+		</li>
 	);
 }
