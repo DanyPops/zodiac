@@ -118,6 +118,8 @@ Clicks, keyboard commands, and the mouse wheel are all the same wrap-around ring
 
 The wheel listener is attached natively via ref/effect, not React's `onWheel` prop: React attaches wheel listeners as passive, so `preventDefault()` inside `onWheel` is silently ignored and the browser's own default scroll still fires alongside ours. `{ passive: false }` is the only way around that.
 
+Wheel distance accumulates across events rather than stepping once per raw event: a trackpad reports one physical swipe as dozens of small events, and stepping on every one spun the carousel through several Windows for a single gentle gesture. `WindowCarousel.tsx` only advances once `WHEEL_STEP_THRESHOLD_PX` (50) of accumulated distance is crossed, capped at one step per event so a single large delta (a real mouse wheel notch) still advances exactly one Window. A gap longer than `WHEEL_GESTURE_IDLE_RESET_MS` (400ms) starts a fresh gesture.
+
 ## Keeping JSX and Tailwind classes readable
 
 - **`platform/cn.ts`** joins conditional Tailwind fragments and resolves conflicting utilities (last one wins) -- the same small `twMerge`-backed helper already used in `prototypes/ui-compat-lab`.
