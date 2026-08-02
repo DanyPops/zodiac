@@ -93,4 +93,14 @@ describe("ChatOverlay", () => {
 		expect(peekRow.className).toContain("p-3");
 		expect(peekRow.className).not.toContain("px-4");
 	});
+
+	it("is 3/4 width, centered in its column -- not full width matching the Carousel", () => {
+		renderOverlay(true);
+		const dialog = screen.getByRole("dialog");
+		expect(dialog.className).toContain("w-3/4");
+		expect(dialog.className).toContain("left-1/2");
+		expect(dialog.className).toContain("-translate-x-1/2");
+		expect(dialog.className).not.toContain("w-full");
+		expect(dialog.className).not.toContain("inset-x-0");
+	});
 });

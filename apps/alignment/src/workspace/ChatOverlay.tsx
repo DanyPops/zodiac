@@ -32,9 +32,11 @@ interface ChatOverlayProps {
  * whole conversation view.
  *
  * Positioned `absolute` within the same `relative` center column as the
- * Window Carousel and the canvas -- not `fixed` to the viewport -- so it
- * inherits that column's own width exactly (matching the Carousel above it)
- * instead of a separate hardcoded max-width of its own.
+ * Window Carousel and the canvas -- not `fixed` to the viewport. 3/4 width,
+ * centered: supersedes matching the Carousel's own width now that the
+ * Carousel itself shrinks to content width (see WindowCarousel's pill
+ * layout) -- a fixed fraction of the column reads better than tracking
+ * whatever width a content-sized Carousel happens to be today.
  */
 export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCapture, onBlurCapture, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onDock }: ChatOverlayProps): React.JSX.Element {
 	const [expanded, setExpanded] = useState(false);
@@ -56,8 +58,11 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 			onFocusCapture={onFocusCapture}
 			onBlurCapture={onBlurCapture}
 			className={cn(
-				"pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex w-full flex-col overflow-hidden rounded-t-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-b-0 border-gray-300 bg-white shadow-2xl outline-none transition-transform duration-200 ease-out motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900",
+				"pointer-events-auto absolute bottom-0 left-1/2 z-40 flex w-3/4 -translate-x-1/2 flex-col overflow-hidden rounded-t-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-b-0 border-gray-300 bg-white shadow-2xl outline-none transition-transform duration-200 ease-out motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900",
 				expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]",
+				// Tailwind's translate-x-*/translate-y-* utilities compose via shared CSS
+				// variables, so this combines correctly with the base class's own
+				// -translate-x-1/2 (horizontal centering) into one transform.
 				visible ? "translate-y-0" : "translate-y-full",
 			)}
 		>
