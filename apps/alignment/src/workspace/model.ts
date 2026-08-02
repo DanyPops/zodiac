@@ -150,6 +150,14 @@ export function findDockedSurfaceForToolName(workspace: Workspace, toolName: str
 	return undefined;
 }
 
+/** The same correlation as findDockedSurfaceForToolName, across every Workspace in a registry -- which Workspace (by id) is the tool call actually about. */
+export function findWorkspaceIdForToolName(workspaces: Readonly<Record<string, Workspace>>, toolName: string): string | undefined {
+	for (const [id, workspace] of Object.entries(workspaces)) {
+		if (findDockedSurfaceForToolName(workspace, toolName)) return id;
+	}
+	return undefined;
+}
+
 /** Removes a docked Surface instance from whichever Window holds it (a no-op if the id isn't docked anywhere). */
 export function undockSurface(workspace: Workspace, surfaceInstanceId: string): Workspace {
 	const windows = workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.id !== surfaceInstanceId) }));

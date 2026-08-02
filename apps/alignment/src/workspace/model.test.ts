@@ -7,6 +7,7 @@ import {
 	dockChat,
 	dockSurface,
 	findDockedSurfaceForToolName,
+	findWorkspaceIdForToolName,
 	hideChat,
 	isChatDocked,
 	nextWindow,
@@ -229,6 +230,17 @@ describe("Workspace window and Surface docking", () => {
 		it("findDockedSurfaceForToolName returns undefined for a tool name with no known binding kind", () => {
 			const workspace = dockSurface(fixtureWorkspace(), "filesystem", "Filesystem", { kind: "filesystem", root: "/repo" }).workspace;
 			expect(findDockedSurfaceForToolName(workspace, "totally-unknown-tool")).toBeUndefined();
+		});
+
+		it("findWorkspaceIdForToolName finds which Workspace (by id) in a registry the tool call is about", () => {
+			const withFs = dockSurface(createWorkspace({ id: "b", title: "B" }), "filesystem", "Filesystem", { kind: "filesystem", root: "/repo" }).workspace;
+			const registry = { a: createWorkspace({ id: "a", title: "A" }), b: withFs };
+			expect(findWorkspaceIdForToolName(registry, "edit")).toBe("b");
+		});
+
+		it("findWorkspaceIdForToolName returns undefined when no Workspace in the registry has a matching binding", () => {
+			const registry = { a: createWorkspace({ id: "a", title: "A" }) };
+			expect(findWorkspaceIdForToolName(registry, "edit")).toBeUndefined();
 		});
 	});
 

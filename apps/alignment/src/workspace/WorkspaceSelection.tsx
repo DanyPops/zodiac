@@ -12,6 +12,8 @@ interface WorkspaceSelectionProps {
 	readonly selectionRef: RefObject<HTMLElement | null>;
 	readonly selectedButtonRef: RefObject<HTMLButtonElement | null>;
 	readonly onWorkspaceFocus: () => void;
+	/** Real tool-call telemetry says the agent is currently acting against this Workspace, and Chat is global (undocked) -- see "Global chat: cross-workspace visibility cue". Undefined most of the time. */
+	readonly toolCallWorkspaceId?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface WorkspaceSelectionProps {
  * in this list. Surface docking itself lives in the Window Carousel/center/
  * Surface Templates pillar instead.
  */
-export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus }: WorkspaceSelectionProps): React.JSX.Element {
+export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId }: WorkspaceSelectionProps): React.JSX.Element {
 	return (
 		<>
 			{!collapsed && (
@@ -48,7 +50,14 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					</div>
 					<ul aria-label="Workspaces" className="min-h-0 flex-1 overflow-auto p-2">
 						{catalog.map((entry) => (
-							<ExpandedCatalogItem key={entry.id} entry={entry} selected={entry.id === activeWorkspaceId} selectedButtonRef={selectedButtonRef} onWorkspaceFocus={onWorkspaceFocus} />
+							<ExpandedCatalogItem
+								key={entry.id}
+								entry={entry}
+								selected={entry.id === activeWorkspaceId}
+								toolCallTarget={entry.id === toolCallWorkspaceId}
+								selectedButtonRef={selectedButtonRef}
+								onWorkspaceFocus={onWorkspaceFocus}
+							/>
 						))}
 					</ul>
 					<div className="grid grid-cols-4 gap-1 border-t-[length:var(--app-line-width)] border-gray-200 p-2 dark:border-gray-700">
@@ -64,7 +73,14 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					<CollapsedToggle />
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
 						{catalog.map((entry) => (
-							<CollapsedCatalogItem key={entry.id} entry={entry} selected={entry.id === activeWorkspaceId} selectedButtonRef={selectedButtonRef} onWorkspaceFocus={onWorkspaceFocus} />
+							<CollapsedCatalogItem
+								key={entry.id}
+								entry={entry}
+								selected={entry.id === activeWorkspaceId}
+								toolCallTarget={entry.id === toolCallWorkspaceId}
+								selectedButtonRef={selectedButtonRef}
+								onWorkspaceFocus={onWorkspaceFocus}
+							/>
 						))}
 					</div>
 					<div className="flex flex-col items-center gap-1 border-t-[length:var(--app-line-width)] border-gray-200 py-2 dark:border-gray-700">
@@ -125,12 +141,14 @@ function FooterCommand({ commandId, label, icon }: { readonly commandId: string;
 interface CatalogItemProps {
 	readonly entry: WorkspaceCatalogEntry;
 	readonly selected: boolean;
+	/** A real tool call is currently acting against this Workspace while Chat is global -- see WorkspaceSelectionProps.toolCallWorkspaceId. */
+	readonly toolCallTarget: boolean;
 	readonly selectedButtonRef: RefObject<HTMLButtonElement | null>;
 	readonly onWorkspaceFocus: () => void;
 }
 
 /** One Workspace's row in the expanded pillar -- its own component so the expanded/collapsed variants (below) each state their own layout once, instead of an inline ternary className repeated at every map callsite. */
-function ExpandedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceFocus }: CatalogItemProps): React.JSX.Element {
+function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRef, onWorkspaceFocus }: CatalogItemProps): React.JSX.Element {
 	return (
 		<li>
 			<CommandButton
@@ -144,6 +162,7 @@ function ExpandedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceFo
 				className={cn(
 					"mb-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe focus-visible:animate-wisp-breathe",
 					selected ? "animate-wisp-breathe bg-white text-gray-950 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800/70",
+					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
 				)}
 			>
 				<entry.icon aria-hidden="true" size={16} className="shrink-0" />
@@ -154,7 +173,7 @@ function ExpandedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceFo
 }
 
 /** One Workspace's glyph in the collapsed pillar -- same catalog entry as ExpandedCatalogItem, laid out as a tooltipped square glyph instead of a labeled row. */
-function CollapsedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceFocus }: CatalogItemProps): React.JSX.Element {
+function CollapsedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRef, onWorkspaceFocus }: CatalogItemProps): React.JSX.Element {
 	return (
 		<PillarTooltip side="right" label={entry.title}>
 			<CommandButton
@@ -169,6 +188,7 @@ function CollapsedCatalogItem({ entry, selected, selectedButtonRef, onWorkspaceF
 				className={cn(
 					"grid size-9 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe focus-visible:animate-wisp-breathe",
 					selected ? "animate-wisp-breathe bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
+					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
 				)}
 			>
 				<entry.icon aria-hidden="true" size={18} />

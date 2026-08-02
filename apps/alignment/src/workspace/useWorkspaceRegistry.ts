@@ -27,6 +27,8 @@ export interface WorkspaceRegistryHandle {
 	activeWorkspaceId: string;
 	selectWorkspace: (id: string) => void;
 	workspace: Workspace;
+	/** Every Workspace's real, current state keyed by id -- not just the active one. For cross-workspace correlation (e.g. the global-chat visibility cue); most consumers want `workspace` instead. */
+	workspaces: Readonly<Record<string, Workspace>>;
 	activeWindow: WorkspaceWindow;
 	nextWindow: () => void;
 	previousWindow: () => void;
@@ -97,6 +99,7 @@ export function useWorkspaceRegistry(
 		activeWorkspaceId,
 		selectWorkspace: setActiveWorkspaceId,
 		workspace,
+		workspaces,
 		activeWindow: activeWindow(workspace),
 		nextWindow: () => update(nextWindow),
 		previousWindow: () => update(previousWindow),

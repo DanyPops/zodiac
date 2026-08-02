@@ -14,7 +14,7 @@ import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useVisualDna } from "../visual-dna-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
-import { CHAT_TEMPLATE_ID, isChatDocked } from "../workspace/model.js";
+import { CHAT_TEMPLATE_ID, findWorkspaceIdForToolName, isChatDocked } from "../workspace/model.js";
 import { useWispCursorTarget } from "../workspace/useWispCursorTarget.js";
 import { WispCursor } from "../workspace/WispCursor.js";
 import { latestToolCallName, resolveWispWindowIndex } from "../workspace/wisp-cursor.js";
@@ -56,8 +56,11 @@ export function App(): React.JSX.Element {
 	const [activeDockedInstanceId, setActiveDockedInstanceId] = useState<string | undefined>(undefined);
 
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
-	const wispWindowIndex = resolveWispWindowIndex(workspace.workspace, latestToolCallName(conversationWorkspace.conversationItems));
+	const latestToolName = latestToolCallName(conversationWorkspace.conversationItems);
+	const wispWindowIndex = resolveWispWindowIndex(workspace.workspace, latestToolName);
 	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
+	const chatIsGlobal = !isChatDocked(workspace.workspace);
+	const toolCallWorkspaceId = chatIsGlobal && latestToolName ? findWorkspaceIdForToolName(workspace.workspaces, latestToolName) : undefined;
 
 	const selectedButtonRef = useRef<HTMLButtonElement>(null);
 	const selectionRef = useRef<HTMLElement>(null);
@@ -154,6 +157,7 @@ export function App(): React.JSX.Element {
 					selectionRef={selectionRef}
 					selectedButtonRef={selectedButtonRef}
 					onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
+					toolCallWorkspaceId={toolCallWorkspaceId}
 				/>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
@@ -191,7 +195,7 @@ export function App(): React.JSX.Element {
 						</Suspense>
 					</section>
 
-					<WispCursor visible={!isChatDocked(workspace.workspace)} target={wispTarget} />
+					<WispCursor visible={chatIsGlobal} target={wispTarget} />
 
 					<ChatOverlay
 						visible={workspace.workspace.chatVisible}

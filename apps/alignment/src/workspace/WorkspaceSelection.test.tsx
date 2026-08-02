@@ -13,7 +13,7 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderCollapsed(execute = vi.fn()) {
+function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "workspace.toggleSelection", title: "Toggle workspace selection", description: "", execute },
@@ -34,6 +34,7 @@ function renderCollapsed(execute = vi.fn()) {
 				selectionRef={createRef()}
 				selectedButtonRef={createRef()}
 				onWorkspaceFocus={vi.fn()}
+				toolCallWorkspaceId={toolCallWorkspaceId}
 			/>
 		</CommandProvider>,
 	);
@@ -87,5 +88,18 @@ describe("collapsed Workspace quick selection", () => {
 		expect(inactive).toHaveClass("hover:animate-wisp-breathe");
 		expect(inactive).toHaveClass("focus-visible:animate-wisp-breathe");
 		expect(inactive).toHaveClass("motion-reduce:animate-none");
+	});
+
+	it("rings and breathes whichever Workspace real tool-call telemetry says the agent is acting against, even if it isn't the active one", () => {
+		renderCollapsed(vi.fn(), WORKSPACE_CATALOG[1]!.id);
+		const target = screen.getByRole("button", { name: WORKSPACE_CATALOG[1]!.title });
+		expect(target).toHaveClass("ring-2");
+		expect(target).toHaveClass("ring-accent");
+		expect(target).toHaveClass("animate-wisp-breathe");
+	});
+
+	it("shows no tool-call ring when nothing correlates", () => {
+		renderCollapsed();
+		for (const entry of WORKSPACE_CATALOG) expect(screen.getByRole("button", { name: entry.title })).not.toHaveClass("ring-accent");
 	});
 });
