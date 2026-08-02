@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPiHttpRoutes } from "./http-routes.js";
 import { createPiSessionRegistry } from "./session-registry.js";
-import type { PiRpcEvent } from "./rpc-protocol.js";
+import type { PiRpcEvent } from "@danypops/pi-rpc-protocol";
 import type { PiRpcSession } from "./process-rpc-session.js";
 
 function fakeSession(): PiRpcSession & { emit(event: PiRpcEvent): void } {

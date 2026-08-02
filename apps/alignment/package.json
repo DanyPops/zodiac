@@ -43,6 +43,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@danypops/pi-rpc-protocol": "file:/home/dpopsuev/Projects/pi-rpc-protocol",
     "@icons-pack/react-simple-icons": "^13.11.1",
     "@radix-ui/react-context-menu": "^2.3.7",
     "@radix-ui/react-dialog": "^1.1.23",

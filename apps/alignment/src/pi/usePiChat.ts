@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ConversationItem } from "../conversation/projector.js";
 import type { PiClient } from "./client.js";
-import { extractMessageText, type PiRpcEvent } from "./rpc-protocol.js";
+import { extractMessageText, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
 
 export interface PiChat {
 	readonly items: readonly ConversationItem[];

@@ -1,7 +1,7 @@
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import type { Readable, Writable } from "node:stream";
-import { encodeRpcCommand, parseRpcLine, type PiRpcCommand, type PiRpcEvent } from "./rpc-protocol.js";
+import { encodeRpcCommand, parseRpcLine, type PiRpcCommand, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
 
 const DEFAULT_COMMAND = ["pi", "--mode", "rpc", "--no-session"] as const;
 

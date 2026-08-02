@@ -1,4 +1,4 @@
-import { parseRpcLine, type PiRpcEvent } from "./rpc-protocol.js";
+import { parseRpcLine, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
 
 /**
  * Driven port: the Chat surface's own view of "a live Pi agent to talk to,"

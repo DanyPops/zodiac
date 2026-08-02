@@ -2,7 +2,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { PiClient } from "./client.js";
-import type { PiRpcEvent } from "./rpc-protocol.js";
+import type { PiRpcEvent } from "@danypops/pi-rpc-protocol";
 import { usePiChat } from "./usePiChat.js";
 
 /** A fully in-memory PiClient stand-in -- tests drive the session by calling the returned `emit` helper directly instead of a real network/SSE connection. */

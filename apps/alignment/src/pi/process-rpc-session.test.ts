@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnPiRpcSession, type PiRpcSession } from "./process-rpc-session.js";
-import type { PiRpcEvent } from "./rpc-protocol.js";
+import type { PiRpcEvent } from "@danypops/pi-rpc-protocol";
 
 const FIXTURE = fileURLToPath(new URL("../../test/fixtures/fake-pi-rpc.mjs", import.meta.url));
 
