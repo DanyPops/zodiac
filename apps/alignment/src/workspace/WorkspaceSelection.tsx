@@ -5,6 +5,7 @@ import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { GlyphBadge } from "./GlyphBadge.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
+import { iconButtonClassName } from "./icon-button-style.js";
 import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
@@ -43,11 +44,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					<div className="flex h-12 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
 						<div className="grid size-7 place-items-center rounded-[var(--app-corner-radius,16px)] bg-accent text-xs font-bold text-white">A</div>
 						<h1 className="text-sm font-semibold tracking-tight text-gray-950 dark:text-white">Alignment</h1>
-						<CommandButton
-							commandId="workspace.toggleSelection"
-							label="Hide workspace selection"
-							className="ml-auto grid size-8 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800"
-						>
+						<CommandButton commandId="workspace.toggleSelection" label="Hide workspace selection" className={cn("ml-auto", iconButtonClassName({ size: "xl" }))}>
 							<ChevronsLeft aria-hidden="true" size={16} />
 						</CommandButton>
 					</div>
@@ -104,12 +101,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 							/>
 						))}
 						<PillarTooltip side="right" label="Create a new Workspace">
-							<button
-								type="button"
-								onClick={onCreateWorkspace}
-								aria-label="Create a new Workspace"
-								className="grid size-9 shrink-0 place-items-center rounded-md border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-600 dark:hover:border-gray-500 dark:hover:text-gray-300"
-							>
+							<button type="button" onClick={onCreateWorkspace} aria-label="Create a new Workspace" className={iconButtonClassName({ size: "lg", dashed: true })}>
 								<Plus aria-hidden="true" size={16} />
 							</button>
 						</PillarTooltip>

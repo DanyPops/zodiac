@@ -41,6 +41,13 @@ describe("SurfaceTemplatesPillar", () => {
 		expect(onDockDefault).toHaveBeenCalledWith("activity", "Activity");
 	});
 
+	it("a template glyph follows Corner Sharpness -- Icon Button's shared token, not a fixed rounded-md", () => {
+		renderPillar();
+		const glyph = screen.getByRole("button", { name: "Dock Activity" });
+		expect(glyph.className).toContain("rounded-[var(--app-corner-radius");
+		expect(glyph.className).not.toMatch(/(?<!:)rounded-md/);
+	});
+
 	it("a template glyph is draggable and carries its template id under the shared MIME type", () => {
 		renderPillar();
 		const glyph = screen.getByRole("button", { name: "Dock Activity" });

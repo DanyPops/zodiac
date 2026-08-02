@@ -4,6 +4,7 @@ import { CommandButton } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
+import { iconButtonClassName } from "./icon-button-style.js";
 import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx, WINDOW_FADE_DISTANCE, WINDOW_ITEM_STEP_PX } from "./window-carousel-fade.js";
 
 /** The viewport's width: just wide enough to show every Window that could still be visibly faded in (WINDOW_FADE_DISTANCE on each side of the active one), not a flex-1 fill of the whole header. */
@@ -83,7 +84,7 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll, a
 			<nav ref={navRef} aria-label="Window Carousel" className={cn("inline-flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] px-2", SURFACE_BG)}>
 				{/* Balances the "+" button on the other end, so the viewport (and the active Window it centers) sits at the pill's true geometric center -- the same center WindowNameRow, below, centers under. */}
 				<div aria-hidden="true" className="size-7 shrink-0" />
-				<CommandButton commandId="window.previous" label="Previous Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+				<CommandButton commandId="window.previous" label="Previous Window" className={iconButtonClassName({ size: "md" })}>
 					<ChevronLeft aria-hidden="true" size={15} />
 				</CommandButton>
 				<div className="relative h-7 overflow-hidden" style={{ width: WINDOWS_VIEWPORT_PX }}>
@@ -93,10 +94,10 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll, a
 						))}
 					</ul>
 				</div>
-				<CommandButton commandId="window.next" label="Next Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+				<CommandButton commandId="window.next" label="Next Window" className={iconButtonClassName({ size: "md" })}>
 					<ChevronRight aria-hidden="true" size={15} />
 				</CommandButton>
-				<CommandButton commandId="window.new" label="New Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+				<CommandButton commandId="window.new" label="New Window" className={iconButtonClassName({ size: "md" })}>
 					<Plus aria-hidden="true" size={15} />
 				</CommandButton>
 			</nav>

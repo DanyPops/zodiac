@@ -184,6 +184,13 @@ describe("collapsed Workspace quick selection", () => {
 		expect(onCreateWorkspace).toHaveBeenCalledOnce();
 	});
 
+	it("the 'Create a new Workspace' glyph follows Corner Sharpness -- Icon Button's shared token, not a fixed rounded-md", () => {
+		renderCollapsed();
+		const button = screen.getByRole("button", { name: "Create a new Workspace" });
+		expect(button.className).toContain("rounded-[var(--app-corner-radius");
+		expect(button.className).not.toMatch(/(?<!:)rounded-md/);
+	});
+
 	it("folds Command Palette/Keyboard Shortcuts/Cycle Theme into one Settings entry, unlike the expanded footer's four separate icons", () => {
 		renderCollapsed();
 		expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();

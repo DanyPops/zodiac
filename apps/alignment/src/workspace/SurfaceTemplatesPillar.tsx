@@ -2,6 +2,7 @@ import { BookOpen } from "lucide-react";
 import { useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
+import { iconButtonClassName } from "./icon-button-style.js";
 import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
@@ -42,7 +43,7 @@ export function SurfaceTemplatesPillar({ entries, onDockDefault }: SurfaceTempla
 							onDragStart={(event) => event.dataTransfer.setData(TEMPLATE_DRAG_MIME_TYPE, entry.templateId)}
 							onClick={() => onDockDefault(entry.templateId, entry.title)}
 							aria-label={`Dock ${entry.title}`}
-							className="grid size-9 place-items-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-950 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+							className={iconButtonClassName({ size: "lg" })}
 						>
 							<entry.icon aria-hidden="true" size={17} />
 						</button>

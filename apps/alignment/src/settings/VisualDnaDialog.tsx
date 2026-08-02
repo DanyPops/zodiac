@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Command, Keyboard, MoonStar, Settings, X } from "lucide-react";
+import { Command, Keyboard, MoonStar, Settings } from "lucide-react";
+import { DialogCloseButton } from "../commands/DialogCloseButton.js";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
@@ -39,11 +40,7 @@ export function VisualDnaDialog({ open, onClose, value, onVibeChange, onCornerSh
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Settings aria-hidden="true" size={16} className="text-gray-500" />
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Settings</Dialog.Title>
-						<Dialog.Close asChild>
-							<CommandButton commandId="dialog.close" label="Close Settings" className="ml-auto rounded-md p-1 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
-								<X aria-hidden="true" size={16} />
-							</CommandButton>
-						</Dialog.Close>
+						<DialogCloseButton label="Close Settings" />
 					</div>
 					<Dialog.Description className="sr-only">Shell actions and the Visual DNA (Vibe and Corner Sharpness) appearance controls. Changes apply immediately and persist across reloads.</Dialog.Description>
 

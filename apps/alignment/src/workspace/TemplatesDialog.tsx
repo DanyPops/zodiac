@@ -1,8 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import type { Position } from "dockview-react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Search, SquareStack, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Search, SquareStack } from "lucide-react";
 import { useState } from "react";
-import { CommandButton } from "../commands/react.js";
+import { DialogCloseButton } from "../commands/DialogCloseButton.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import type { SurfaceTemplateEntry } from "./useSurfaceTemplates.js";
@@ -59,11 +59,7 @@ export function TemplatesDialog({ open, onClose, entries, onDock }: TemplatesDia
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Search aria-hidden="true" size={17} className="text-gray-500" />
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selected ? `Dock "${selected.title}"` : "Surface Templates"}</Dialog.Title>
-						<Dialog.Close asChild>
-							<CommandButton commandId="dialog.close" label="Close Surface Templates" className="ml-auto rounded-md p-1 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
-								<X aria-hidden="true" size={16} />
-							</CommandButton>
-						</Dialog.Close>
+						<DialogCloseButton label="Close Surface Templates" />
 					</div>
 					<Dialog.Description className="sr-only">Filter Surface Templates by keyboard, choose one, then choose where it docks.</Dialog.Description>
 

@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useState } from "react";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
+import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID, WORKSPACE_GLYPH_OPTIONS } from "./workspace-catalog.js";
 
 interface CreateWorkspaceDialogProps {
@@ -57,10 +58,7 @@ export function CreateWorkspaceDialog({ open, onClose, onCreate }: CreateWorkspa
 										aria-checked={glyphId === id}
 										aria-label={id}
 										onClick={() => setGlyphId(id)}
-										className={cn(
-											"grid size-8 place-items-center rounded-md text-gray-600 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800",
-											glyphId === id && "bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30",
-										)}
+										className={glyphBadgeClassName({ active: glyphId === id, size: "xl" })}
 									>
 										<Icon aria-hidden="true" size={16} />
 									</button>

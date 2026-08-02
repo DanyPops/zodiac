@@ -1,7 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CommandButton } from "../commands/react.js";
+import { DialogCloseButton } from "../commands/DialogCloseButton.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { GALLERY_CATEGORIES, type GalleryCategory } from "./gallery-categories.js";
@@ -35,11 +34,7 @@ export function SurfaceTemplatesGallery({ open, onClose }: SurfaceTemplatesGalle
 				<Dialog.Content aria-label="Surface Templates gallery" className={cn("fixed left-1/2 top-[10vh] z-50 w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-200 shadow-2xl outline-none -translate-x-1/2 dark:border-gray-700", SURFACE_BG)}>
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Surface Templates</Dialog.Title>
-						<Dialog.Close asChild>
-							<CommandButton commandId="dialog.close" label="Close Surface Templates gallery" className="ml-auto rounded-md p-1 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
-								<X aria-hidden="true" size={16} />
-							</CommandButton>
-						</Dialog.Close>
+						<DialogCloseButton label="Close Surface Templates gallery" />
 					</div>
 					<Dialog.Description className="sr-only">Browse Surface Template categories. Most are not backed by a real integration yet.</Dialog.Description>
 					<div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-auto p-4 sm:grid-cols-3">

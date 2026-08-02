@@ -1,10 +1,11 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { formatForDisplay, useHotkeyRecorder, type Hotkey } from "@tanstack/react-hotkeys";
-import { Search, X } from "lucide-react";
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
-import { CommandButton, useCommandEnvironment } from "./react.js";
+import { DialogCloseButton } from "./DialogCloseButton.js";
+import { useCommandEnvironment } from "./react.js";
 import type { KeybindingDefinition } from "./registry.js";
 import type { DialogMode } from "./useCommandContextStack.js";
 
@@ -71,15 +72,7 @@ export function CommandDialog({
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Search aria-hidden="true" size={17} className="text-gray-500" />
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</Dialog.Title>
-						<Dialog.Close asChild>
-							<CommandButton
-								commandId="dialog.close"
-								label={`Close ${title.toLowerCase()}`}
-								className="ml-auto rounded-md p-1 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800"
-							>
-								<X aria-hidden="true" size={16} />
-							</CommandButton>
-						</Dialog.Close>
+						<DialogCloseButton label={`Close ${title.toLowerCase()}`} />
 					</div>
 					<Dialog.Description className="sr-only">
 						{mode === "palette" ? "Search and execute Alignment commands." : "Inspect the active keyboard bindings for Alignment commands."}

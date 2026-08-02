@@ -4,6 +4,7 @@ import { Composer, ConversationRow, ConversationSurface } from "../conversation/
 import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
+import { iconButtonClassName } from "./icon-button-style.js";
 import type { ChatPosition } from "./chat-drag.js";
 
 interface ChatOverlayProps {
@@ -91,7 +92,7 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 					onPointerDown={(event) => event.stopPropagation()}
 					onClick={onDock}
 					aria-label="Dock Chat into the active Window"
-					className={cn("grid size-6 shrink-0 place-items-center rounded-md text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800", !expanded && "ml-auto")}
+					className={cn(iconButtonClassName({ size: "sm" }), !expanded && "ml-auto")}
 				>
 					<PanelRightOpen aria-hidden="true" size={13} />
 				</button>
@@ -101,7 +102,7 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 						onPointerDown={(event) => event.stopPropagation()}
 						onClick={() => setExpanded(false)}
 						aria-label="Collapse to the last reply"
-						className="ml-auto grid size-6 shrink-0 place-items-center rounded-md text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800"
+						className={cn("ml-auto", iconButtonClassName({ size: "sm" }))}
 					>
 						<ChevronDown aria-hidden="true" size={14} />
 					</button>
