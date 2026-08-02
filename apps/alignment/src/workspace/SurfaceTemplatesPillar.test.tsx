@@ -28,6 +28,13 @@ function renderPillar(props: Partial<Parameters<typeof SurfaceTemplatesPillar>[0
 }
 
 describe("SurfaceTemplatesPillar", () => {
+	it("uses the shared --app-corner-radius token for its own shape, not a fixed circular override -- so it follows Corner Sharpness like everything else", () => {
+		renderPillar();
+		const nav = screen.getByRole("navigation", { name: "Surface Templates" });
+		expect(nav.className).toMatch(/rounded-\[var\(--app-corner-radius/);
+		expect(nav.className).not.toMatch(/(?<!:)rounded-full/);
+	});
+
 	it("clicking a template glyph docks it with the default placement", () => {
 		const { onDockDefault } = renderPillar();
 		fireEvent.click(screen.getByRole("button", { name: "Dock Activity" }));

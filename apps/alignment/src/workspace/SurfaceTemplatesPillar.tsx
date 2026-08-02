@@ -22,9 +22,9 @@ interface SurfaceTemplatesPillarProps {
 export function SurfaceTemplatesPillar({ entries, onDockDefault }: SurfaceTemplatesPillarProps): React.JSX.Element {
 	const openGalleryShortcut = useCommandShortcut("templates.openGallery");
 
-	// Pillar Cap: rounded-full, not the shared corner-radius token -- a Pillar is always a stadium/pill shape at its own top and bottom, independent of the Corner Sharpness setting elsewhere.
+	// Pillar Cap: the shared --app-corner-radius token, same as everywhere else -- CSS's own per-corner clamping (radius capped at half the box's own side) turns this narrow, tall nav into a true stadium once Corner Sharpness pushes the radius past half its width, exactly how a size-9 glyph button already becomes a circle at max sharpness. Never a fixed rounded-full: that would stay circular even at Corner Sharpness 0.
 	return (
-		<nav aria-label="Surface Templates" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-full", SURFACE_BG)}>
+		<nav aria-label="Surface Templates" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)]", SURFACE_BG)}>
 			{/* The categorized gallery (brand logos, per-category previews) -- browsing/discovery, not a dock action. TemplatesDialog's own keyboard-native filter+placement flow is still reachable via its own command/shortcut for docking a real template. */}
 			<PillarTooltip side="left" label="Browse the Surface Templates gallery" shortcut={openGalleryShortcut}>
 				<CommandButton commandId="templates.openGallery" label="Browse the Surface Templates gallery" tooltip={false} className="grid h-12 w-14 shrink-0 place-items-center border-b border-gray-200 text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">

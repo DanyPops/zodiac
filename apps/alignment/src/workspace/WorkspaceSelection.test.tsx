@@ -103,6 +103,13 @@ describe("expanded Workspace selection", () => {
 });
 
 describe("collapsed Workspace quick selection", () => {
+	it("uses the shared --app-corner-radius token for its own shape, not a fixed circular override -- so it follows Corner Sharpness like everything else", () => {
+		renderCollapsed();
+		const nav = screen.getByRole("navigation", { name: "Workspace quick selection" });
+		expect(nav.className).toMatch(/rounded-\[var\(--app-corner-radius/);
+		expect(nav.className).not.toMatch(/(?<!:)rounded-full/);
+	});
+
 	it("overlays the Alignment logo and expand glyph in one control at the same height as the expanded header", () => {
 		renderCollapsed();
 		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });

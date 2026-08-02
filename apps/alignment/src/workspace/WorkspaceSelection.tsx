@@ -85,9 +85,9 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					</div>
 				</nav>
 			)}
-			{/* Pillar Cap: rounded-full, not the shared corner-radius token -- a Pillar is always a stadium/pill shape at its own top and bottom, independent of the Corner Sharpness setting elsewhere. */}
+			{/* Pillar Cap: the shared --app-corner-radius token, same as everywhere else -- CSS's own per-corner clamping (radius capped at half the box's own side) turns this narrow, tall nav into a true stadium once Corner Sharpness pushes the radius past half its width, exactly how a size-9 glyph button already becomes a circle at max sharpness. Never a fixed rounded-full: that would stay circular even at Corner Sharpness 0. */}
 			{collapsed && (
-				<nav aria-label="Workspace quick selection" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-full", SURFACE_BG)}>
+				<nav aria-label="Workspace quick selection" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)]", SURFACE_BG)}>
 					<CollapsedToggle />
 					{/* The "+" lives inside this same flex column, right after the last Workspace glyph -- not a sibling pinned near the footer by the column's own flex-1 growth. */}
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
