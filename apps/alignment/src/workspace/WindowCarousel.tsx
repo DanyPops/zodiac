@@ -5,6 +5,7 @@ import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { iconButtonClassName } from "./icon-button-style.js";
+import { UTILITY_PILL_CLASSES } from "./utility-pill-style.js";
 import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx, WINDOW_FADE_DISTANCE, WINDOW_ITEM_STEP_PX } from "./window-carousel-fade.js";
 
 /** The viewport's width: just wide enough to show every Window that could still be visibly faded in (WINDOW_FADE_DISTANCE on each side of the active one), not a flex-1 fill of the whole header. */
@@ -81,7 +82,7 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll, a
 
 	return (
 		<div className="flex flex-col items-center gap-1 self-center">
-			<nav ref={navRef} aria-label="Window Carousel" className={cn("inline-flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] px-2", SURFACE_BG)}>
+			<nav ref={navRef} aria-label="Window Carousel" className={cn(UTILITY_PILL_CLASSES, SURFACE_BG)}>
 				{/* Balances the "+" button on the other end, so the viewport (and the active Window it centers) sits at the pill's true geometric center -- the same center WindowNameRow, below, centers under. */}
 				<div aria-hidden="true" className="size-7 shrink-0" />
 				<CommandButton commandId="window.previous" label="Previous Window" className={iconButtonClassName({ size: "md" })}>

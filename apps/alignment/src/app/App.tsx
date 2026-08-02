@@ -32,6 +32,8 @@ import { useUserWorkspaces } from "../workspace/useUserWorkspaces.js";
 import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
+import { NotificationsPill } from "../workspace/NotificationsPill.js";
+import { WatchPill } from "../workspace/WatchPill.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
 import { createDemoWorkspace, WORKSPACE_CATALOG } from "../workspace/workspace-catalog.js";
@@ -178,14 +180,23 @@ export function App(): React.JSX.Element {
 				/>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
-					<WindowCarousel
-						windowCount={workspace.workspace.windows.length}
-						activeIndex={workspace.workspace.activeWindowIndex}
-						onSelect={workspace.selectWindow}
-						onScroll={workspace.scrollWindow}
-						activeWindowTitle={workspace.activeWindow.title}
-						onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow.id, title)}
-					/>
+					{/* A 3-column grid, not a flex row: the Carousel (auto-width, its own centered column) stays truly centered regardless of how wide Notifications/WatchPill are on either side. */}
+					<div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
+						<div className="flex justify-start">
+							<NotificationsPill />
+						</div>
+						<WindowCarousel
+							windowCount={workspace.workspace.windows.length}
+							activeIndex={workspace.workspace.activeWindowIndex}
+							onSelect={workspace.selectWindow}
+							onScroll={workspace.scrollWindow}
+							activeWindowTitle={workspace.activeWindow.title}
+							onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow.id, title)}
+						/>
+						<div className="flex justify-end">
+							<WatchPill />
+						</div>
+					</div>
 					<section
 						ref={canvasRef}
 						tabIndex={-1}
