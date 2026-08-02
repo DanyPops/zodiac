@@ -24,6 +24,7 @@ function noopActions(): AlignmentCommandActions {
 		newWindow: vi.fn(),
 		toggleChat: vi.fn(),
 		openTemplatesPicker: vi.fn(),
+		openTemplatesGallery: vi.fn(),
 		dockDefaultTemplate: vi.fn(),
 		openAppearance: vi.fn(),
 	};

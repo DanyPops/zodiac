@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { PillarTooltip } from "./PillarTooltip.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
@@ -18,13 +18,14 @@ interface SurfaceTemplatesPillarProps {
  * WindowDockview/SaveAsTemplateDialog) -- not this pillar.
  */
 export function SurfaceTemplatesPillar({ entries, onDockDefault }: SurfaceTemplatesPillarProps): React.JSX.Element {
-	const openPickerShortcut = useCommandShortcut("templates.open");
+	const openGalleryShortcut = useCommandShortcut("templates.openGallery");
 
 	return (
 		<nav aria-label="Surface Templates" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
-			<PillarTooltip side="left" label="Browse Surface Templates" shortcut={openPickerShortcut}>
-				<CommandButton commandId="templates.open" label="Browse Surface Templates" tooltip={false} className="grid h-12 w-14 shrink-0 place-items-center border-b border-gray-200 text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
-					<Plus aria-hidden="true" size={18} />
+			{/* The categorized gallery (brand logos, per-category previews) -- browsing/discovery, not a dock action. TemplatesDialog's own keyboard-native filter+placement flow is still reachable via its own command/shortcut for docking a real template. */}
+			<PillarTooltip side="left" label="Browse the Surface Templates gallery" shortcut={openGalleryShortcut}>
+				<CommandButton commandId="templates.openGallery" label="Browse the Surface Templates gallery" tooltip={false} className="grid h-12 w-14 shrink-0 place-items-center border-b border-gray-200 text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
+					<BookOpen aria-hidden="true" size={18} />
 				</CommandButton>
 			</PillarTooltip>
 

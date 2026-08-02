@@ -17,7 +17,7 @@ afterEach(() => {
 const ENTRIES: SurfaceTemplateEntry[] = [{ id: "activity", title: "Activity", icon: Activity, dockCommandId: "template.dockActivity", templateId: "activity", saved: false }];
 
 function renderPillar(props: Partial<Parameters<typeof SurfaceTemplatesPillar>[0]> = {}) {
-	const registry = createCommandRegistry({ commands: [{ id: "templates.open", title: "Browse Surface Templates", description: "d", execute: vi.fn() }], bindings: [] });
+	const registry = createCommandRegistry({ commands: [{ id: "templates.openGallery", title: "Browse the Surface Templates gallery", description: "d", execute: vi.fn() }], bindings: [] });
 	const onDockDefault = vi.fn();
 	render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
@@ -47,5 +47,10 @@ describe("SurfaceTemplatesPillar", () => {
 	it("carries no save-as-template affordance of its own -- that's reached from a docked Surface's own tab context menu instead", () => {
 		renderPillar();
 		expect(screen.queryByLabelText(/save.*template/i)).not.toBeInTheDocument();
+	});
+
+	it("the top button opens the categorized gallery, not the flat filter-list dialog", () => {
+		renderPillar();
+		expect(screen.getByRole("button", { name: "Browse the Surface Templates gallery" })).toBeInTheDocument();
 	});
 });

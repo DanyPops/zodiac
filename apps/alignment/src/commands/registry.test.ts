@@ -29,6 +29,7 @@ function fixtureActions(): AlignmentCommandActions {
 		newWindow: action,
 		toggleChat: action,
 		openTemplatesPicker: action,
+		openTemplatesGallery: action,
 		dockDefaultTemplate: action,
 		openAppearance: action,
 	};

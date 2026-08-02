@@ -24,6 +24,7 @@ import { latestToolCallName, resolveWispWindowIndex } from "../workspace/wisp-cu
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
+import { SurfaceTemplatesGallery } from "../workspace/SurfaceTemplatesGallery.js";
 import { useChatVisibility } from "../workspace/useChatVisibility.js";
 import { useSurfaceTemplates } from "../workspace/useSurfaceTemplates.js";
 import { useWorkspaceListNavigation } from "../workspace/useWorkspaceListNavigation.js";
@@ -150,6 +151,7 @@ export function App(): React.JSX.Element {
 			newWindow: workspace.addWindow,
 			toggleChat: workspace.toggleChat,
 			openTemplatesPicker: () => contexts.openDialog("templates"),
+			openTemplatesGallery: () => contexts.openDialog("templatesGallery"),
 			dockDefaultTemplate(templateId) {
 				if (!templateId) return;
 				const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
@@ -259,6 +261,13 @@ export function App(): React.JSX.Element {
 					}}
 					entries={surfaceTemplates.entries}
 					onDock={(templateId, title, position) => dockTemplate(templateId, title, position)}
+				/>
+				<SurfaceTemplatesGallery
+					open={contexts.dialogMode === "templatesGallery"}
+					onClose={() => {
+						contexts.closeDialog();
+						contexts.enterGlobal();
+					}}
 				/>
 				<VisualDnaDialog
 					open={contexts.dialogMode === "appearance"}
