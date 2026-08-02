@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { Activity } from "lucide-react";
 import { createPreferences } from "../platform/preferences.js";
 import { useSurfaceTemplates } from "./useSurfaceTemplates.js";
 
@@ -60,6 +61,16 @@ describe("useSurfaceTemplates", () => {
 
 		expect(result.current.entries.some((entry) => entry.saved)).toBe(false);
 		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([]);
+	});
+
+	it("includes extension-registered Surface Templates alongside the built-in catalog", () => {
+		const preferences = createPreferences(memoryStorage());
+		const extensionTemplate = { id: "acme-tickets", title: "Acme Tickets", icon: Activity, dockCommandId: "dock.acmeTickets", dockCommandTitle: "Dock Acme Tickets", dockCommandDescription: "", render: () => null };
+
+		const { result } = renderHook(() => useSurfaceTemplates(preferences, [extensionTemplate]));
+
+		expect(result.current.entries.some((entry) => entry.templateId === "acme-tickets" && !entry.saved)).toBe(true);
+		expect(result.current.entries.some((entry) => entry.templateId === "activity")).toBe(true);
 	});
 
 	it("silently drops a saved template naming a since-removed built-in template", () => {

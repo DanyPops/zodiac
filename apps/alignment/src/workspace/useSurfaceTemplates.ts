@@ -20,8 +20,8 @@ export interface SurfaceTemplatesHandle {
 
 let savedIdCounter = 0;
 
-function builtinEntries(): SurfaceTemplateEntry[] {
-	return SURFACE_TEMPLATE_REGISTRY.map((template) => ({
+function builtinEntries(extensionTemplates: readonly SurfaceTemplateDefinition[]): SurfaceTemplateEntry[] {
+	return [...SURFACE_TEMPLATE_REGISTRY, ...extensionTemplates].map((template) => ({
 		id: template.id,
 		title: template.title,
 		icon: template.icon,
@@ -41,8 +41,8 @@ function savedEntries(saved: readonly SavedSurfaceTemplate[]): SurfaceTemplateEn
 	return entries;
 }
 
-/** Owns the Surface Templates pillar's contents: the fixed built-in catalog plus user-saved templates, persisted via the Preferences port. */
-export function useSurfaceTemplates(preferences: Preferences): SurfaceTemplatesHandle {
+/** Owns the Surface Templates pillar's contents: the fixed built-in catalog, any extension-registered templates, plus user-saved templates, persisted via the Preferences port. */
+export function useSurfaceTemplates(preferences: Preferences, extensionTemplates: readonly SurfaceTemplateDefinition[] = []): SurfaceTemplatesHandle {
 	const [saved, setSaved] = useState<SavedSurfaceTemplate[]>(() => preferences.savedSurfaceTemplates());
 
 	function persist(next: SavedSurfaceTemplate[]): void {
@@ -51,7 +51,7 @@ export function useSurfaceTemplates(preferences: Preferences): SurfaceTemplatesH
 	}
 
 	return {
-		entries: [...builtinEntries(), ...savedEntries(saved)],
+		entries: [...builtinEntries(extensionTemplates), ...savedEntries(saved)],
 		saveAsTemplate(title, templateId) {
 			const trimmed = title.trim();
 			if (!trimmed || !findSurfaceTemplate(templateId)) return;

@@ -19,6 +19,7 @@ import {
 	type Workspace,
 	type WorkspaceWindow,
 } from "./model.js";
+import type { ExtensionHost } from "../extensions/extension-host.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
 export interface WorkspaceRegistryHandle {
@@ -59,6 +60,8 @@ export function useWorkspaceRegistry(
 	catalog: readonly WorkspaceCatalogEntry[],
 	/** Builds each catalog entry's starting Workspace -- defaults to a plain, single-Window `createWorkspace`. A caller (e.g. App.tsx, for the mock catalog's demo Windows) may pass a different factory without this hook itself knowing or caring that the result is demo data. */
 	createInitialWorkspace: (id: string, title: string) => Workspace = (id, title) => createWorkspace({ id, title }),
+	/** Optional -- emits workspace:selected/surface:docked/surface:undocked for any registered extension's on() handlers. */
+	host?: ExtensionHost,
 ): WorkspaceRegistryHandle {
 	const [workspaces, setWorkspaces] = useState<Record<string, Workspace>>(() => {
 		const initial: Record<string, Workspace> = {};
@@ -85,19 +88,24 @@ export function useWorkspaceRegistry(
 	function dock(templateId: string, title: string): DockedSurfaceInstance {
 		const result = dockSurface(workspace, templateId, title);
 		setWorkspaces((current) => ({ ...current, [activeWorkspaceId]: result.workspace }));
+		host?.emit({ type: "surface:docked", workspaceId: activeWorkspaceId, windowId: activeWindow(result.workspace).id, instance: result.instance });
 		return result.instance;
 	}
 
 	function dockChatSurface(title: string): DockedSurfaceInstance {
 		const result = dockChat(workspace, title);
 		setWorkspaces((current) => ({ ...current, [activeWorkspaceId]: result.workspace }));
+		host?.emit({ type: "surface:docked", workspaceId: activeWorkspaceId, windowId: activeWindow(result.workspace).id, instance: result.instance });
 		return result.instance;
 	}
 
 	return {
 		catalog,
 		activeWorkspaceId,
-		selectWorkspace: setActiveWorkspaceId,
+		selectWorkspace: (id) => {
+			setActiveWorkspaceId(id);
+			host?.emit({ type: "workspace:selected", workspaceId: id });
+		},
 		workspace,
 		workspaces,
 		activeWindow: activeWindow(workspace),
@@ -107,7 +115,10 @@ export function useWorkspaceRegistry(
 		selectWindow: (index) => update((current) => selectWindow(current, index)),
 		addWindow: () => update(addWindow),
 		dockSurface: dock,
-		undockSurface: (surfaceInstanceId) => update((current) => undockSurface(current, surfaceInstanceId)),
+		undockSurface: (surfaceInstanceId) => {
+			update((current) => undockSurface(current, surfaceInstanceId));
+			host?.emit({ type: "surface:undocked", workspaceId: activeWorkspaceId, surfaceInstanceId });
+		},
 		showChat: () => update(showChat),
 		hideChat: () => update(hideChat),
 		toggleChat: () => update(toggleChat),

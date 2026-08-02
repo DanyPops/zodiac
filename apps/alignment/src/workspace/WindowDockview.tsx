@@ -1,12 +1,12 @@
 import { DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewReadyEvent, type IDockviewPanelProps, type Position } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import { PanelLeftOpen } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
-import { findSurfaceTemplate } from "./surface-templates.js";
+import { findSurfaceTemplate, type SurfaceTemplateDefinition } from "./surface-templates.js";
 
 // The debounced/idle-gated drop-preview policy the redesign settled on: a
 // fast pass over several drop zones must not flicker a highlight on every
@@ -14,14 +14,12 @@ import { findSurfaceTemplate } from "./surface-templates.js";
 // since the last sampled frame is at or below this threshold.
 const DRAG_HINT_IDLE_VELOCITY_PX_PER_MS = 0.5;
 
-// `IDockviewPanelProps` is dockview's own type (api/containerApi/params and
-// more), not ours to mark readonly -- the rule can't see that `params` is the
-// only field this component actually reads.
-// eslint-disable-next-line sonarjs/prefer-read-only-props
-function SurfaceTemplatePanel(props: IDockviewPanelProps<{ readonly templateId: string }>): React.JSX.Element {
-	const template = findSurfaceTemplate(props.params.templateId);
-	if (!template) return <div className="p-4 text-sm text-danger-80">Unknown Surface Template &quot;{props.params.templateId}&quot;.</div>;
-	return <>{template.render()}</>;
+function makeSurfaceTemplatePanel(extensionTemplates: readonly SurfaceTemplateDefinition[]) {
+	return function SurfaceTemplatePanel(props: IDockviewPanelProps<{ readonly templateId: string }>): React.JSX.Element {
+		const template = findSurfaceTemplate(props.params.templateId, extensionTemplates);
+		if (!template) return <div className="p-4 text-sm text-danger-80">Unknown Surface Template &quot;{props.params.templateId}&quot;.</div>;
+		return <>{template.render()}</>;
+	};
 }
 
 /** Params for the docked Chat Surface -- unlike an ordinary template, it needs live conversation data and, per the redesign, awareness of its sibling docked Surfaces in the same Window. */
@@ -55,8 +53,6 @@ function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JS
 	);
 }
 
-const PANEL_COMPONENTS = { surfaceTemplate: SurfaceTemplatePanel, chatSurface: DockedChatPanel };
-
 /** A domain-docked instance still awaiting placement in the docking engine -- carries the split direction (or `undefined` for the engine's own default) a keyboard or drag placement chose. */
 export interface PendingDock {
 	instanceId: string;
@@ -84,6 +80,8 @@ interface WindowDockviewProps {
 	readonly onDraftChange: (value: string) => void;
 	readonly onComposerFocus: () => void;
 	readonly onUndockChat: () => void;
+	/** Extension-registered Surface Templates (e.g. an ExtensionHost's), resolved alongside the built-in registry when rendering a docked panel. */
+	readonly extensionTemplates?: readonly SurfaceTemplateDefinition[];
 }
 
 export function WindowDockview({
@@ -102,10 +100,13 @@ export function WindowDockview({
 	onDraftChange,
 	onComposerFocus,
 	onUndockChat,
+	extensionTemplates = [],
 }: WindowDockviewProps): React.JSX.Element {
 	const apiRef = useRef<DockviewReadyEvent["api"]>(undefined);
 	const mountedIdsRef = useRef<Set<string>>(new Set());
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- extensionTemplates is expected to be a caller-memoized, effectively-static reference (see App.tsx); re-keying every panel component on each new array identity would be wrong here, not a missing dependency.
+	const panelComponents = useMemo(() => ({ surfaceTemplate: makeSurfaceTemplatePanel(extensionTemplates), chatSurface: DockedChatPanel }), []);
 
 	function chatParams(instance: DockedSurfaceInstance): DockedChatParams {
 		return {
@@ -227,7 +228,7 @@ export function WindowDockview({
 		<DockviewReact
 			key={windowId}
 			className="h-full"
-			components={PANEL_COMPONENTS}
+			components={panelComponents}
 			// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
 			theme={isDark ? themeAbyssSpaced : themeLightSpaced}
 			onReady={onReady}

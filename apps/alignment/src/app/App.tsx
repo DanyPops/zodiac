@@ -10,6 +10,7 @@ import { useConversationWorkspace } from "../conversation/useConversationWorkspa
 import { createPreferences } from "../platform/preferences.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
 import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
+import { createExtensionHost } from "../extensions/extension-host.js";
 import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useVisualDna } from "../visual-dna-hooks.js";
@@ -43,14 +44,20 @@ export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
 	const pointerTracker = useMemo(() => createWindowPointerTracker(), []);
 	const wispTargetMeasurer = useMemo(() => createDomWispTargetMeasurer(), []);
+	// One host for the whole app's lifetime: extensions register once at
+	// startup (no live discovery/reloading yet -- see the Native Extension
+	// System task), so its contributed lists stay stable across renders.
+	const extensionHost = useMemo(() => createExtensionHost(), []);
+	const extensionSurfaceTemplates = useMemo(() => extensionHost.surfaceTemplates(), [extensionHost]);
+	const extensionCommands = useMemo(() => extensionHost.commands(), [extensionHost]);
 	const theme = useTheme();
 	const visualDna = useVisualDna(preferences);
 	const selection = useWorkspaceSelectionCollapse(preferences);
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
 	const conversationWorkspace = useConversationWorkspace(conversationClient);
-	const workspace = useWorkspaceRegistry(WORKSPACE_CATALOG, createDemoWorkspace);
-	const surfaceTemplates = useSurfaceTemplates(preferences);
+	const workspace = useWorkspaceRegistry(WORKSPACE_CATALOG, createDemoWorkspace, extensionHost);
+	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
 	const [activeDockedInstanceId, setActiveDockedInstanceId] = useState<string | undefined>(undefined);
@@ -139,12 +146,13 @@ export function App(): React.JSX.Element {
 			openTemplatesPicker: () => contexts.openDialog("templates"),
 			dockDefaultTemplate(templateId) {
 				if (!templateId) return;
-				const template = findSurfaceTemplate(templateId);
+				const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
 				if (template) dockTemplate(templateId, template.title, undefined);
 			},
 			openAppearance: () => contexts.openDialog("appearance"),
 		},
 		keybindings.userBindings,
+		extensionCommands,
 	);
 
 	return (
@@ -179,11 +187,12 @@ export function App(): React.JSX.Element {
 								onPendingDockConsumed={() => setPendingDock(undefined)}
 								onPanelClosed={handlePanelClosed}
 								onExternalTemplateDrop={(templateId, position, referenceGroupId) => {
-									const template = findSurfaceTemplate(templateId);
+									const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
 									if (template) dockTemplate(templateId, template.title, position, referenceGroupId);
 								}}
 								onActivePanelChange={setActiveDockedInstanceId}
 								isDark={theme.isDark}
+								extensionTemplates={extensionSurfaceTemplates}
 								conversationItems={conversationWorkspace.conversationItems}
 								conversationLoading={conversationWorkspace.conversationLoading}
 								conversationError={conversationWorkspace.conversationError}

@@ -48,7 +48,7 @@ export const DEFAULT_BINDINGS: readonly KeybindingDefinition[] = [
 	{ commandId: "appearance.open", keys: "Mod+Shift+,", context: "global" },
 ];
 
-export function createAlignmentCommandRegistry(actions: AlignmentCommandActions, userBindings: readonly KeybindingDefinition[] = []) {
+export function createAlignmentCommandRegistry(actions: AlignmentCommandActions, userBindings: readonly KeybindingDefinition[] = [], extensionCommands: readonly CommandDefinition[] = []) {
 	const commands: CommandDefinition[] = [
 		define("workspace.toggleSelection", "Toggle workspace selection", "Show or hide the Workspace Selection surface.", actions.toggleWorkspaceSelection),
 		define("workspace.focusSelection", "Focus workspace selection", "Move focus to the selected Workspace.", actions.focusWorkspaceSelection),
@@ -71,6 +71,7 @@ export function createAlignmentCommandRegistry(actions: AlignmentCommandActions,
 		define("templates.open", "Browse Surface Templates", "Filter Surface Templates by keyboard and choose where to dock one.", actions.openTemplatesPicker),
 		define("appearance.open", "Open Visual DNA", "Adjust the shell's Vibe (line neatness) and Corner Sharpness.", actions.openAppearance),
 		...SURFACE_TEMPLATE_REGISTRY.map((template) => define(template.dockCommandId, template.dockCommandTitle, template.dockCommandDescription, () => actions.dockDefaultTemplate(template.id))),
+		...extensionCommands,
 	];
 	return createCommandRegistry({ commands, bindings: DEFAULT_BINDINGS, userBindings });
 }

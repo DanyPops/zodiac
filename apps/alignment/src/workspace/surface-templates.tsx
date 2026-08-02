@@ -38,6 +38,7 @@ export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 	},
 ];
 
-export function findSurfaceTemplate(templateId: string): SurfaceTemplateDefinition | undefined {
-	return SURFACE_TEMPLATE_REGISTRY.find((template) => template.id === templateId);
+/** `extra` -- e.g. an ExtensionHost's registered templates -- is searched after the built-in registry, so a built-in id always wins a collision. */
+export function findSurfaceTemplate(templateId: string, extra: readonly SurfaceTemplateDefinition[] = []): SurfaceTemplateDefinition | undefined {
+	return SURFACE_TEMPLATE_REGISTRY.find((template) => template.id === templateId) ?? extra.find((template) => template.id === templateId);
 }
