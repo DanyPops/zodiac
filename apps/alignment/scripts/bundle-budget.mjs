@@ -10,7 +10,7 @@
 // are real but deferred off the critical path, not absent.
 export const BUDGETS_BYTES = {
 	entryJs: 155_000, // gzip -- measured ~124.2kB baseline; raised from 150kB for @radix-ui/react-popover (Notifications), still ~14% headroom
-	entryCss: 7_000, // gzip -- measured ~5.6kB baseline, ~21% headroom
+	entryCss: 7_200, // gzip -- measured ~5.6kB baseline; raised from 7kB for the Dock Ruler's own overlay hiding rule, ~22% headroom
 	totalJs: 250_000, // gzip -- measured ~207.2kB baseline (entry + WindowDockview's dockview-react chunk); raised alongside entryJs, ~13% headroom
 	totalCss: 18_000, // gzip -- measured ~14.3kB baseline, ~23% headroom
 };

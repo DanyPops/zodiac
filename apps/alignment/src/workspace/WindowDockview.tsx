@@ -7,23 +7,33 @@ import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
+import { DockRuler } from "./DockRuler.js";
+import { computeDockRulerHint, type DockRulerHint } from "./dock-ruler.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
 import { isSurfaceFocused } from "./surface-focus.js";
 import { findSurfaceTemplate, type SurfaceTemplateDefinition } from "./surface-templates.js";
 
-// The debounced/idle-gated drop-preview policy the redesign settled on: a
-// fast pass over several drop zones must not flicker a highlight on every
-// one it crosses. Suppress the overlay unless the pointer's own velocity
-// since the last sampled frame is at or below this threshold.
-const DRAG_HINT_IDLE_VELOCITY_PX_PER_MS = 0.5;
-
 // How long the fade-out plays before the panel is actually removed from
 // dockview -- matches --animate-surface-spawn's own scale but a touch
 // slower, since closing reads calmer as a slightly longer fade than the
 // spawn's snappier entrance.
 const CLOSE_FADE_MS = 220;
+
+// The debounced/idle-gated drop-preview policy for the empty-Window
+// watermark case (dockview's own root-level 'edge' overlay, a separate
+// mechanism from the Dock Ruler below -- there's no existing group to split
+// a fraction of yet, so the Ruler doesn't apply there). A fast pass over
+// several drop zones must not flicker a highlight on every one it crosses.
+const DRAG_HINT_IDLE_VELOCITY_PX_PER_MS = 0.5;
+
+/** The same hint computation the Dock Ruler renders, run fresh against a real drag event and its target group's own DOM box -- shared between the live overlay (onWillShowOverlay) and the actual drop (onDidDrop) so what the ruler showed and what the drop does can never disagree. */
+function dockRulerHintFromEvent(nativeEvent: DragEvent | PointerEvent | Event, groupElement: HTMLElement): DockRulerHint | undefined {
+	if (!(nativeEvent instanceof DragEvent) && !(nativeEvent instanceof PointerEvent)) return undefined;
+	const box = groupElement.getBoundingClientRect();
+	return computeDockRulerHint(nativeEvent.clientX - box.left, nativeEvent.clientY - box.top, box.width, box.height);
+}
 
 interface SurfaceTemplatePanelParams {
 	readonly templateId: string;
@@ -160,6 +170,8 @@ export interface PendingDock {
 	instanceId: string;
 	position?: Position;
 	referenceGroupId?: string;
+	/** The fraction of the reference group's current size (along whichever axis `position` implies) this Surface should occupy -- chosen via the Dock Ruler during a drag. Undefined for placements with no drag geometry to derive one from (click-to-dock, the keyboard TemplatesDialog flow), which fall back to dockview's own default split size. */
+	newGroupSizeRatio?: number;
 }
 
 interface WindowDockviewProps {
@@ -170,7 +182,7 @@ interface WindowDockviewProps {
 	readonly onPendingDockConsumed: () => void;
 	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too (or float it, for Chat). */
 	readonly onPanelClosed: (instanceId: string) => void;
-	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined) => void;
+	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined, newGroupSizeRatio: number | undefined) => void;
 	/** The active panel's docked-Surface instance id, or undefined when the Window is empty. Optional -- no current caller needs it ("save as template" is now reached per-tab via context menu, not by tracking the active panel), but the real dockview event is still wired through for whichever future caller does. */
 	readonly onActivePanelChange?: (instanceId: string | undefined) => void;
 	readonly isDark: boolean;
@@ -213,8 +225,14 @@ export function WindowDockview({
 }: WindowDockviewProps): React.JSX.Element {
 	const apiRef = useRef<DockviewReadyEvent["api"]>(undefined);
 	const mountedIdsRef = useRef<Set<string>>(new Set());
+	const wrapperRef = useRef<HTMLDivElement>(null);
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
 	const [saveAsTemplateRequest, setSaveAsTemplateRequest] = useState<{ templateId: string; defaultTitle: string } | undefined>(undefined);
+	// The live Dock Ruler overlay's own position/hint while dragging over an
+	// existing group's content -- undefined outside a drag, or once the
+	// pointer leaves the target, drops, or lands in the small center
+	// dead-zone (tab-insert, no fraction to show).
+	const [dockRulerBox, setDockRulerBox] = useState<{ left: number; top: number; width: number; height: number; hint: DockRulerHint } | undefined>(undefined);
 	// Ids currently mid-fade, just before their real dockview removal --
 	// requestClose below owns the whole lifecycle (mark closing, wait
 	// CLOSE_FADE_MS, then the real api.close()).
@@ -267,16 +285,26 @@ export function WindowDockview({
 		return { templateId: instance.templateId, closing: closingIds.has(instance.id), focused: isSurfaceFocused(instance.id, activePanelId, dockedSurfaces.length) };
 	}
 
-	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string): void {
+	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string, newGroupSizeRatio?: number): void {
 		const api = apiRef.current;
 		if (!api) return;
 		const isChat = instance.templateId === CHAT_TEMPLATE_ID;
+		// The Dock Ruler's chosen fraction, converted into dockview's own
+		// initialWidth/initialHeight (its real, documented addPanel option for
+		// sizing the newly-created group) -- measured off the reference group's
+		// own current size, not the ruler's drag-time snapshot, since a real
+		// resize could happen between drop and this mount effect running.
+		const referenceGroup = referenceGroupId ? api.getGroup(referenceGroupId) : undefined;
+		const initialWidth = newGroupSizeRatio !== undefined && referenceGroup && (position === "left" || position === "right") ? referenceGroup.width * newGroupSizeRatio : undefined;
+		const initialHeight = newGroupSizeRatio !== undefined && referenceGroup && (position === "top" || position === "bottom") ? referenceGroup.height * newGroupSizeRatio : undefined;
 		api.addPanel({
 			id: instance.id,
 			component: isChat ? "chatSurface" : "surfaceTemplate",
 			title: instance.title,
 			params: isChat ? chatParams(instance) : surfaceTemplateParams(instance),
 			position: position ? { direction: positionToDirection(position), referenceGroup: referenceGroupId } : undefined,
+			initialWidth,
+			initialHeight,
 		});
 		mountedIdsRef.current.add(instance.id);
 	}
@@ -306,11 +334,33 @@ export function WindowDockview({
 			if (dataTransfer?.types.includes(TEMPLATE_DRAG_MIME_TYPE)) dndEvent.accept();
 		});
 
-		// Debounce/idle-gate the split/tab preview: suppress a frame's overlay
-		// unless the pointer has been moving slowly (or is idle) since the
-		// previous sampled frame, so a fast pass over several drop zones
-		// doesn't flicker a highlight on every one it crosses.
 		event.api.onWillShowOverlay((overlayEvent) => {
+			// The Dock Ruler replaces dockview's own coarse quadrant overlay
+			// entirely (hidden via CSS within an existing group -- see
+			// styles.css) with a live, granular one: every dragover over an
+			// existing group's content recomputes the hint fresh and positions
+			// the ruler over that group's own real box. dockview's own overlay
+			// `_state` is left alone (no preventDefault) so its onDrop still
+			// fires normally -- onDidDrop below ignores dockview's own reported
+			// position anyway, recomputing the same hint fresh so what the
+			// ruler showed and what the drop does can never disagree.
+			if (overlayEvent.kind === "content" && overlayEvent.group) {
+				const wrapper = wrapperRef.current;
+				const hint = wrapper ? dockRulerHintFromEvent(overlayEvent.nativeEvent, overlayEvent.group.element) : undefined;
+				if (!hint || !wrapper) {
+					setDockRulerBox(undefined);
+					return;
+				}
+				const groupBox = overlayEvent.group.element.getBoundingClientRect();
+				const wrapperBox = wrapper.getBoundingClientRect();
+				setDockRulerBox({ left: groupBox.left - wrapperBox.left, top: groupBox.top - wrapperBox.top, width: groupBox.width, height: groupBox.height, hint });
+				return;
+			}
+
+			// Every other kind (the empty-Window watermark's own root-level
+			// 'edge' overlay, tab/header_space) keeps its original debounced
+			// behavior, untouched by the Dock Ruler.
+			setDockRulerBox(undefined);
 			const point = overlayEvent.nativeEvent instanceof DragEvent || overlayEvent.nativeEvent instanceof PointerEvent ? { x: overlayEvent.nativeEvent.clientX, y: overlayEvent.nativeEvent.clientY, t: Date.now() } : null;
 			const last = lastMoveRef.current;
 			if (point) lastMoveRef.current = point;
@@ -336,7 +386,7 @@ export function WindowDockview({
 		for (const instance of dockedSurfaces) {
 			if (mountedIdsRef.current.has(instance.id)) continue;
 			const isPending = pendingDock?.instanceId === instance.id;
-			mountPanel(instance, isPending ? pendingDock.position : undefined, isPending ? pendingDock.referenceGroupId : undefined);
+			mountPanel(instance, isPending ? pendingDock.position : undefined, isPending ? pendingDock.referenceGroupId : undefined, isPending ? pendingDock.newGroupSizeRatio : undefined);
 			if (isPending) onPendingDockConsumed();
 		}
 
@@ -389,22 +439,52 @@ export function WindowDockview({
 		// over any outer ancestor's inherited 12px, confirmed by inspecting
 		// the rendered DOM's computed --dv-border-radius, not assumed.
 		<>
-			<DockviewReact
-				key={windowId}
-				className="h-full"
-				components={panelComponents}
-				defaultTabComponent={defaultTabComponent}
-				tabComponents={tabComponents}
-				// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
-				theme={isDark ? themeAbyssSpaced : themeLightSpaced}
-				onReady={onReady}
-				onDidDrop={(event) => {
-					const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
-					const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
-					if (templateId) onExternalTemplateDrop(templateId, event.position, event.group?.id);
+			<div
+				ref={wrapperRef}
+				className="relative h-full"
+				onDragLeave={(event) => {
+					// dragleave fires when moving between a wrapper's own children too --
+					// only actually clear the ruler once the pointer has left the whole
+					// wrapper, not just crossed an internal element boundary.
+					if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDockRulerBox(undefined);
 				}}
-				watermarkComponent={() => <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>}
-			/>
+			>
+				<DockviewReact
+					key={windowId}
+					className="h-full"
+					components={panelComponents}
+					defaultTabComponent={defaultTabComponent}
+					tabComponents={tabComponents}
+					// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
+					theme={isDark ? themeAbyssSpaced : themeLightSpaced}
+					onReady={onReady}
+					onDidDrop={(event) => {
+						const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
+						const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
+						setDockRulerBox(undefined);
+						if (!templateId) return;
+						// Recompute the same hint fresh, rather than trusting dockview's own
+						// reported `event.position` -- its quadrant thresholds are much
+						// narrower than the Dock Ruler's, so they can disagree near the
+						// pane's own center. Falls back to dockview's own position/no ratio
+						// when there's no group to measure (the empty-Window watermark) or
+						// the pointer was in the ruler's own small center dead-zone.
+						const hint = event.group ? dockRulerHintFromEvent(event.nativeEvent, event.group.element) : undefined;
+						if (!hint) {
+							onExternalTemplateDrop(templateId, event.position, event.group?.id, undefined);
+							return;
+						}
+						const newGroupSizeRatio = hint.edge === "left" || hint.edge === "top" ? hint.guide.ratio : 1 - hint.guide.ratio;
+						onExternalTemplateDrop(templateId, hint.edge, event.group?.id, newGroupSizeRatio);
+					}}
+					watermarkComponent={() => <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>}
+				/>
+				{dockRulerBox && (
+					<div className="absolute" style={{ left: dockRulerBox.left, top: dockRulerBox.top, width: dockRulerBox.width, height: dockRulerBox.height }}>
+						<DockRuler width={dockRulerBox.width} height={dockRulerBox.height} hint={dockRulerBox.hint} />
+					</div>
+				)}
+			</div>
 			<SaveAsTemplateDialog
 				open={saveAsTemplateRequest !== undefined}
 				defaultTitle={saveAsTemplateRequest?.defaultTitle ?? ""}

@@ -300,6 +300,75 @@ test("dragging a template onto the left edge of an already-docked Surface splits
 	expect(leftBox!.x).toBeLessThan(rightBox!.x); // genuinely a left/right split, not two stacked or tabbed panels
 });
 
+test("Dock Ruler: dragging well inside an already-docked Surface (not the thin root-edge band) shows a granular fraction guide", async ({ page }) => {
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+	await expect(page.getByText("Workspace activity")).toBeVisible();
+
+	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
+	// dockview's per-group content dropTarget is bound to .dv-content-container,
+	// a descendant of .dv-dockview -- native drag events only bubble upward from
+	// their real dispatch target, so dispatching on the outer .dv-dockview (as
+	// the coarse root-edge test above does) never reaches it.
+	const content = page.locator(".dv-content-container");
+	const box = (await content.boundingBox())!;
+	// A quarter of the way across -- comfortably inside the group's own
+	// content area, past the thin (10px) root-edge band that rootDropTargetService
+	// owns separately (see the coarse edge-split test above, unaffected by the
+	// Dock Ruler by design -- a fast "split roughly in half" gesture still works).
+	const quarterX = box.x + box.width / 4;
+	const midY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await content.dispatchEvent("dragenter", { dataTransfer, clientX: quarterX, clientY: midY });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
+
+	// The ruler tracks live -- no settle/debounce needed, unlike the root-edge case.
+	await expect(page.getByTestId("dock-ruler")).toBeVisible();
+	await expect(page.getByText("1/4")).toBeVisible();
+	// Dockview's own coarse overlay is superseded, not just visually covered.
+	await expect(page.locator(".dv-drop-target-dropzone")).toBeHidden();
+
+	await content.dispatchEvent("drop", { dataTransfer, clientX: quarterX, clientY: midY });
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+
+	const groups = page.locator(".dv-groupview");
+	await expect(groups).toHaveCount(2);
+	const [leftBox, rightBox] = await Promise.all([groups.nth(0).boundingBox(), groups.nth(1).boundingBox()]);
+	expect(leftBox!.x).toBeLessThan(rightBox!.x);
+	// The chosen fraction actually sized the split -- not dockview's usual 50/50 default.
+	expect(leftBox!.width).toBeGreaterThan(box.width * 0.15);
+	expect(leftBox!.width).toBeLessThan(box.width * 0.35);
+});
+
+test("Dock Ruler: dragging past the midpoint docks to the right, sized from the guide's own fraction", async ({ page }) => {
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+	await expect(page.getByText("Workspace activity")).toBeVisible();
+
+	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
+	const content = page.locator(".dv-content-container");
+	const box = (await content.boundingBox())!;
+	const threeQuarterX = box.x + (box.width * 3) / 4;
+	const midY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await content.dispatchEvent("dragenter", { dataTransfer, clientX: threeQuarterX, clientY: midY });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: threeQuarterX, clientY: midY });
+	await expect(page.getByText("3/4")).toBeVisible();
+
+	await content.dispatchEvent("drop", { dataTransfer, clientX: threeQuarterX, clientY: midY });
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+
+	const groups = page.locator(".dv-groupview");
+	await expect(groups).toHaveCount(2);
+	const [leftBox, rightBox] = await Promise.all([groups.nth(0).boundingBox(), groups.nth(1).boundingBox()]);
+	expect(leftBox!.x).toBeLessThan(rightBox!.x);
+	// Docked right at 3/4 -> the new (right) group takes the remaining 1/4, not half.
+	expect(rightBox!.width).toBeGreaterThan(box.width * 0.15);
+	expect(rightBox!.width).toBeLessThan(box.width * 0.35);
+});
+
 test("a split's non-active pane dims (defocus); clicking the other pane flips which one is dimmed", async ({ page }) => {
 	// Same split setup as the previous test -- two real, simultaneously-visible
 	// panels, which is the only case dockview lets a defocus dim be visible at

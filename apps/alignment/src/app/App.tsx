@@ -89,9 +89,10 @@ export function App(): React.JSX.Element {
 		requestAnimationFrame(() => selectedButtonRef.current?.focus());
 	}
 
-	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string): void {
+	/** `newGroupSizeRatio` -- the fraction of the reference group's current size (along whichever axis `position` implies) the newly-docked Surface should occupy, chosen via the Dock Ruler. Undefined for the plain click-to-dock/tab-insert paths, which have no drag geometry to derive a fraction from. */
+	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string, newGroupSizeRatio?: number): void {
 		const instance = workspace.dockSurface(templateId, title);
-		setPendingDock({ instanceId: instance.id, position, referenceGroupId });
+		setPendingDock({ instanceId: instance.id, position, referenceGroupId, newGroupSizeRatio });
 	}
 
 	function dockChatSurface(): void {
@@ -209,9 +210,9 @@ export function App(): React.JSX.Element {
 								pendingDock={pendingDock}
 								onPendingDockConsumed={() => setPendingDock(undefined)}
 								onPanelClosed={handlePanelClosed}
-								onExternalTemplateDrop={(templateId, position, referenceGroupId) => {
+								onExternalTemplateDrop={(templateId, position, referenceGroupId, newGroupSizeRatio) => {
 									const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
-									if (template) dockTemplate(templateId, template.title, position, referenceGroupId);
+									if (template) dockTemplate(templateId, template.title, position, referenceGroupId, newGroupSizeRatio);
 								}}
 								isDark={theme.isDark}
 								extensionTemplates={extensionSurfaceTemplates}

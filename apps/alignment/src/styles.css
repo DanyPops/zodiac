@@ -219,6 +219,20 @@
 	--dv-active-sash-color: #737373 !important;
 }
 
+/*
+ * The Dock Ruler (workspace/DockRuler.tsx) replaces dockview's own coarse
+ * quadrant highlight entirely when dragging over an existing group's
+ * content -- dockview's own overlay DOM is left alone (its onDrop still
+ * needs the same internal state it drives), just hidden here. Scoped to
+ * .dv-groupview specifically so the empty-Window watermark's own root-level
+ * drop highlight (a different, non-nested target) is untouched -- there's
+ * nothing to divide into a fraction there.
+ */
+.dv-groupview .dv-drop-target-dropzone,
+.dv-groupview .dv-drop-target-selection {
+	display: none !important;
+}
+
 @media (forced-colors: active) {
 	button:focus-visible,
 	[tabindex]:focus-visible {
