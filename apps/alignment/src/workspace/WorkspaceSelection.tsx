@@ -60,11 +60,12 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 							/>
 						))}
 					</ul>
+					{/* Expanded keeps every action as its own icon -- only the collapsed pillar folds these under one Settings entry. */}
 					<div className="grid grid-cols-4 gap-1 border-t-[length:var(--app-line-width)] border-gray-200 p-2 dark:border-gray-700">
 						<FooterCommand commandId="palette.open" label="Command palette" icon={<Command aria-hidden="true" size={15} />} />
 						<FooterCommand commandId="shortcuts.open" label="Keyboard shortcuts" icon={<Keyboard aria-hidden="true" size={15} />} />
 						<FooterCommand commandId="theme.cycle" label="Cycle color theme" icon={<MoonStar aria-hidden="true" size={15} />} />
-						<FooterCommand commandId="appearance.open" label="Visual DNA" icon={<Settings aria-hidden="true" size={15} />} />
+						<FooterCommand commandId="appearance.open" label="Settings" icon={<Settings aria-hidden="true" size={15} />} />
 					</div>
 				</nav>
 			)}
@@ -83,11 +84,9 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 							/>
 						))}
 					</div>
+					{/* Command palette/shortcuts/theme fold into the one Settings entry (its own dialog exposes all three as rows) -- the collapsed pillar has no room for four separate icons. */}
 					<div className="flex flex-col items-center gap-1 border-t-[length:var(--app-line-width)] border-gray-200 py-2 dark:border-gray-700">
-						<PillarCommand commandId="palette.open" label="Command palette" icon={<Command aria-hidden="true" size={16} />} />
-						<PillarCommand commandId="shortcuts.open" label="Keyboard shortcuts" icon={<Keyboard aria-hidden="true" size={16} />} />
-						<PillarCommand commandId="theme.cycle" label="Color theme" icon={<MoonStar aria-hidden="true" size={16} />} />
-						<PillarCommand commandId="appearance.open" label="Visual DNA" icon={<Settings aria-hidden="true" size={16} />} />
+						<PillarCommand commandId="appearance.open" label="Settings" icon={<Settings aria-hidden="true" size={16} />} />
 					</div>
 				</nav>
 			)}

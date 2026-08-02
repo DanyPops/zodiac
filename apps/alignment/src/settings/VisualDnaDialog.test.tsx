@@ -13,7 +13,15 @@ afterEach(() => {
 });
 
 function renderDialog(value: VisualDna = { vibe: 100, cornerSharpness: 50 }) {
-	const registry = createCommandRegistry({ commands: [{ id: "dialog.close", title: "Close dialog", description: "Closes the open dialog.", execute: vi.fn() }], bindings: [] });
+	const registry = createCommandRegistry({
+		commands: [
+			{ id: "dialog.close", title: "Close dialog", description: "Closes the open dialog.", execute: vi.fn() },
+			{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
+			{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
+			{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
+		],
+		bindings: [],
+	});
 	const onVibeChange = vi.fn();
 	const onCornerSharpnessChange = vi.fn();
 	const onClose = vi.fn();
@@ -63,7 +71,15 @@ describe("VisualDnaDialog", () => {
 
 	it("closing calls onClose", () => {
 		const { onClose } = renderDialog();
-		fireEvent.click(screen.getByRole("button", { name: "Close Visual DNA" }));
+		fireEvent.click(screen.getByRole("button", { name: "Close Settings" }));
 		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("is titled Settings, the umbrella dialog, with the folded shell actions alongside Appearance", () => {
+		renderDialog();
+		expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Command Palette" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Keyboard Shortcuts" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Cycle Theme" })).toBeInTheDocument();
 	});
 });

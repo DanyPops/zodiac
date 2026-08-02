@@ -41,6 +41,34 @@ function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string) {
 	return { execute };
 }
 
+function renderExpanded() {
+	const registry = createCommandRegistry({
+		commands: [
+			{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() },
+			{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
+			{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
+			{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
+			{ id: "appearance.open", title: "Open Settings", description: "", execute: vi.fn() },
+		],
+		bindings: [],
+	});
+	render(
+		<CommandProvider registry={registry} activeContexts={["global"]}>
+			<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} />
+		</CommandProvider>,
+	);
+}
+
+describe("expanded Workspace selection", () => {
+	it("keeps every action as its own icon, renamed to Settings for the appearance/umbrella one", () => {
+		renderExpanded();
+		expect(screen.getByRole("button", { name: "Command palette" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Keyboard shortcuts" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Cycle color theme" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+	});
+});
+
 describe("collapsed Workspace quick selection", () => {
 	it("overlays the Alignment logo and expand glyph in one control at the same height as the expanded header", () => {
 		renderCollapsed();
@@ -101,5 +129,13 @@ describe("collapsed Workspace quick selection", () => {
 	it("shows no tool-call ring when nothing correlates", () => {
 		renderCollapsed();
 		for (const entry of WORKSPACE_CATALOG) expect(screen.getByRole("button", { name: entry.title })).not.toHaveClass("ring-accent");
+	});
+
+	it("folds Command Palette/Keyboard Shortcuts/Cycle Theme into one Settings entry, unlike the expanded footer's four separate icons", () => {
+		renderCollapsed();
+		expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Command palette" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Color theme" })).not.toBeInTheDocument();
 	});
 });

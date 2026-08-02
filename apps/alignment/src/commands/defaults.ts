@@ -69,7 +69,7 @@ export function createAlignmentCommandRegistry(actions: AlignmentCommandActions,
 		define("window.new", "New Window", "Create a new empty Window at the end of the Window Carousel.", actions.newWindow),
 		define("chat.toggle", "Toggle Chat", "Show or hide the floating Conversation Chat Surface.", actions.toggleChat),
 		define("templates.open", "Browse Surface Templates", "Filter Surface Templates by keyboard and choose where to dock one.", actions.openTemplatesPicker),
-		define("appearance.open", "Open Visual DNA", "Adjust the shell's Vibe (line neatness) and Corner Sharpness.", actions.openAppearance),
+		define("appearance.open", "Open Settings", "Shell actions and the Visual DNA (Vibe, Corner Sharpness) appearance controls.", actions.openAppearance),
 		...SURFACE_TEMPLATE_REGISTRY.map((template) => define(template.dockCommandId, template.dockCommandTitle, template.dockCommandDescription, () => actions.dockDefaultTemplate(template.id))),
 		...extensionCommands,
 	];
