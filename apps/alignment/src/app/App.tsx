@@ -9,12 +9,15 @@ import { createHttpConversationClient } from "../conversation/client.js";
 import { useConversationWorkspace } from "../conversation/useConversationWorkspace.js";
 import { createPreferences } from "../platform/preferences.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
+import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
 import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useVisualDna } from "../visual-dna-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
 import { CHAT_TEMPLATE_ID, isChatDocked } from "../workspace/model.js";
+import { useWispCursorTarget } from "../workspace/useWispCursorTarget.js";
 import { WispCursor } from "../workspace/WispCursor.js";
+import { latestToolCallName, resolveWispWindowIndex } from "../workspace/wisp-cursor.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -39,6 +42,7 @@ const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then(
 export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
 	const pointerTracker = useMemo(() => createWindowPointerTracker(), []);
+	const wispTargetMeasurer = useMemo(() => createDomWispTargetMeasurer(), []);
 	const theme = useTheme();
 	const visualDna = useVisualDna(preferences);
 	const selection = useWorkspaceSelectionCollapse(preferences);
@@ -52,6 +56,8 @@ export function App(): React.JSX.Element {
 	const [activeDockedInstanceId, setActiveDockedInstanceId] = useState<string | undefined>(undefined);
 
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
+	const wispWindowIndex = resolveWispWindowIndex(workspace.workspace, latestToolCallName(conversationWorkspace.conversationItems));
+	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
 
 	const selectedButtonRef = useRef<HTMLButtonElement>(null);
 	const selectionRef = useRef<HTMLElement>(null);
@@ -185,7 +191,7 @@ export function App(): React.JSX.Element {
 						</Suspense>
 					</section>
 
-					<WispCursor visible={!isChatDocked(workspace.workspace)} />
+					<WispCursor visible={!isChatDocked(workspace.workspace)} target={wispTarget} />
 
 					<ChatOverlay
 						visible={workspace.workspace.chatVisible}

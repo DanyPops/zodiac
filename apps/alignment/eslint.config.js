@@ -30,6 +30,7 @@ const ADAPTER_ALLOWLIST = [
 	"src/conversation/client.ts", // ConversationClient's own fetch adapter factory (fetch is its injectable default, never called literally here)
 	"src/platform/pointer.ts", // PointerTracker's own browser adapter factory
 	"src/platform/visual-dna-style.ts", // VisualDnaStyleTarget's own browser adapter factory
+	"src/platform/wisp-target-measurer.ts", // WispTargetMeasurer's own browser adapter factory
 ];
 
 const RESTRICTED_GLOBALS = [

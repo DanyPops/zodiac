@@ -109,6 +109,7 @@ function WindowButton({ index, activeIndex, windowCount, onSelect }: WindowButto
 		<li className="absolute top-0 left-1/2" style={{ transform: `translateX(calc(-50% + ${offsetPx}px))` }}>
 			<button
 				type="button"
+				data-window-index={index}
 				onClick={() => onSelect(index)}
 				aria-current={isActive ? "true" : undefined}
 				style={{ opacity: computeWindowFadeOpacity(delta) }}
