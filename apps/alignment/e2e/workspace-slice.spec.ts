@@ -325,6 +325,42 @@ test("Dock Ruler: the frame appears the moment a Surface Template drag starts an
 	await expect(page.getByTestId("dock-ruler")).toBeHidden();
 });
 
+test("Dock Ruler frame is a pure visual overlay -- it must never win real hit-testing over the dock canvas mid-drag", async ({ page }) => {
+	// Regression test for a real degradation: element.dispatchEvent() (used by
+	// every other drag test in this file, for good reason -- see the
+	// .dv-content-container comment below) fires directly on a named element
+	// regardless of what's visually on top of it, so it can't catch a drop
+	// silently being swallowed by an invisible full-viewport layer. A real
+	// browser resolves drag/drop targets via genuine hit-testing (whatever
+	// element is topmost at the pointer), which document.elementFromPoint
+	// exercises the same way without fighting Playwright's own unreliable
+	// native HTML5 drag simulation.
+	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
+	const canvas = page.getByRole("region", { name: "Window view" });
+	const box = (await canvas.boundingBox())!;
+	const centerX = box.x + box.width / 2;
+	const centerY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await expect(page.getByTestId("dock-ruler")).toBeVisible();
+
+	const hit = await page.evaluate(
+		([x, y]) => {
+			const element = document.elementFromPoint(x, y);
+			return element?.getAttribute("data-testid") ?? null;
+		},
+		[centerX, centerY] as const,
+	);
+	// The frame wraps the canvas from the outside -- real hit-testing at the
+	// canvas's own center must resolve to the dockview content underneath it,
+	// never to the frame's own wrapper or one of its bars.
+	expect(hit).not.toBe("dock-ruler");
+	expect(hit).not.toBe("dock-ruler-bar");
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
+
 test("Dock Ruler: dragging well inside an already-docked Surface (not the thin root-edge band) shows a granular fraction guide", async ({ page }) => {
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();

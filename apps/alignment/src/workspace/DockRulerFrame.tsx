@@ -74,7 +74,16 @@ export function DockRulerFrame({ visible, box, mark, guides = dockRulerGuides() 
 	const verticalMarkOffset = mark?.axis === "vertical" ? mark.position - box.top : undefined;
 
 	return (
-		<div data-testid="dock-ruler" className="fixed inset-0 z-40">
+		// pointer-events-none on the WRAPPER itself, not just its bar children --
+		// this spans the whole viewport (fixed inset-0) to host four small bars
+		// positioned around the canvas's own edges, but even with no visible
+		// content of its own over the canvas interior, an element's own box still
+		// participates in hit-testing unless it opts out. Without this, the
+		// wrapper -- not the dockview content beneath it -- was the real target
+		// document.elementFromPoint (and, in a real browser, every dragover/drop)
+		// resolved to for the whole drag's duration, silently swallowing every
+		// drop onto the canvas underneath it.
+		<div data-testid="dock-ruler" className="pointer-events-none fixed inset-0 z-40">
 			<RulerBar orientation="horizontal" length={box.width} guides={guides} markOffset={horizontalMarkOffset} markLabel={mark?.label} style={{ left: box.left, top: box.top - RULER_THICKNESS_PX, width: box.width, height: RULER_THICKNESS_PX }} />
 			<RulerBar orientation="horizontal" length={box.width} guides={guides} markOffset={horizontalMarkOffset} markLabel={mark?.label} style={{ left: box.left, top: box.top + box.height, width: box.width, height: RULER_THICKNESS_PX }} />
 			<RulerBar orientation="vertical" length={box.height} guides={guides} markOffset={verticalMarkOffset} markLabel={mark?.label} style={{ top: box.top, left: box.left - RULER_THICKNESS_PX, width: RULER_THICKNESS_PX, height: box.height }} />

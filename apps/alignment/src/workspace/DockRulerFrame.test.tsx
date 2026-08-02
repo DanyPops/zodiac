@@ -58,4 +58,9 @@ describe("DockRulerFrame", () => {
 		render(<DockRulerFrame visible box={BOX} mark={{ axis: "horizontal", position: 200, label: "1/4" }} />);
 		for (const bar of screen.getAllByTestId("dock-ruler-bar")) expect(bar).toHaveClass("pointer-events-none");
 	});
+
+	it("the outer wrapper itself is pointer-events-none, not just its bar children -- it spans the whole viewport (fixed inset-0) to host the bars, and without this its own transparent box still wins real hit-testing over the dock canvas beneath it, silently swallowing every drop for the drag's whole duration", () => {
+		render(<DockRulerFrame visible box={BOX} mark={undefined} />);
+		expect(screen.getByTestId("dock-ruler")).toHaveClass("pointer-events-none");
+	});
 });
