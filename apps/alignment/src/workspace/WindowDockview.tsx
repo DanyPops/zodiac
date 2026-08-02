@@ -185,6 +185,8 @@ interface WindowDockviewProps {
 	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined, newGroupSizeRatio: number | undefined) => void;
 	/** The Dock Ruler's outer frame (DockRulerFrame, rendered outside this Window's own overflow-hidden canvas by a parent) needs the live hint too, converted into an absolute page-space mark -- undefined outside a drag, once the pointer leaves the target, or in the small center dead-zone. */
 	readonly onDockRulerHintChange?: (mark: DockRulerFrameMark | undefined) => void;
+	/** App.tsx's own templateDragging -- true for a Surface Template drag's entire duration, regardless of where it started or how it concludes. Used only to force-clear the in-content Dock Ruler shade once a drag ends by any means other than a drop or the pointer visibly leaving (a cancelled drag, or one dropped outside any valid target) -- see the effect below. */
+	readonly dragActive?: boolean;
 	/** The active panel's docked-Surface instance id, or undefined when the Window is empty. Optional -- no current caller needs it ("save as template" is now reached per-tab via context menu, not by tracking the active panel), but the real dockview event is still wired through for whichever future caller does. */
 	readonly onActivePanelChange?: (instanceId: string | undefined) => void;
 	readonly isDark: boolean;
@@ -212,6 +214,7 @@ export function WindowDockview({
 	onPanelClosed,
 	onExternalTemplateDrop,
 	onDockRulerHintChange = () => {},
+	dragActive = false,
 	onActivePanelChange = () => {},
 	isDark,
 	conversationItems,
@@ -245,6 +248,22 @@ export function WindowDockview({
 	// there's nothing to dim there) -- drives the "via defocus" half of the
 	// shared animation language via surface-focus.ts's isSurfaceFocused.
 	const [activePanelId, setActivePanelId] = useState<string | undefined>(undefined);
+
+	// A drag can end without ever dropping onto this Window -- cancelled via
+	// Escape, or dropped outside any valid target entirely. onDragLeave only
+	// clears the ruler once the pointer visibly leaves the wrapper, and
+	// onDidDrop only clears it on a real drop -- neither covers a drag that
+	// simply ends in place. dragActive (App.tsx's own templateDragging,
+	// already cleared unconditionally on the pillar's own dragend regardless
+	// of where or how the drag concluded) catches exactly that gap. Found
+	// live: a real, reported degradation -- the in-content shade (DockRuler)
+	// stayed visible indefinitely after a cancelled drag, since nothing else
+	// ever cleared dockRulerBox for it.
+	useEffect(() => {
+		if (dragActive) return;
+		setDockRulerBox(undefined);
+		onDockRulerHintChange(undefined);
+	}, [dragActive, onDockRulerHintChange]);
 
 	function requestClose(instanceId: string): void {
 		setClosingIds((current) => new Set(current).add(instanceId));

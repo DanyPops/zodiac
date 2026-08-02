@@ -253,6 +253,7 @@ export function App(): React.JSX.Element {
 								chatPinned={workspace.chatPinned}
 								onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
 								onDockRulerHintChange={setDockRulerMark}
+								dragActive={templateDragging}
 							/>
 						</Suspense>
 					</section>
