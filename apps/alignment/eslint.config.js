@@ -31,6 +31,7 @@ const ADAPTER_ALLOWLIST = [
 	"src/platform/pointer.ts", // PointerTracker's own browser adapter factory
 	"src/platform/visual-dna-style.ts", // VisualDnaStyleTarget's own browser adapter factory
 	"src/platform/wisp-target-measurer.ts", // WispTargetMeasurer's own browser adapter factory
+	"src/platform/drag-tracker.ts", // DragTracker's own browser adapter factory
 ];
 
 const RESTRICTED_GLOBALS = [

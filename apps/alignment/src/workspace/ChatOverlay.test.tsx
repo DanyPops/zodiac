@@ -12,7 +12,7 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderOverlay(visible: boolean, items: readonly ConversationItem[] = []) {
+function renderOverlay(visible: boolean, items: readonly ConversationItem[] = [], overrides: Partial<{ position: { x: number; y: number }; dragging: boolean; onDragHandlePointerDown: (event: { clientX: number; clientY: number }) => void }> = {}) {
 	const registry = createCommandRegistry({
 		commands: [{ id: "conversation.send", title: "Send message", description: "Sends the drafted message.", execute: vi.fn() }],
 		bindings: [],
@@ -32,6 +32,9 @@ function renderOverlay(visible: boolean, items: readonly ConversationItem[] = []
 				onDraftChange={vi.fn()}
 				onComposerFocus={vi.fn()}
 				onDock={vi.fn()}
+				position={overrides.position ?? { x: 0, y: 0 }}
+				dragging={overrides.dragging ?? false}
+				onDragHandlePointerDown={overrides.onDragHandlePointerDown ?? vi.fn()}
 			/>
 		</CommandProvider>,
 	);
@@ -99,8 +102,36 @@ describe("ChatOverlay", () => {
 		const dialog = screen.getByRole("dialog");
 		expect(dialog.className).toContain("w-3/4");
 		expect(dialog.className).toContain("left-1/2");
-		expect(dialog.className).toContain("-translate-x-1/2");
+		expect(dialog.style.transform).toContain("translateX(calc(-50% + 0px))");
 		expect(dialog.className).not.toContain("w-full");
 		expect(dialog.className).not.toContain("inset-x-0");
+	});
+
+	describe("dragging", () => {
+		it("applies the given position as a pixel offset alongside centering and show/hide", () => {
+			renderOverlay(true, [], { position: { x: 42, y: -8 } });
+			const dialog = screen.getByRole("dialog");
+			expect(dialog.style.transform).toContain("translateX(calc(-50% + 42px))");
+			expect(dialog.style.transform).toContain("translateY(-8px)");
+		});
+
+		it("pointer-down on the header (the drag handle) reports the pointer's client coordinates", () => {
+			const onDragHandlePointerDown = vi.fn();
+			renderOverlay(true, [], { onDragHandlePointerDown });
+			fireEvent.pointerDown(screen.getByText(/drag to move/i).closest("div")!, { clientX: 100, clientY: 200 });
+			expect(onDragHandlePointerDown).toHaveBeenCalledWith(expect.objectContaining({ clientX: 100, clientY: 200 }));
+		});
+
+		it("clicking the Dock button never starts a drag", () => {
+			const onDragHandlePointerDown = vi.fn();
+			renderOverlay(true, [], { onDragHandlePointerDown });
+			fireEvent.pointerDown(screen.getByRole("button", { name: "Dock Chat into the active Window" }));
+			expect(onDragHandlePointerDown).not.toHaveBeenCalled();
+		});
+
+		it("suppresses the show/hide transition while actively dragging", () => {
+			renderOverlay(true, [], { dragging: true });
+			expect(screen.getByRole("dialog").className).not.toContain("transition-transform");
+		});
 	});
 });

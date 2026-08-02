@@ -8,9 +8,11 @@ import { useKeybindingOverrides } from "../commands/useKeybindingOverrides.js";
 import { createHttpConversationClient } from "../conversation/client.js";
 import { useConversationWorkspace } from "../conversation/useConversationWorkspace.js";
 import { createPreferences } from "../platform/preferences.js";
+import { createWindowDragTracker } from "../platform/drag-tracker.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
 import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
 import { createExtensionHost } from "../extensions/extension-host.js";
+import { useDraggablePosition } from "../workspace/useDraggablePosition.js";
 import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useVisualDna } from "../visual-dna-hooks.js";
@@ -62,6 +64,8 @@ export function App(): React.JSX.Element {
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
 
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
+	const dragTracker = useMemo(() => createWindowDragTracker(), []);
+	const chatDrag = useDraggablePosition({ x: 0, y: 0 }, dragTracker);
 	const latestToolName = latestToolCallName(conversationWorkspace.conversationItems);
 	const wispWindowIndex = resolveWispWindowIndex(workspace.workspace, latestToolName);
 	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
@@ -223,6 +227,9 @@ export function App(): React.JSX.Element {
 						onDraftChange={setDraft}
 						onComposerFocus={contexts.enterTextInput}
 						onDock={dockChatSurface}
+						position={chatDrag.position}
+						dragging={chatDrag.dragging}
+						onDragHandlePointerDown={chatDrag.onDragHandlePointerDown}
 					/>
 				</div>
 
