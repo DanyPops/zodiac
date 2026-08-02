@@ -169,7 +169,14 @@ export function App(): React.JSX.Element {
 				/>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
-					<WindowCarousel windowCount={workspace.workspace.windows.length} activeIndex={workspace.workspace.activeWindowIndex} onSelect={workspace.selectWindow} onScroll={workspace.scrollWindow} />
+					<WindowCarousel
+						windowCount={workspace.workspace.windows.length}
+						activeIndex={workspace.workspace.activeWindowIndex}
+						onSelect={workspace.selectWindow}
+						onScroll={workspace.scrollWindow}
+						activeWindowTitle={workspace.activeWindow.title}
+						onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow.id, title)}
+					/>
 					<section
 						ref={canvasRef}
 						tabIndex={-1}

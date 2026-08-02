@@ -31,7 +31,11 @@ export interface DockedSurfaceInstance {
  */
 export interface WorkspaceWindow {
 	id: string;
+	/** User-renamable, defaults to "Window N" at creation -- see renameWindow. */
+	title: string;
 	dockedSurfaces: DockedSurfaceInstance[];
+	/** True for a Window created by scrolling past the Carousel's end -- pruned automatically if the user scrolls away from it while still empty. Absent (not false) for every ordinarily-created Window. */
+	ephemeral?: boolean;
 }
 
 export interface Workspace {
@@ -61,14 +65,25 @@ function nextInstanceId(prefix: string): string {
 	return `${prefix}-${instanceCounter}`;
 }
 
+function createWindow(ordinal: number): WorkspaceWindow {
+	return { id: nextInstanceId("window"), title: `Window ${ordinal}`, dockedSurfaces: [] };
+}
+
 export function createWorkspace(definition: WorkspaceDefinition): Workspace {
 	return {
 		id: definition.id,
 		title: definition.title,
-		windows: [{ id: nextInstanceId("window"), dockedSurfaces: [] }],
+		windows: [createWindow(1)],
 		activeWindowIndex: 0,
 		chatVisible: false,
 	};
+}
+
+/** Renames a Window by id; a blank (whitespace-only) title is rejected rather than leaving a Window with an empty name. */
+export function renameWindow(workspace: Workspace, windowId: string, title: string): Workspace {
+	const trimmed = title.trim();
+	if (!trimmed) return workspace;
+	return { ...workspace, windows: workspace.windows.map((window) => (window.id === windowId ? { ...window, title: trimmed } : window)) };
 }
 
 export function activeWindow(workspace: Workspace): WorkspaceWindow {
@@ -99,24 +114,52 @@ export function selectWindow(workspace: Workspace, index: number): Workspace {
 
 /** Appends a new empty Window at the end (index -1, rightmost) and switches to it. */
 export function addWindow(workspace: Workspace): Workspace {
-	const windows = [...workspace.windows, { id: nextInstanceId("window"), dockedSurfaces: [] }];
+	const windows = [...workspace.windows, createWindow(workspace.windows.length + 1)];
 	return { ...workspace, windows, activeWindowIndex: windows.length - 1 };
 }
 
+function isEmptyEphemeral(window: WorkspaceWindow): boolean {
+	return window.ephemeral === true && window.dockedSurfaces.length === 0;
+}
+
+/** Removes the Window at `index`, shifting activeWindowIndex down if it pointed past the removed one. Never removes the last remaining Window. */
+function removeWindowAt(workspace: Workspace, index: number): Workspace {
+	if (workspace.windows.length <= 1) return workspace;
+	const windows = workspace.windows.filter((_, i) => i !== index);
+	const activeWindowIndex = workspace.activeWindowIndex > index ? workspace.activeWindowIndex - 1 : workspace.activeWindowIndex;
+	return { ...workspace, windows, activeWindowIndex };
+}
+
 /**
- * The mouse-wheel policy on the Window Carousel -- the same wrap-around
- * ring as nextWindow/previousWindow, not a separate policy. Never
- * creates or prunes a Window; explicit creation is still available via
- * addWindow/window.new, just not implicitly tied to scrolling an edge.
+ * The Window Carousel's own scroll/wheel policy -- deliberately not the
+ * same wrap-around ring as nextWindow/previousWindow (those still wrap, for
+ * the window.next/window.previous commands). Scrolling past either end
+ * creates exactly one new ephemeral Window instead of wrapping; scrolling
+ * away from an empty ephemeral Window prunes it. Mid-list movement is a
+ * plain +/-1 step.
  */
 export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace {
-	return direction > 0 ? nextWindow(workspace) : previousWindow(workspace);
+	const currentIndex = workspace.activeWindowIndex;
+	const currentWindow = workspace.windows[currentIndex];
+	if (!currentWindow) return workspace;
+	const atEdge = direction > 0 ? currentIndex === workspace.windows.length - 1 : currentIndex === 0;
+
+	if (atEdge) {
+		if (isEmptyEphemeral(currentWindow)) return workspace; // already at the transient slot -- nothing further to create
+		const newWindow: WorkspaceWindow = { ...createWindow(workspace.windows.length + 1), ephemeral: true };
+		const windows = direction > 0 ? [...workspace.windows, newWindow] : [newWindow, ...workspace.windows];
+		return { ...workspace, windows, activeWindowIndex: direction > 0 ? windows.length - 1 : 0 };
+	}
+
+	const moved = { ...workspace, activeWindowIndex: currentIndex + direction };
+	return isEmptyEphemeral(currentWindow) ? removeWindowAt(moved, currentIndex) : moved;
 }
 
 /** Docks a new Surface instance of `templateId` into the active Window. `binding` is optional -- omit it for a Surface with no real external system behind it (e.g. Activity). Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
 export function dockSurface(workspace: Workspace, templateId: string, title: string, binding?: SurfaceBinding): { workspace: Workspace; instance: DockedSurfaceInstance } {
 	const instance: DockedSurfaceInstance = { id: nextInstanceId(templateId), templateId, title, ...(binding ? { binding } : {}) };
-	const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? { ...window, dockedSurfaces: [...window.dockedSurfaces, instance] } : window));
+	// Docking into an ephemeral Window promotes it to a real, permanent one -- it's no longer eligible for scroll-away pruning.
+	const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? { ...window, dockedSurfaces: [...window.dockedSurfaces, instance], ephemeral: false } : window));
 	return { workspace: { ...workspace, windows }, instance };
 }
 

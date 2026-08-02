@@ -1,8 +1,11 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CommandButton } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
-import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx } from "./window-carousel-fade.js";
+import { circularWindowDelta, computeWindowFadeOpacity, computeWindowOffsetPx, WINDOW_FADE_DISTANCE, WINDOW_ITEM_STEP_PX } from "./window-carousel-fade.js";
+
+/** The viewport's width: just wide enough to show every Window that could still be visibly faded in (WINDOW_FADE_DISTANCE on each side of the active one), not a flex-1 fill of the whole header. */
+const WINDOWS_VIEWPORT_PX = WINDOW_FADE_DISTANCE * WINDOW_ITEM_STEP_PX * 2;
 
 /** Pixels of accumulated wheel distance needed to advance one Window. */
 const WHEEL_STEP_THRESHOLD_PX = 50;
@@ -13,8 +16,10 @@ interface WindowCarouselProps {
 	readonly windowCount: number;
 	readonly activeIndex: number;
 	readonly onSelect: (index: number) => void;
-	/** Same wrap-around ring as onSelect/nextWindow/previousWindow (workspace/model.ts's scrollWindow). */
+	/** The Carousel's own scroll policy -- not the same ring as onSelect/nextWindow/previousWindow (workspace/model.ts's scrollWindow: creates/prunes ephemeral Windows at the ends instead of wrapping). */
 	readonly onScroll: (direction: 1 | -1) => void;
+	readonly activeWindowTitle: string;
+	readonly onRenameActiveWindow: (title: string) => void;
 }
 
 /**
@@ -30,7 +35,7 @@ interface WindowCarouselProps {
  * browser's own default scroll still fires alongside ours. `{ passive:
  * false }` is the only way around that; there's no React prop for it.
  */
-export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }: WindowCarouselProps): React.JSX.Element {
+export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll, activeWindowTitle, onRenameActiveWindow }: WindowCarouselProps): React.JSX.Element {
 	const navRef = useRef<HTMLElement>(null);
 	// Ref, not a dependency: onScroll is a fresh closure every render, and
 	// this effect only needs to run once to attach the listener.
@@ -72,24 +77,74 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll }:
 	}, []);
 
 	return (
-		<nav ref={navRef} aria-label="Window Carousel" className="flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] bg-gray-50 px-2 dark:bg-gray-900">
-			<CommandButton commandId="window.previous" label="Previous Window" className="grid size-7 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
-				<ChevronLeft aria-hidden="true" size={15} />
-			</CommandButton>
-			<div className="relative h-7 min-w-0 flex-1 overflow-hidden">
-				<ul className="absolute inset-0" aria-label="Windows">
-					{Array.from({ length: windowCount }, (_, index) => (
-						<WindowButton key={index} index={index} activeIndex={activeIndex} windowCount={windowCount} onSelect={onSelect} />
-					))}
-				</ul>
-			</div>
-			<CommandButton commandId="window.next" label="Next Window" className="grid size-7 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
-				<ChevronRight aria-hidden="true" size={15} />
-			</CommandButton>
-			<CommandButton commandId="window.new" label="New Window" className="grid size-7 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
-				<Plus aria-hidden="true" size={15} />
-			</CommandButton>
-		</nav>
+		<div className="flex flex-col items-center gap-1 self-start">
+			<nav ref={navRef} aria-label="Window Carousel" className="inline-flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] bg-gray-50 px-2 dark:bg-gray-900">
+				<CommandButton commandId="window.previous" label="Previous Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+					<ChevronLeft aria-hidden="true" size={15} />
+				</CommandButton>
+				<div className="relative h-7 overflow-hidden" style={{ width: WINDOWS_VIEWPORT_PX }}>
+					<ul className="absolute inset-0" aria-label="Windows">
+						{Array.from({ length: windowCount }, (_, index) => (
+							<WindowButton key={index} index={index} activeIndex={activeIndex} windowCount={windowCount} onSelect={onSelect} />
+						))}
+					</ul>
+				</div>
+				<CommandButton commandId="window.next" label="Next Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+					<ChevronRight aria-hidden="true" size={15} />
+				</CommandButton>
+				<CommandButton commandId="window.new" label="New Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
+					<Plus aria-hidden="true" size={15} />
+				</CommandButton>
+			</nav>
+			<WindowNameRow key={activeIndex} title={activeWindowTitle} onRename={onRenameActiveWindow} />
+		</div>
+	);
+}
+
+interface WindowNameRowProps {
+	readonly title: string;
+	readonly onRename: (title: string) => void;
+}
+
+/** The active Window's name, click-to-edit. `key={activeIndex}` on the caller side remounts this on every Window switch, so a half-typed rename never leaks onto a different Window. */
+function WindowNameRow({ title, onRename }: WindowNameRowProps): React.JSX.Element {
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(title);
+
+	function commit(): void {
+		setEditing(false);
+		if (draft.trim() && draft.trim() !== title) onRename(draft);
+	}
+
+	if (editing) {
+		return (
+			<input
+				autoFocus
+				aria-label="Rename Window"
+				value={draft}
+				onChange={(event) => setDraft(event.target.value)}
+				onBlur={commit}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") commit();
+					if (event.key === "Escape") {
+						setDraft(title);
+						setEditing(false);
+					}
+				}}
+				className="w-32 rounded-md border border-accent bg-white px-2 py-0.5 text-center text-[11px] text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100"
+			/>
+		);
+	}
+
+	return (
+		<button
+			type="button"
+			onClick={() => setEditing(true)}
+			aria-label={`Rename ${title}`}
+			className="max-w-40 truncate rounded-md px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800"
+		>
+			{title}
+		</button>
 	);
 }
 

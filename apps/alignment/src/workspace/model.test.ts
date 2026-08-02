@@ -12,6 +12,7 @@ import {
 	isChatDocked,
 	nextWindow,
 	previousWindow,
+	renameWindow,
 	scrollWindow,
 	selectWindow,
 	showChat,
@@ -35,6 +36,39 @@ describe("Workspace window and Surface docking", () => {
 		expect(workspace.activeWindowIndex).toBe(0);
 		expect(workspace.chatVisible).toBe(false);
 		expect(activeWindow(workspace).dockedSurfaces).toEqual([]);
+	});
+
+	it("gives every Window a plain default title -- 'Window 1', 'Window 2', ...", () => {
+		let workspace = fixtureWorkspace();
+		expect(activeWindow(workspace).title).toBe("Window 1");
+
+		workspace = addWindow(workspace);
+		expect(activeWindow(workspace).title).toBe("Window 2");
+	});
+
+	describe("renameWindow", () => {
+		it("renames a Window by id", () => {
+			const workspace = fixtureWorkspace();
+			const windowId = activeWindow(workspace).id;
+			const renamed = renameWindow(workspace, windowId, "Debugging");
+			expect(activeWindow(renamed).title).toBe("Debugging");
+		});
+
+		it("trims whitespace", () => {
+			const workspace = fixtureWorkspace();
+			const renamed = renameWindow(workspace, activeWindow(workspace).id, "  Debugging  ");
+			expect(activeWindow(renamed).title).toBe("Debugging");
+		});
+
+		it("rejects a blank title, leaving the Window unchanged", () => {
+			const workspace = fixtureWorkspace();
+			expect(renameWindow(workspace, activeWindow(workspace).id, "   ")).toBe(workspace);
+		});
+
+		it("is a no-op for an unknown Window id", () => {
+			const workspace = fixtureWorkspace();
+			expect(renameWindow(workspace, "does-not-exist", "New title")).toEqual(workspace);
+		});
 	});
 
 	it("activeWindow throws for an out-of-bounds index rather than returning undefined silently", () => {
@@ -70,52 +104,59 @@ describe("Workspace window and Surface docking", () => {
 		});
 	});
 
-	describe("scrollWindow: the Window Carousel's mouse-wheel policy", () => {
-		it("is the exact same wrap-around ring as nextWindow/previousWindow, not a separate policy", () => {
+	describe("scrollWindow: the Window Carousel's own scroll policy (not the same ring as nextWindow/previousWindow)", () => {
+		it("a mid-list scroll is a plain +/-1 step, same as nextWindow/previousWindow", () => {
 			let workspace = fixtureWorkspace();
 			workspace = addWindow(workspace); // window 1
 			workspace = addWindow(workspace); // window 2
-			workspace = selectWindow(workspace, 0);
+			workspace = selectWindow(workspace, 1);
 
-			expect(scrollWindow(workspace, 1)).toEqual(nextWindow(workspace));
-			expect(scrollWindow(workspace, -1)).toEqual(previousWindow(workspace));
+			expect(scrollWindow(workspace, 1).activeWindowIndex).toBe(2);
+			expect(scrollWindow(workspace, -1).activeWindowIndex).toBe(0);
 		});
 
-		it("wraps from the last Window back to the first when scrolling forward, without creating or pruning anything", () => {
+		it("scrolling forward past the last Window creates one new ephemeral Window and switches to it, instead of wrapping", () => {
 			let workspace = fixtureWorkspace();
-			workspace = addWindow(workspace); // window 1
-			workspace = addWindow(workspace); // window 2, active
+			workspace = addWindow(workspace); // window 1, active
 
 			const scrolled = scrollWindow(workspace, 1);
-			expect(scrolled.activeWindowIndex).toBe(0);
 			expect(scrolled.windows).toHaveLength(3);
+			expect(scrolled.activeWindowIndex).toBe(2);
+			expect(scrolled.windows[2]).toMatchObject({ title: "Window 3", ephemeral: true, dockedSurfaces: [] });
 		});
 
-		it("wraps from the first Window back to the last when scrolling backward, without creating or pruning anything", () => {
+		it("scrolling backward past the first Window creates one new ephemeral Window at the start and switches to it, instead of wrapping", () => {
 			let workspace = fixtureWorkspace();
-			workspace = addWindow(workspace); // window 1
-			workspace = addWindow(workspace); // window 2
+			workspace = addWindow(workspace);
 			workspace = selectWindow(workspace, 0);
 
 			const scrolled = scrollWindow(workspace, -1);
-			expect(scrolled.activeWindowIndex).toBe(2);
 			expect(scrolled.windows).toHaveLength(3);
+			expect(scrolled.activeWindowIndex).toBe(0);
+			expect(scrolled.windows[0]).toMatchObject({ ephemeral: true, dockedSurfaces: [] });
 		});
 
-		it("never creates or prunes a Window -- scrolling through several empty Windows leaves every one of them intact", () => {
-			let workspace = fixtureWorkspace();
-			workspace = addWindow(workspace); // window 1
-			workspace = addWindow(workspace); // window 2
-			workspace = addWindow(workspace); // window 3
-			workspace = selectWindow(workspace, 2);
+		it("scrolling further past the end while already on an empty ephemeral Window is a no-op, not another new Window", () => {
+			const workspace = scrollWindow(fixtureWorkspace(), 1); // creates one ephemeral Window, 2 total
+			expect(scrollWindow(workspace, 1)).toEqual(workspace);
+		});
 
-			workspace = scrollWindow(workspace, 1); // to window 3
-			expect(workspace.windows).toHaveLength(4); // every Window survives
-			expect(workspace.activeWindowIndex).toBe(3);
+		it("scrolling away from an empty ephemeral Window prunes it", () => {
+			let workspace = scrollWindow(fixtureWorkspace(), 1); // window 0 (real), window 1 (ephemeral, active)
+			expect(workspace.windows).toHaveLength(2);
 
-			workspace = scrollWindow(workspace, 1); // wraps to window 0
-			expect(workspace.windows).toHaveLength(4);
+			workspace = scrollWindow(workspace, -1); // back to the real Window -- the empty ephemeral one is pruned
+			expect(workspace.windows).toHaveLength(1);
 			expect(workspace.activeWindowIndex).toBe(0);
+		});
+
+		it("an ephemeral Window with a docked Surface survives -- dockSurface promotes it to permanent", () => {
+			let workspace = scrollWindow(fixtureWorkspace(), 1); // window 1 is ephemeral, active
+			workspace = dockSurface(workspace, "activity", "Activity").workspace;
+
+			workspace = scrollWindow(workspace, -1); // leave it
+			expect(workspace.windows).toHaveLength(2); // survives -- no longer eligible for pruning
+			expect(workspace.windows[1]?.ephemeral).toBe(false);
 		});
 	});
 

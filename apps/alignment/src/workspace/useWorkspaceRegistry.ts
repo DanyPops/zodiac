@@ -9,6 +9,7 @@ import {
 	isChatDocked,
 	nextWindow,
 	previousWindow,
+	renameWindow,
 	scrollWindow,
 	selectWindow,
 	showChat,
@@ -36,6 +37,7 @@ export interface WorkspaceRegistryHandle {
 	scrollWindow: (direction: 1 | -1) => void;
 	selectWindow: (index: number) => void;
 	addWindow: () => void;
+	renameWindow: (windowId: string, title: string) => void;
 	dockSurface: (templateId: string, title: string) => DockedSurfaceInstance;
 	undockSurface: (surfaceInstanceId: string) => void;
 	showChat: () => void;
@@ -114,6 +116,7 @@ export function useWorkspaceRegistry(
 		scrollWindow: (direction) => update((current) => scrollWindow(current, direction)),
 		selectWindow: (index) => update((current) => selectWindow(current, index)),
 		addWindow: () => update(addWindow),
+		renameWindow: (windowId, title) => update((current) => renameWindow(current, windowId, title)),
 		dockSurface: dock,
 		undockSurface: (surfaceInstanceId) => {
 			update((current) => undockSurface(current, surfaceInstanceId));

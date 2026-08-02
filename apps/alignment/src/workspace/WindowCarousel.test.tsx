@@ -11,7 +11,7 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderCarousel(windowCount: number, activeIndex: number, onSelect: (index: number) => void, onScroll: (direction: 1 | -1) => void = vi.fn()) {
+function renderCarousel(windowCount: number, activeIndex: number, onSelect: (index: number) => void, onScroll: (direction: 1 | -1) => void = vi.fn(), activeWindowTitle = "Window 1", onRenameActiveWindow: (title: string) => void = vi.fn()) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "window.previous", title: "Previous Window", description: "d", execute: vi.fn() },
@@ -22,7 +22,7 @@ function renderCarousel(windowCount: number, activeIndex: number, onSelect: (ind
 	});
 	return render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<WindowCarousel windowCount={windowCount} activeIndex={activeIndex} onSelect={onSelect} onScroll={onScroll} />
+			<WindowCarousel windowCount={windowCount} activeIndex={activeIndex} onSelect={onSelect} onScroll={onScroll} activeWindowTitle={activeWindowTitle} onRenameActiveWindow={onRenameActiveWindow} />
 		</CommandProvider>,
 	);
 }
@@ -100,5 +100,61 @@ describe("WindowCarousel", () => {
 		fireEvent.wheel(screen.getByLabelText("Window Carousel"), { deltaY: 250 });
 		expect(onScroll).toHaveBeenCalledTimes(1);
 		expect(onScroll).toHaveBeenCalledWith(1);
+	});
+
+	it("the Windows viewport is a fixed content-hugging width, not a flex-1 fill", () => {
+		renderCarousel(3, 0, vi.fn());
+		const viewport = screen.getByLabelText("Windows").parentElement as HTMLElement;
+		expect(viewport.className).not.toContain("flex-1");
+		expect(viewport.style.width).not.toBe("");
+	});
+
+	describe("Win Name row", () => {
+		it("shows the active Window's title as a rename button", () => {
+			renderCarousel(1, 0, vi.fn(), vi.fn(), "Debugging");
+			expect(screen.getByRole("button", { name: "Rename Debugging" })).toHaveTextContent("Debugging");
+		});
+
+		it("clicking it opens an inline text input pre-filled with the current title", () => {
+			renderCarousel(1, 0, vi.fn(), vi.fn(), "Debugging");
+			fireEvent.click(screen.getByRole("button", { name: "Rename Debugging" }));
+			expect(screen.getByLabelText("Rename Window")).toHaveValue("Debugging");
+		});
+
+		it("pressing Enter commits the new title", () => {
+			const onRename = vi.fn();
+			renderCarousel(1, 0, vi.fn(), vi.fn(), "Debugging", onRename);
+			fireEvent.click(screen.getByRole("button", { name: "Rename Debugging" }));
+			fireEvent.change(screen.getByLabelText("Rename Window"), { target: { value: "Deploy" } });
+			fireEvent.keyDown(screen.getByLabelText("Rename Window"), { key: "Enter" });
+			expect(onRename).toHaveBeenCalledWith("Deploy");
+		});
+
+		it("pressing Escape discards the edit without committing", () => {
+			const onRename = vi.fn();
+			renderCarousel(1, 0, vi.fn(), vi.fn(), "Debugging", onRename);
+			fireEvent.click(screen.getByRole("button", { name: "Rename Debugging" }));
+			fireEvent.change(screen.getByLabelText("Rename Window"), { target: { value: "Deploy" } });
+			fireEvent.keyDown(screen.getByLabelText("Rename Window"), { key: "Escape" });
+			expect(onRename).not.toHaveBeenCalled();
+			expect(screen.getByRole("button", { name: "Rename Debugging" })).toBeInTheDocument();
+		});
+
+		it("blurring commits, same as Enter", () => {
+			const onRename = vi.fn();
+			renderCarousel(1, 0, vi.fn(), vi.fn(), "Debugging", onRename);
+			fireEvent.click(screen.getByRole("button", { name: "Rename Debugging" }));
+			fireEvent.change(screen.getByLabelText("Rename Window"), { target: { value: "Deploy" } });
+			fireEvent.blur(screen.getByLabelText("Rename Window"));
+			expect(onRename).toHaveBeenCalledWith("Deploy");
+		});
+
+		it("committing an unchanged or blank title does not call onRename", () => {
+			const onRename = vi.fn();
+			renderCarousel(1, 0, vi.fn(), vi.fn(), "Debugging", onRename);
+			fireEvent.click(screen.getByRole("button", { name: "Rename Debugging" }));
+			fireEvent.keyDown(screen.getByLabelText("Rename Window"), { key: "Enter" });
+			expect(onRename).not.toHaveBeenCalled();
+		});
 	});
 });

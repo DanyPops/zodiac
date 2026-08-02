@@ -93,13 +93,20 @@ describe("useWorkspaceRegistry", () => {
 		expect(result.current.workspace.chatVisible).toBe(true);
 	});
 
-	it("scrollWindow drives the Window Carousel's mouse-wheel policy -- the same wrap-around ring as nextWindow/previousWindow", () => {
+	it("scrollWindow drives the Window Carousel's own scroll policy -- creates an ephemeral Window past the single Window's end", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
-		const firstWindowId = result.current.workspace.windows[0]?.id;
 
-		act(() => result.current.scrollWindow(1)); // a single Window wraps to itself -- nothing created or pruned
-		expect(result.current.workspace.windows).toHaveLength(1);
-		expect(result.current.workspace.windows[0]?.id).toBe(firstWindowId);
+		act(() => result.current.scrollWindow(1));
+		expect(result.current.workspace.windows).toHaveLength(2);
+		expect(result.current.activeWindow.ephemeral).toBe(true);
+	});
+
+	it("renameWindow renames a Window by id", () => {
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+		const windowId = result.current.activeWindow.id;
+
+		act(() => result.current.renameWindow(windowId, "Debugging"));
+		expect(result.current.activeWindow.title).toBe("Debugging");
 	});
 
 	it("dockChat/isChatDocked/undockChatToFloating drive Chat between floating and docked", () => {
