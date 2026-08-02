@@ -1,4 +1,15 @@
 /**
+ * What a docked Surface is actually bound to in the outside world -- the
+ * client tool call a Surface Template's category maps to. `kind` matches a
+ * Surface Templates gallery category; the rest of each variant is whatever
+ * that category needs to describe one real binding target (a filesystem
+ * root, a terminal's working directory, ...). Optional on
+ * DockedSurfaceInstance since not every Surface is bound to anything --
+ * Activity has no external system behind it.
+ */
+export type SurfaceBinding = { kind: "filesystem"; root: string } | { kind: "terminal"; cwd: string } | { kind: "tickets"; project: string } | { kind: "automation"; pipeline: string };
+
+/**
  * One instance of a Surface Template docked into a Window's center. `id` is
  * unique per instance (a Window can dock the same template kind more than
  * once -- two Terminal surfaces, say), `templateId` names which entry in the
@@ -8,6 +19,7 @@ export interface DockedSurfaceInstance {
 	id: string;
 	templateId: string;
 	title: string;
+	binding?: SurfaceBinding;
 }
 
 /**
@@ -101,11 +113,41 @@ export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace
 	return direction > 0 ? nextWindow(workspace) : previousWindow(workspace);
 }
 
-/** Docks a new Surface instance of `templateId` into the active Window. Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
-export function dockSurface(workspace: Workspace, templateId: string, title: string): { workspace: Workspace; instance: DockedSurfaceInstance } {
-	const instance: DockedSurfaceInstance = { id: nextInstanceId(templateId), templateId, title };
+/** Docks a new Surface instance of `templateId` into the active Window. `binding` is optional -- omit it for a Surface with no real external system behind it (e.g. Activity). Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
+export function dockSurface(workspace: Workspace, templateId: string, title: string, binding?: SurfaceBinding): { workspace: Workspace; instance: DockedSurfaceInstance } {
+	const instance: DockedSurfaceInstance = { id: nextInstanceId(templateId), templateId, title, ...(binding ? { binding } : {}) };
 	const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? { ...window, dockedSurfaces: [...window.dockedSurfaces, instance] } : window));
 	return { workspace: { ...workspace, windows }, instance };
+}
+
+/**
+ * Coarse tool-name-to-binding-kind mapping, grounded in real Pi/Alef tool
+ * names -- not exhaustive, but enough to correlate a tool call to a bound
+ * Surface's category without parsing each tool's own argument shape.
+ */
+const TOOL_NAME_TO_BINDING_KIND: Record<string, SurfaceBinding["kind"]> = {
+	read: "filesystem",
+	write: "filesystem",
+	edit: "filesystem",
+	find: "filesystem",
+	ls: "filesystem",
+	bash: "terminal",
+	shell: "terminal",
+};
+
+export function surfaceBindingKindForToolName(toolName: string): SurfaceBinding["kind"] | undefined {
+	return TOOL_NAME_TO_BINDING_KIND[toolName];
+}
+
+/** Finds the first docked Surface instance (in any Window) whose binding kind matches the tool call, or undefined if none is docked here. */
+export function findDockedSurfaceForToolName(workspace: Workspace, toolName: string): { window: WorkspaceWindow; instance: DockedSurfaceInstance } | undefined {
+	const kind = surfaceBindingKindForToolName(toolName);
+	if (!kind) return undefined;
+	for (const window of workspace.windows) {
+		const instance = window.dockedSurfaces.find((surface) => surface.binding?.kind === kind);
+		if (instance) return { window, instance };
+	}
+	return undefined;
 }
 
 /** Removes a docked Surface instance from whichever Window holds it (a no-op if the id isn't docked anywhere). */

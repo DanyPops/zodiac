@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { activeWindow, addWindow, CHAT_TEMPLATE_ID, createWorkspace, dockChat, dockSurface, hideChat, isChatDocked, nextWindow, previousWindow, scrollWindow, selectWindow, showChat, toggleChat, undockChatToFloating, undockSurface, type Workspace } from "./model.js";
+import {
+	activeWindow,
+	addWindow,
+	CHAT_TEMPLATE_ID,
+	createWorkspace,
+	dockChat,
+	dockSurface,
+	findDockedSurfaceForToolName,
+	hideChat,
+	isChatDocked,
+	nextWindow,
+	previousWindow,
+	scrollWindow,
+	selectWindow,
+	showChat,
+	surfaceBindingKindForToolName,
+	toggleChat,
+	undockChatToFloating,
+	undockSurface,
+	type Workspace,
+} from "./model.js";
 
 /** A Workspace is its own independent thing -- never bound to a Conversation, which is a Surface that may or may not exist inside one. This fixture stands in for whichever catalog entry a test needs. */
 function fixtureWorkspace(): Workspace {
@@ -172,6 +192,44 @@ describe("Workspace window and Surface docking", () => {
 	it("undockSurface is a no-op for an id that isn't docked anywhere", () => {
 		const workspace = fixtureWorkspace();
 		expect(undockSurface(workspace, "does-not-exist")).toEqual(workspace);
+	});
+
+	describe("Surface bindings", () => {
+		it("dockSurface leaves binding undefined when none is given", () => {
+			const { instance } = dockSurface(fixtureWorkspace(), "activity", "Activity");
+			expect(instance.binding).toBeUndefined();
+		});
+
+		it("dockSurface records a real binding when given one", () => {
+			const { instance } = dockSurface(fixtureWorkspace(), "filesystem", "Filesystem", { kind: "filesystem", root: "/home/user/project" });
+			expect(instance.binding).toEqual({ kind: "filesystem", root: "/home/user/project" });
+		});
+
+		it("surfaceBindingKindForToolName maps known Pi/Alef tool names to a binding kind", () => {
+			expect(surfaceBindingKindForToolName("read")).toBe("filesystem");
+			expect(surfaceBindingKindForToolName("edit")).toBe("filesystem");
+			expect(surfaceBindingKindForToolName("bash")).toBe("terminal");
+			expect(surfaceBindingKindForToolName("totally-unknown-tool")).toBeUndefined();
+		});
+
+		it("findDockedSurfaceForToolName finds a bound Surface anywhere in the Workspace, not just the active Window", () => {
+			let workspace = fixtureWorkspace();
+			const { workspace: withFs, instance } = dockSurface(workspace, "filesystem", "Filesystem", { kind: "filesystem", root: "/repo" });
+			workspace = addWindow(withFs); // now on a different, empty Window
+
+			const found = findDockedSurfaceForToolName(workspace, "edit");
+			expect(found?.instance).toEqual(instance);
+		});
+
+		it("findDockedSurfaceForToolName returns undefined when no Surface matches the tool's kind", () => {
+			const workspace = dockSurface(fixtureWorkspace(), "activity", "Activity").workspace;
+			expect(findDockedSurfaceForToolName(workspace, "edit")).toBeUndefined();
+		});
+
+		it("findDockedSurfaceForToolName returns undefined for a tool name with no known binding kind", () => {
+			const workspace = dockSurface(fixtureWorkspace(), "filesystem", "Filesystem", { kind: "filesystem", root: "/repo" }).workspace;
+			expect(findDockedSurfaceForToolName(workspace, "totally-unknown-tool")).toBeUndefined();
+		});
 	});
 
 	it("dockSurface issues a distinct id per instance, even for the same template", () => {
