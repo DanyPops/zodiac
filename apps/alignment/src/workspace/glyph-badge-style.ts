@@ -23,7 +23,8 @@ const SIZE_CLASSES: Record<GlyphBadgeSize, string> = {
  */
 export function glyphBadgeClassName({ active, ring, size = "md" }: GlyphBadgeStateOptions): string {
 	return cn(
-		"grid place-items-center rounded-md transition-colors motion-reduce:animate-none",
+		// The shared --app-corner-radius token, same as the pillars themselves and the "A" logo tile -- a glyph-sized box becomes a true circle once Corner Sharpness's radius exceeds half its own side, same as everywhere else that token is used.
+		"grid place-items-center rounded-[var(--app-corner-radius,16px)] transition-colors motion-reduce:animate-none",
 		SIZE_CLASSES[size],
 		active ? "border border-gray-300 bg-gray-100 text-gray-950 dark:border-gray-600 dark:bg-gray-700 dark:text-white" : "text-gray-500 dark:text-gray-400",
 		ring && "ring-2 ring-accent",

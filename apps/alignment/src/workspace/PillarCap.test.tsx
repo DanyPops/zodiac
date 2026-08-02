@@ -1,0 +1,46 @@
+/** @vitest-environment jsdom */
+import { cleanup, render, screen } from "@testing-library/react";
+import { getHotkeyManager } from "@tanstack/react-hotkeys";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CommandProvider } from "../commands/react.js";
+import { createCommandRegistry } from "../commands/registry.js";
+import { PillarCap } from "./PillarCap.js";
+
+afterEach(() => {
+	cleanup();
+	getHotkeyManager().destroy();
+});
+
+function renderCap(edge: "top" | "bottom") {
+	const execute = vi.fn();
+	const registry = createCommandRegistry({ commands: [{ id: "pillar.cap", title: "Pillar Cap", description: "d", execute }], bindings: [] });
+	render(
+		<CommandProvider registry={registry} activeContexts={["global"]}>
+			<PillarCap commandId="pillar.cap" label="Pillar Cap" edge={edge}>
+				<span>glyph</span>
+			</PillarCap>
+		</CommandProvider>,
+	);
+	return { execute };
+}
+
+describe("PillarCap", () => {
+	it("is a full pillar-width, fixed-height cell -- the same shape at every call site", () => {
+		renderCap("top");
+		const button = screen.getByRole("button", { name: "Pillar Cap" });
+		expect(button).toHaveClass("h-12", "w-14");
+	});
+
+	it("renders its glyph directly, with no separate nested chip", () => {
+		renderCap("top");
+		expect(screen.getByText("glyph").parentElement).toBe(screen.getByRole("button", { name: "Pillar Cap" }));
+	});
+
+	it("dividers against the rest of the pillar on the side facing away from its own edge", () => {
+		renderCap("top");
+		expect(screen.getByRole("button", { name: "Pillar Cap" }).className).toMatch(/border-b/);
+		cleanup();
+		renderCap("bottom");
+		expect(screen.getByRole("button", { name: "Pillar Cap" }).className).toMatch(/border-t/);
+	});
+});

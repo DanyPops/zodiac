@@ -110,6 +110,13 @@ describe("collapsed Workspace quick selection", () => {
 		expect(nav.className).not.toMatch(/(?<!:)rounded-full/);
 	});
 
+	it("the 'A' logo sits directly in its Pillar Cap cell, no separate nested chip with its own corner radius -- same as the Surface Templates pillar's book icon", () => {
+		renderCollapsed();
+		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });
+		expect(toggle.className).not.toMatch(/(?<!:)rounded-md|(?<!:)rounded-\[var\(--app-corner-radius/);
+		expect(within(toggle).getByText("A").className).not.toMatch(/bg-accent/);
+	});
+
 	it("overlays the Alignment logo and expand glyph in one control at the same height as the expanded header", () => {
 		renderCollapsed();
 		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });

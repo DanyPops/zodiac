@@ -5,6 +5,7 @@ import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { GlyphBadge } from "./GlyphBadge.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
+import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
@@ -30,6 +31,7 @@ interface WorkspaceSelectionProps {
  * Surface Templates pillar instead.
  */
 export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace }: WorkspaceSelectionProps): React.JSX.Element {
+	const appearanceShortcut = useCommandShortcut("appearance.open");
 	return (
 		<>
 			{!collapsed && (
@@ -39,7 +41,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					className={cn("absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] shadow-xl md:relative md:shadow-none", SURFACE_BG)}
 				>
 					<div className="flex h-12 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
-						<div className="grid size-7 place-items-center rounded-md bg-accent text-xs font-bold text-white">A</div>
+						<div className="grid size-7 place-items-center rounded-[var(--app-corner-radius,16px)] bg-accent text-xs font-bold text-white">A</div>
 						<h1 className="text-sm font-semibold tracking-tight text-gray-950 dark:text-white">Alignment</h1>
 						<CommandButton
 							commandId="workspace.toggleSelection"
@@ -113,9 +115,11 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 						</PillarTooltip>
 					</div>
 					{/* Command palette/shortcuts/theme fold into the one Settings entry (its own dialog exposes all three as rows) -- the collapsed pillar has no room for four separate icons. */}
-					<div className="flex flex-col items-center gap-1 border-t-[length:var(--app-line-width)] border-gray-200 py-2 dark:border-gray-700">
-						<PillarCommand commandId="appearance.open" label="Settings" icon={<Settings aria-hidden="true" size={16} />} />
-					</div>
+					<PillarTooltip side="right" label="Settings" shortcut={appearanceShortcut}>
+						<PillarCap commandId="appearance.open" label="Settings" edge="bottom">
+							<Settings aria-hidden="true" size={16} />
+						</PillarCap>
+					</PillarTooltip>
 				</nav>
 			)}
 		</>
@@ -127,28 +131,12 @@ function CollapsedToggle(): React.JSX.Element {
 	const shortcut = useCommandShortcut("workspace.toggleSelection");
 	return (
 		<PillarTooltip side="right" label={label} shortcut={shortcut}>
-			<CommandButton
-				commandId="workspace.toggleSelection"
-				label={label}
-				tooltip={false}
-				className="group grid h-12 w-14 shrink-0 place-items-center border-b-[length:var(--app-line-width)] border-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700"
-			>
-				<span className="relative grid size-7 place-items-center rounded-md bg-accent text-white">
-					<span aria-hidden="true" className="text-xs font-bold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">A</span>
-					<ChevronsRight aria-hidden="true" size={16} className="absolute opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" />
+			<PillarCap commandId="workspace.toggleSelection" label={label} edge="top">
+				<span className="relative grid place-items-center">
+					<span aria-hidden="true" className="text-base font-bold text-accent transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">A</span>
+					<ChevronsRight aria-hidden="true" size={18} className="absolute opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" />
 				</span>
-			</CommandButton>
-		</PillarTooltip>
-	);
-}
-
-function PillarCommand({ commandId, label, icon }: { readonly commandId: string; readonly label: string; readonly icon: React.ReactNode }): React.JSX.Element {
-	const shortcut = useCommandShortcut(commandId);
-	return (
-		<PillarTooltip side="right" label={label} shortcut={shortcut}>
-			<CommandButton commandId={commandId} label={label} tooltip={false} className="grid size-9 place-items-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-950 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
-				{icon}
-			</CommandButton>
+			</PillarCap>
 		</PillarTooltip>
 	);
 }
