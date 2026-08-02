@@ -7,6 +7,8 @@ import { useCommandContextStack } from "../commands/useCommandContextStack.js";
 import { useKeybindingOverrides } from "../commands/useKeybindingOverrides.js";
 import { createHttpConversationClient } from "../conversation/client.js";
 import { useConversationWorkspace } from "../conversation/useConversationWorkspace.js";
+import { createHttpPiClient } from "../pi/client.js";
+import { usePiChat } from "../pi/usePiChat.js";
 import { createPreferences } from "../platform/preferences.js";
 import { createWindowDragTracker } from "../platform/drag-tracker.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
@@ -42,6 +44,7 @@ import { createDemoWorkspace, WORKSPACE_CATALOG } from "../workspace/workspace-c
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 
 const conversationClient = createHttpConversationClient();
+const piClient = createHttpPiClient();
 
 // The docking engine (dockview-react + its CSS theme) is a real ~80kB gzip
 // dependency -- split into its own chunk so the core shell (Workspace
@@ -65,6 +68,14 @@ export function App(): React.JSX.Element {
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
 	const conversationWorkspace = useConversationWorkspace(conversationClient);
+	// Chat is Pi-first: once the user sends a live message, the live Pi
+	// conversation replaces the browsed (Alef-sourced, historical) one as
+	// what's displayed -- see usePiChat's own doc comment for why these stay
+	// two independent hooks rather than one merged data source.
+	const piChat = usePiChat(piClient);
+	const activeConversationItems = piChat.hasStarted ? piChat.items : conversationWorkspace.conversationItems;
+	const activeConversationLoading = piChat.hasStarted ? piChat.busy : conversationWorkspace.conversationLoading;
+	const activeConversationError = piChat.hasStarted ? piChat.error : conversationWorkspace.conversationError;
 	const userWorkspaces = useUserWorkspaces(preferences);
 	const catalog = useMemo(() => [...WORKSPACE_CATALOG, ...userWorkspaces.entries], [userWorkspaces.entries]);
 	const workspace = useWorkspaceRegistry(catalog, createDemoWorkspace, extensionHost);
@@ -86,7 +97,7 @@ export function App(): React.JSX.Element {
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
 	const dragTracker = useMemo(() => createWindowDragTracker(), []);
 	const chatDrag = useDraggablePosition({ x: 0, y: 0 }, dragTracker);
-	const latestToolName = latestToolCallName(conversationWorkspace.conversationItems);
+	const latestToolName = latestToolCallName(activeConversationItems);
 	const wispWindowIndex = resolveWispWindowIndex(workspace.workspace, latestToolName);
 	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
 	const chatIsGlobal = !isChatDocked(workspace.workspace);
@@ -165,7 +176,7 @@ export function App(): React.JSX.Element {
 			sendMessage() {
 				const text = draft.trim();
 				if (!text) return;
-				conversationWorkspace.appendUserMessage(text);
+				piChat.sendMessage(text);
 				setDraft("");
 			},
 			openPalette: () => contexts.openDialog("palette"),
@@ -244,9 +255,9 @@ export function App(): React.JSX.Element {
 								isDark={theme.isDark}
 								extensionTemplates={extensionSurfaceTemplates}
 								onSaveAsTemplate={(templateId, title) => surfaceTemplates.saveAsTemplate(title, templateId)}
-								conversationItems={conversationWorkspace.conversationItems}
-								conversationLoading={conversationWorkspace.conversationLoading}
-								conversationError={conversationWorkspace.conversationError}
+								conversationItems={activeConversationItems}
+								conversationLoading={activeConversationLoading}
+								conversationError={activeConversationError}
 								draft={draft}
 								onDraftChange={setDraft}
 								onComposerFocus={contexts.enterTextInput}
@@ -267,9 +278,9 @@ export function App(): React.JSX.Element {
 						onPointerLeave={chatVisibility.onPointerLeave}
 						onFocusCapture={chatVisibility.onFocusCapture}
 						onBlurCapture={chatVisibility.onBlurCapture}
-						conversationItems={conversationWorkspace.conversationItems}
-						conversationLoading={conversationWorkspace.conversationLoading}
-						conversationError={conversationWorkspace.conversationError}
+						conversationItems={activeConversationItems}
+						conversationLoading={activeConversationLoading}
+						conversationError={activeConversationError}
 						draft={draft}
 						onDraftChange={setDraft}
 						onComposerFocus={contexts.enterTextInput}

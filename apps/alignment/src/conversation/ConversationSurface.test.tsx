@@ -64,10 +64,10 @@ describe("ConversationSurface", () => {
 		expect(screen.getByText("User:")).toBeInTheDocument();
 	});
 
-	it("renders an assistant message attributed to Alef", () => {
+	it("renders an assistant message with a generic attribution -- this row also renders live Pi replies, not only Alef's", () => {
 		renderSurface(FIXTURES.assistantMessage);
 		expect(screen.getByText("Done.")).toBeInTheDocument();
-		expect(screen.getByText("Alef:")).toBeInTheDocument();
+		expect(screen.getByText("Assistant:")).toBeInTheDocument();
 	});
 
 	it("renders a collapsed turn marker with the tool call count", () => {
@@ -90,7 +90,7 @@ describe("ConversationSurface", () => {
 	describe("Composer", () => {
 		it("spans edge-to-edge of its own container, not inset by a separate max-w-3xl", () => {
 			renderSurface(FIXTURES.empty);
-			const input = screen.getByLabelText("Message Alef");
+			const input = screen.getByLabelText("Message Pi");
 			const row = input.parentElement as HTMLElement;
 			expect(row.className).not.toContain("max-w-3xl");
 			expect(row.className).not.toContain("mx-auto");

@@ -68,13 +68,4 @@ describe("useConversationWorkspace", () => {
 		expect(result.current.selectedConversationId).toBe("explicit");
 	});
 
-	it("appendUserMessage adds a synthetic message item immediately", async () => {
-		const client = fakeClient([summary("a")]);
-		const { result } = renderHook(() => useConversationWorkspace(client));
-		await waitFor(() => expect(result.current.conversationsLoading).toBe(false));
-
-		act(() => result.current.appendUserMessage("hello"));
-
-		expect(result.current.conversationItems).toContainEqual(expect.objectContaining({ kind: "message", role: "user", text: "hello" }));
-	});
 });

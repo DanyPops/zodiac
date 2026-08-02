@@ -20,7 +20,6 @@ export interface ConversationWorkspace {
 	 * caller can decide whether to also switch the visible surface.
 	 */
 	openConversation: (conversationId?: string) => string | undefined;
-	appendUserMessage: (text: string) => void;
 }
 
 function toConversationItems(events: readonly NormalizedEvent[]): ConversationItem[] {
@@ -91,9 +90,6 @@ export function useConversationWorkspace(client: ConversationClient): Conversati
 			const id = conversationId ?? focusedConversationIdRef.current ?? selectedConversationId ?? conversations[0]?.id;
 			if (id) setSelectedConversationId(id);
 			return id;
-		},
-		appendUserMessage(text) {
-			setConversationItems((items) => [...items, { kind: "message", role: "user", text, timestamp: Date.now() }]);
 		},
 	};
 }

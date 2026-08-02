@@ -49,15 +49,14 @@ interface ComposerProps {
 export function Composer({ draft, onDraftChange, onComposerFocus }: ComposerProps): React.JSX.Element {
 	return (
 		<div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
-			<p className="mb-1.5 text-[10px] text-gray-600 dark:text-gray-300">Fixture preview — Alef write path is not connected.</p>
 			<div className="flex items-stretch gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
 				<textarea
-					aria-label="Message Alef"
+					aria-label="Message Pi"
 					rows={2}
 					value={draft}
 					onFocus={onComposerFocus}
 					onChange={(event) => onDraftChange(event.target.value)}
-					placeholder="Message Alef"
+					placeholder="Message Pi"
 					className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 dark:text-gray-100 dark:placeholder:text-gray-400"
 				/>
 				{/* w-9 + self-stretch, not a fixed size-9 square -- its height tracks the row's actual height (the textarea can grow up to max-h-36), matching the composer's own height instead of a hardcoded one. */}
@@ -80,14 +79,15 @@ export function ConversationRow({ item }: { readonly item: ConversationItem }): 
 		return (
 			<div className={`flex ${user ? "justify-end" : "justify-start"}`}>
 				<div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm leading-6 ${user ? "bg-accent-10 text-accent-80 dark:bg-accent-70 dark:text-accent-10" : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"}`}>
-					<span className="sr-only">{user ? "User" : "Alef"}: </span>
+					{/* Generic, not "Alef" -- this row now also renders live Pi replies, and ConversationItem carries no per-item source discriminator. */}
+					<span className="sr-only">{user ? "User" : "Assistant"}: </span>
 					{item.text}
 				</div>
 			</div>
 		);
 	}
 	if (item.kind === "turn-marker") {
-		return <p className="px-1 text-xs text-gray-600 dark:text-gray-300">Alef used {item.toolCallCount} tool{item.toolCallCount === 1 ? "" : "s"}.</p>;
+		return <p className="px-1 text-xs text-gray-600 dark:text-gray-300">Used {item.toolCallCount} tool{item.toolCallCount === 1 ? "" : "s"}.</p>;
 	}
 	if (item.kind === "tool-call") {
 		return (

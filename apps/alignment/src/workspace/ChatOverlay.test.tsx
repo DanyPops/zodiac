@@ -64,7 +64,7 @@ describe("ChatOverlay", () => {
 		renderOverlay(true, MESSAGES);
 		expect(screen.getByText("Most recent reply")).toBeInTheDocument();
 		expect(screen.queryByText("First message")).not.toBeInTheDocument();
-		expect(screen.getByLabelText("Message Alef")).toBeInTheDocument();
+		expect(screen.getByLabelText("Message Pi")).toBeInTheDocument();
 	});
 
 	it("peek shows a placeholder when there are no messages yet", () => {
