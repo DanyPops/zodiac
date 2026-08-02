@@ -300,6 +300,43 @@ test("dragging a template onto the left edge of an already-docked Surface splits
 	expect(leftBox!.x).toBeLessThan(rightBox!.x); // genuinely a left/right split, not two stacked or tabbed panels
 });
 
+test("a split's non-active pane dims (defocus); clicking the other pane flips which one is dimmed", async ({ page }) => {
+	// Same split setup as the previous test -- two real, simultaneously-visible
+	// panels, which is the only case dockview lets a defocus dim be visible at
+	// all (an inactive *tab* in one group has its content removed from the DOM
+	// entirely on switch, not merely hidden -- there's nothing there to dim).
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
+	const target = page.locator(".dv-dockview");
+	const box = (await target.boundingBox())!;
+	const edgeX = box.x + 5;
+	const midY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await target.dispatchEvent("dragenter", { dataTransfer, clientX: edgeX, clientY: midY });
+	await target.dispatchEvent("dragover", { dataTransfer, clientX: edgeX, clientY: midY });
+	await target.dispatchEvent("dragover", { dataTransfer, clientX: edgeX, clientY: midY });
+	await target.dispatchEvent("drop", { dataTransfer, clientX: edgeX, clientY: midY });
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+
+	const groups = page.locator(".dv-groupview");
+	await expect(groups).toHaveCount(2);
+	const leftPanel = groups.nth(0).locator(".animate-surface-spawn");
+	const rightPanel = groups.nth(1).locator(".animate-surface-spawn");
+
+	// Focus the left pane -- the freshly-created split's right pane is
+	// whichever one dockview activated on drop, so assert relative to whichever
+	// pane ends up dimmed, not a hardcoded left/right assumption.
+	await groups.nth(0).click();
+	await expect(leftPanel).toHaveClass(/opacity-100/);
+	await expect(rightPanel).toHaveClass(/opacity-90/);
+
+	await groups.nth(1).click();
+	await expect(rightPanel).toHaveClass(/opacity-100/);
+	await expect(leftPanel).toHaveClass(/opacity-90/);
+});
+
 test("the split/tab preview overlay is debounced: a fast pass over several positions shows nothing, and it appears once the pointer settles", async ({ page }) => {
 	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
 	const target = page.locator(".dv-dockview");

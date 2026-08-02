@@ -10,6 +10,7 @@ import { SURFACE_BG } from "../platform/surface-style.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
+import { isSurfaceFocused } from "./surface-focus.js";
 import { findSurfaceTemplate, type SurfaceTemplateDefinition } from "./surface-templates.js";
 
 // The debounced/idle-gated drop-preview policy the redesign settled on: a
@@ -28,6 +29,15 @@ interface SurfaceTemplatePanelParams {
 	readonly templateId: string;
 	/** True while fading out, just before the panel is actually removed -- see requestClose. */
 	readonly closing?: boolean;
+	/** False while a sibling Surface (in a split, not a hidden tab -- see surface-focus.ts) is the Window's active panel. The "via defocus" half of the shared animation language: a steady-state dim, not a one-shot transition. */
+	readonly focused?: boolean;
+}
+
+/** Combines the two opacity states a docked panel can be in -- closing (fading all the way out) always wins over a mere defocus dim, since a closing panel shouldn't visually settle at the dimmed level first. */
+function panelOpacityClassName(closing: boolean | undefined, focused: boolean | undefined): string {
+	if (closing) return "opacity-0";
+	if (focused === false) return "opacity-90";
+	return "opacity-100";
 }
 
 function makeSurfaceTemplatePanel(extensionTemplates: readonly SurfaceTemplateDefinition[]) {
@@ -36,9 +46,10 @@ function makeSurfaceTemplatePanel(extensionTemplates: readonly SurfaceTemplateDe
 		const content = !template ? <div className="p-4 text-sm text-danger-80">Unknown Surface Template &quot;{props.params.templateId}&quot;.</div> : <>{template.render()}</>;
 		return (
 			// animate-surface-spawn plays once on mount (a bubble-expand-in); the
-			// opacity transition below only ever activates later, on close -- the
-			// two never run at the same time in practice.
-			<div className={cn("h-full animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", props.params.closing ? "opacity-0" : "opacity-100")}>{content}</div>
+			// opacity transition below activates later, on close or defocus -- the
+			// spawn animation and an opacity change never run at the same time in
+			// practice.
+			<div className={cn("h-full animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", panelOpacityClassName(props.params.closing, props.params.focused))}>{content}</div>
 		);
 	};
 }
@@ -91,17 +102,19 @@ export interface DockedChatParams {
 	readonly onTogglePin: () => void;
 	/** True while fading out, just before the panel is actually removed -- see requestClose. */
 	readonly closing: boolean;
+	/** False while a sibling Surface (in a split, not a hidden tab) is the Window's active panel -- see surface-focus.ts. */
+	readonly focused: boolean;
 }
 
 // eslint-disable-next-line sonarjs/prefer-read-only-props -- see SurfaceTemplatePanel above
 function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JSX.Element {
-	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock, pinned, closing } = props.params;
+	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock, pinned, closing, focused } = props.params;
 	return (
 		// animate-chat-follow-bounce and animate-surface-spawn both play once on
 		// mount (a fresh mount happens naturally every time Chat relocates to a
 		// new active Window, each Window its own DockviewReact instance) -- the
-		// opacity transition only ever activates later, on close.
-		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", !pinned && "animate-chat-follow-bounce", closing ? "opacity-0" : "opacity-100")}>
+		// opacity transition activates later, on close or defocus.
+		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", !pinned && "animate-chat-follow-bounce", panelOpacityClassName(closing, focused))}>
 			<div className="flex h-8 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
 				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
 				<button type="button" onClick={onUndock} aria-label="Undock Chat back to the floating overlay" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
@@ -206,6 +219,11 @@ export function WindowDockview({
 	// requestClose below owns the whole lifecycle (mark closing, wait
 	// CLOSE_FADE_MS, then the real api.close()).
 	const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(new Set());
+	// The Window's currently active panel (a real split's focused pane, not a
+	// hidden tab -- dockview unmounts a tab's content entirely on switch, so
+	// there's nothing to dim there) -- drives the "via defocus" half of the
+	// shared animation language via surface-focus.ts's isSurfaceFocused.
+	const [activePanelId, setActivePanelId] = useState<string | undefined>(undefined);
 
 	function requestClose(instanceId: string): void {
 		setClosingIds((current) => new Set(current).add(instanceId));
@@ -241,11 +259,12 @@ export function WindowDockview({
 			pinned: chatPinned,
 			onTogglePin: onTogglePinChat,
 			closing: closingIds.has(instance.id),
+			focused: isSurfaceFocused(instance.id, activePanelId, dockedSurfaces.length),
 		};
 	}
 
 	function surfaceTemplateParams(instance: DockedSurfaceInstance): SurfaceTemplatePanelParams {
-		return { templateId: instance.templateId, closing: closingIds.has(instance.id) };
+		return { templateId: instance.templateId, closing: closingIds.has(instance.id), focused: isSurfaceFocused(instance.id, activePanelId, dockedSurfaces.length) };
 	}
 
 	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string): void {
@@ -272,7 +291,11 @@ export function WindowDockview({
 			onPanelClosed(panel.id);
 		});
 
-		event.api.onDidActivePanelChange((change) => onActivePanelChange(change.panel?.id));
+		setActivePanelId(event.api.activePanel?.id);
+		event.api.onDidActivePanelChange((change) => {
+			setActivePanelId(change.panel?.id);
+			onActivePanelChange(change.panel?.id);
+		});
 
 		// dockview rejects an external (non-dockview-panel) drag's drop-target
 		// overlay by default -- a consumer must explicitly accept it. Only
@@ -338,7 +361,7 @@ export function WindowDockview({
 		if (!chatInstance || !mountedIdsRef.current.has(chatInstance.id)) return;
 		api.getPanel(chatInstance.id)?.api.updateParameters(chatParams(chatInstance));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- chatParams is a stable closure over the same props already listed
-	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat, chatPinned, onTogglePinChat, closingIds]);
+	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat, chatPinned, onTogglePinChat, closingIds, activePanelId]);
 
 	// Pushes the fading-out `closing` flag live into every currently-mounted
 	// panel's params (chat's own effect above already covers chat's case via
@@ -350,8 +373,8 @@ export function WindowDockview({
 			if (instance.templateId === CHAT_TEMPLATE_ID || !mountedIdsRef.current.has(instance.id)) continue;
 			api.getPanel(instance.id)?.api.updateParameters(surfaceTemplateParams(instance));
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- surfaceTemplateParams is a stable closure over closingIds, already listed
-	}, [dockedSurfaces, closingIds]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- surfaceTemplateParams is a stable closure over closingIds/activePanelId, already listed
+	}, [dockedSurfaces, closingIds, activePanelId]);
 
 	return (
 		// themeLightSpaced/themeDarkSpaced (not themeLight/themeDark +
