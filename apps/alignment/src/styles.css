@@ -220,16 +220,42 @@
 }
 
 /*
- * The Dock Ruler (workspace/DockRuler.tsx) replaces dockview's own coarse
- * quadrant highlight entirely when dragging over an existing group's
- * content -- dockview's own overlay DOM is left alone (its onDrop still
- * needs the same internal state it drives), just hidden here. Scoped to
- * .dv-groupview specifically so the empty-Window watermark's own root-level
- * drop highlight (a different, non-nested target) is untouched -- there's
- * nothing to divide into a fraction there.
+ * The Dock Ruler (workspace/DockRuler.tsx + DockRulerFrame.tsx) replaces
+ * dockview's own coarse per-group content highlight entirely -- dockview's
+ * own overlay DOM is left alone (its onDrop still needs the same internal
+ * state it drives), just hidden here.
  */
 .dv-groupview .dv-drop-target-dropzone,
 .dv-groupview .dv-drop-target-selection {
+	display: none !important;
+}
+
+/*
+ * The root-level overlay (.dv-drop-target-anchor, rootDropTargetService --
+ * the empty-Window watermark's own big highlight, and a thin coarse edge
+ * band on an already-occupied canvas) is legitimate and wanted WHILE a drag
+ * is active (an existing e2e test protects it: a fast "split roughly in
+ * half" gesture still needs to see it) -- so it can't be hidden
+ * unconditionally the way the per-group one above is.
+ *
+ * But it's a real, confirmed bug once the drag is *not* active: dockview's
+ * own cleanup for it requires either a dragend reaching a listener bound to
+ * .dv-dockview (never happens for an externally sourced drag -- native
+ * dragend only fires on the drag's own origin element, our Surface
+ * Templates pillar, which bubbles through its own ancestors only, never
+ * into an unrelated sibling subtree) or a dragleave (a deliberate no-op in
+ * dockview's own Droptarget whenever an override target -- exactly this
+ * root-level case -- is active). Confirmed live: dragging near the canvas's
+ * outer edge and cancelling (dragend, no drop -- Escape, or releasing
+ * outside any valid target) leaves this overlay visible in the DOM
+ * indefinitely, matching a real reported "stuck highlighter" screenshot
+ * exactly. Gated on data-template-dragging (App.tsx's own templateDragging,
+ * already the authoritative "is a Surface Template drag active" signal driving
+ * the Dock Ruler frame) instead of dockview's own event pipeline -- forces
+ * it hidden the instant our own tracking says the drag is over, regardless
+ * of whether dockview's own internal state ever got the memo.
+ */
+[data-template-dragging="false"] .dv-drop-target-anchor {
 	display: none !important;
 }
 

@@ -194,7 +194,8 @@ export function App(): React.JSX.Element {
 
 	return (
 		<CommandProvider registry={registry} activeContexts={contexts.effectiveContexts}>
-			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace.id}>
+			{/* data-template-dragging: the authoritative "is a Surface Template drag active" signal, consumed by styles.css to force-hide dockview's own root-level drop-target overlay once a drag ends -- see the CSS rule's own doc comment for why dockview's own cleanup can't be trusted to do this itself. */}
+			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace.id} data-template-dragging={templateDragging}>
 				<WorkspaceSelection
 					collapsed={selection.collapsed}
 					catalog={workspace.catalog}

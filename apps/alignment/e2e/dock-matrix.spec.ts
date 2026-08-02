@@ -112,10 +112,6 @@ async function rightmostGroupContent(page: Page): Promise<Locator> {
 	return groupContent(page, await indexOfExtreme(page, (a, b) => (a.x >= b.x ? a : b)));
 }
 
-async function topmostGroupContent(page: Page): Promise<Locator> {
-	return groupContent(page, await indexOfExtreme(page, (a, b) => (a.y <= b.y ? a : b)));
-}
-
 async function bottommostGroupContent(page: Page): Promise<Locator> {
 	return groupContent(page, await indexOfExtreme(page, (a, b) => (a.y >= b.y ? a : b)));
 }
@@ -134,19 +130,9 @@ async function leftmostGroupBox(page: Page): Promise<Box> {
 	return boxes.reduce((a, b) => (a.x <= b.x ? a : b));
 }
 
-async function rightmostGroupBox(page: Page): Promise<Box> {
-	const boxes = await groupBoxes(page);
-	return boxes.reduce((a, b) => (a.x >= b.x ? a : b));
-}
-
 async function topmostGroupBox(page: Page): Promise<Box> {
 	const boxes = await groupBoxes(page);
 	return boxes.reduce((a, b) => (a.y <= b.y ? a : b));
-}
-
-async function bottommostGroupBox(page: Page): Promise<Box> {
-	const boxes = await groupBoxes(page);
-	return boxes.reduce((a, b) => (a.y >= b.y ? a : b));
 }
 
 /**
@@ -412,6 +398,45 @@ test("17. A cancelled drag (dragend with no drop) leaves the Window untouched an
 	const boxAfter = (await groupBoxes(page))[0]!;
 	expect(boxAfter.width).toBeCloseTo(boxBefore.width, 0);
 	await expectNoStrayRulerArtifacts(page); // ...and gone now that the drag ended
+});
+
+test("19. A cancelled drag near the canvas's own outer edge (root-level, not a specific pane's content) leaves no stuck dockview overlay behind", async ({ page }) => {
+	// Regression test for a real degradation reported live: dockview's own
+	// root-level drop-target overlay (.dv-drop-target-anchor, owned by
+	// rootDropTargetService -- a genuinely distinct mechanism from both the
+	// Dock Ruler's own frame and its in-content shade) has no reliable
+	// cleanup path for an externally-sourced drag. Its own dragend listener
+	// is bound to .dv-dockview, which a native dragend fired on our Surface
+	// Templates pillar (an unrelated sibling, not an ancestor) never reaches;
+	// its own dragleave handling is a deliberate no-op whenever an override
+	// target -- exactly this root-level case -- is active. Confirmed live via
+	// a real browser (not just this dispatchEvent-driven test, since a
+	// synthetic dragend has the same bubbling semantics as a genuine one
+	// here) before fixing: dragging near the canvas's outer edge and
+	// cancelling left a purple highlight box stuck in the DOM indefinitely.
+	await dockViaClick(page);
+	const dockview = page.locator(".dv-dockview");
+	const box = (await dockview.boundingBox())!;
+	// The root-level activation band is a fixed 10px from the true edge
+	// (DEFAULT_ROOT_OVERLAY_MODEL.activationSize), not a percentage of the
+	// canvas -- a ratio-based offset (as the Dock Ruler's own tests use for
+	// its much wider ~whole-pane activation) can miss this much narrower
+	// band entirely depending on viewport width.
+	const nearEdgeX = box.x + box.width - 5;
+	const midY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	const glyph = activityGlyph(page);
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await dockview.dispatchEvent("dragenter", { dataTransfer, clientX: nearEdgeX, clientY: midY });
+	await dockview.dispatchEvent("dragover", { dataTransfer, clientX: nearEdgeX, clientY: midY });
+	await dockview.dispatchEvent("dragover", { dataTransfer, clientX: nearEdgeX, clientY: midY }); // second sample -- this root-level overlay has its own idle-velocity debounce, same as the empty-watermark case
+	await glyph.dispatchEvent("dragend", { dataTransfer }); // cancelled, no drop
+
+	// The DOM node itself still exists (dockview's own JS creates it
+	// regardless of CSS) -- the fix hides it, it doesn't prevent creation.
+	await expect(page.locator(".dv-drop-target-anchor")).toBeHidden();
+	await expect(groups(page)).toHaveCount(1); // unchanged -- no phantom split
 });
 
 test("18. Three (mixed L-shaped layout) has no duplicate DOM: exactly as many tabs, content containers, and watermarks as docked Surfaces, never more", async ({ page }) => {
