@@ -5,6 +5,7 @@ import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { GlyphBadge } from "./GlyphBadge.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
+import { GLYPH_SIZE_CLASSES } from "./glyph-size.js";
 import { iconButtonClassName } from "./icon-button-style.js";
 import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";
@@ -42,7 +43,8 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					className={cn("absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] shadow-xl md:relative md:shadow-none", SURFACE_BG)}
 				>
 					<div className="flex h-12 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
-						<div className="grid size-7 place-items-center rounded-[var(--app-corner-radius,16px)] bg-accent text-xs font-bold text-white">A</div>
+						{/* The header's own logo lockup (icon mark + wordmark) -- a static brand mark, not a Glyph Badge (no active/idle state) or Icon Button (no action), so its accent fill is a deliberate one-off, not a stray. Its size still shares the same scale as everything else. */}
+						<div className={cn("grid place-items-center rounded-[var(--app-corner-radius,16px)] bg-accent text-xs font-bold text-white", GLYPH_SIZE_CLASSES.md)}>A</div>
 						<h1 className="text-sm font-semibold tracking-tight text-gray-950 dark:text-white">Alignment</h1>
 						<CommandButton commandId="workspace.toggleSelection" label="Hide workspace selection" className={cn("ml-auto", iconButtonClassName({ size: "xl" }))}>
 							<ChevronsLeft aria-hidden="true" size={16} />
