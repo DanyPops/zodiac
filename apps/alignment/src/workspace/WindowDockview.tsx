@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
@@ -61,7 +62,7 @@ function makeDockedSurfaceTab(extensionTemplates: readonly SurfaceTemplateDefini
 					<DockviewDefaultTab {...props} closeActionOverride={() => onRequestClose(props.api.id)} />
 				</ContextMenu.Trigger>
 				<ContextMenu.Portal>
-					<ContextMenu.Content className="z-50 min-w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg outline-none dark:border-gray-700 dark:bg-gray-900">
+					<ContextMenu.Content className={cn("z-50 min-w-44 rounded-md border border-gray-200 p-1 shadow-lg outline-none dark:border-gray-700", SURFACE_BG)}>
 						<ContextMenu.Item
 							onSelect={() => onRequestSaveAsTemplate(templateId, props.api.title ?? templateId)}
 							className="cursor-pointer rounded px-2 py-1.5 text-xs text-gray-700 outline-none data-[highlighted]:bg-gray-100 dark:text-gray-200 dark:data-[highlighted]:bg-gray-800"

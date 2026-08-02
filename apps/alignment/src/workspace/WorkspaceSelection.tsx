@@ -2,6 +2,9 @@ import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Setting
 import type { RefObject } from "react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
+import { GlyphBadge } from "./GlyphBadge.js";
+import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { PillarTooltip } from "./PillarTooltip.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
@@ -33,7 +36,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 				<nav
 					ref={selectionRef}
 					aria-label="Workspace selection"
-					className="absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 shadow-xl dark:bg-gray-900 md:relative md:shadow-none"
+					className={cn("absolute inset-y-0 left-0 z-20 flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] shadow-xl md:relative md:shadow-none", SURFACE_BG)}
 				>
 					<div className="flex h-12 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
 						<div className="grid size-7 place-items-center rounded-md bg-accent text-xs font-bold text-white">A</div>
@@ -82,8 +85,9 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					</div>
 				</nav>
 			)}
+			{/* Pillar Cap: rounded-full, not the shared corner-radius token -- a Pillar is always a stadium/pill shape at its own top and bottom, independent of the Corner Sharpness setting elsewhere. */}
 			{collapsed && (
-				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
+				<nav aria-label="Workspace quick selection" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-full", SURFACE_BG)}>
 					<CollapsedToggle />
 					{/* The "+" lives inside this same flex column, right after the last Workspace glyph -- not a sibling pinned near the footer by the column's own flex-1 growth. */}
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
@@ -188,10 +192,9 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
 				)}
 			>
-				{/* Every Workspace's own logo chip: white icon, black border -- a fixed brand mark, not theme- or selection-dependent. */}
-				<span className="grid size-6 shrink-0 place-items-center rounded-md border-2 border-gray-950 bg-gray-950 text-white">
+				<GlyphBadge active={selected} size="sm">
 					<entry.icon aria-hidden="true" size={13} />
-				</span>
+				</GlyphBadge>
 				<span className="truncate text-xs font-medium">{entry.title}</span>
 			</CommandButton>
 		</li>
@@ -212,10 +215,10 @@ function CollapsedCatalogItem({ entry, selected, toolCallTarget, selectedButtonR
 				tooltip={false}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
-					// Every Workspace's own logo chip: white icon, black border -- a fixed brand mark, not theme- or selection-dependent. Selection reads via the ring + breathing, not icon color.
-					"grid size-9 place-items-center rounded-md border-2 border-gray-950 bg-gray-950 text-white transition-opacity focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe hover:opacity-100 focus-visible:animate-wisp-breathe",
-					selected ? "animate-wisp-breathe opacity-100" : "opacity-70",
-					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
+					glyphBadgeClassName({ active: selected, ring: toolCallTarget, size: "lg" }),
+					"focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe focus-visible:animate-wisp-breathe",
+					(selected || toolCallTarget) && "animate-wisp-breathe",
+					!selected && "hover:bg-gray-100 hover:text-gray-950 dark:hover:bg-gray-700 dark:hover:text-white",
 				)}
 			>
 				<entry.icon aria-hidden="true" size={18} />

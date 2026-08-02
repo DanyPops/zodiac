@@ -1,5 +1,7 @@
 import { BookOpen } from "lucide-react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
+import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import { PillarTooltip } from "./PillarTooltip.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import type { SurfaceTemplateEntry } from "./useSurfaceTemplates.js";
@@ -20,8 +22,9 @@ interface SurfaceTemplatesPillarProps {
 export function SurfaceTemplatesPillar({ entries, onDockDefault }: SurfaceTemplatesPillarProps): React.JSX.Element {
 	const openGalleryShortcut = useCommandShortcut("templates.openGallery");
 
+	// Pillar Cap: rounded-full, not the shared corner-radius token -- a Pillar is always a stadium/pill shape at its own top and bottom, independent of the Corner Sharpness setting elsewhere.
 	return (
-		<nav aria-label="Surface Templates" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
+		<nav aria-label="Surface Templates" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-full", SURFACE_BG)}>
 			{/* The categorized gallery (brand logos, per-category previews) -- browsing/discovery, not a dock action. TemplatesDialog's own keyboard-native filter+placement flow is still reachable via its own command/shortcut for docking a real template. */}
 			<PillarTooltip side="left" label="Browse the Surface Templates gallery" shortcut={openGalleryShortcut}>
 				<CommandButton commandId="templates.openGallery" label="Browse the Surface Templates gallery" tooltip={false} className="grid h-12 w-14 shrink-0 place-items-center border-b border-gray-200 text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">

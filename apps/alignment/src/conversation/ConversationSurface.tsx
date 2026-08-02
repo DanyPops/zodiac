@@ -1,6 +1,8 @@
 import { Send, Wrench } from "lucide-react";
 import type { ConversationItem } from "./projector.js";
 import { CommandButton } from "../commands/react.js";
+import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 
 interface ConversationSurfaceProps {
 	readonly items: readonly ConversationItem[];
@@ -13,7 +15,7 @@ interface ConversationSurfaceProps {
 
 export function ConversationSurface({ items, loading, error, draft, onDraftChange, onComposerFocus }: ConversationSurfaceProps): React.JSX.Element {
 	return (
-		<div className="flex h-full min-h-0 flex-col bg-white dark:bg-gray-900">
+		<div className={cn("flex h-full min-h-0 flex-col", SURFACE_BG)}>
 			<div role="log" aria-label="AI conversation" aria-live="polite" className="min-h-0 flex-1 overflow-auto px-5 py-4">
 				{loading && <p className="text-sm text-gray-600 dark:text-gray-300">Loading conversation…</p>}
 				{error && <p className="rounded-lg border border-danger-50 bg-danger-10 px-3 py-2 text-sm text-danger-80">{error}</p>}
@@ -46,7 +48,7 @@ interface ComposerProps {
  */
 export function Composer({ draft, onDraftChange, onComposerFocus }: ComposerProps): React.JSX.Element {
 	return (
-		<div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+		<div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
 			<p className="mb-1.5 text-[10px] text-gray-600 dark:text-gray-300">Fixture preview — Alef write path is not connected.</p>
 			<div className="flex items-stretch gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
 				<textarea

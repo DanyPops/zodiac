@@ -2,6 +2,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { formatForDisplay, useHotkeyRecorder, type Hotkey } from "@tanstack/react-hotkeys";
 import { Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import { CommandButton, useCommandEnvironment } from "./react.js";
 import type { KeybindingDefinition } from "./registry.js";
 import type { DialogMode } from "./useCommandContextStack.js";
@@ -64,7 +66,7 @@ export function CommandDialog({
 				<Dialog.Overlay className="fixed inset-0 z-40 bg-gray-950/45 backdrop-blur-[1px] data-[state=open]:animate-in" />
 				<Dialog.Content
 					aria-label={title}
-					className="fixed left-1/2 top-[14vh] z-50 w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl outline-none dark:border-gray-700 dark:bg-gray-900"
+					className={cn("fixed left-1/2 top-[14vh] z-50 w-[min(640px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-gray-200 shadow-2xl outline-none dark:border-gray-700", SURFACE_BG)}
 				>
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Search aria-hidden="true" size={17} className="text-gray-500" />

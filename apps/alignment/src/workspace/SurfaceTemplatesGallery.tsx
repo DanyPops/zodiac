@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CommandButton } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import { GALLERY_CATEGORIES, type GalleryCategory } from "./gallery-categories.js";
 
 /** How long each face (icon cluster, then preview) shows before cross-fading to the other -- per the settled "automatic loop" discussion. */
@@ -31,7 +32,7 @@ export function SurfaceTemplatesGallery({ open, onClose }: SurfaceTemplatesGalle
 		>
 			<Dialog.Portal>
 				<Dialog.Overlay className="fixed inset-0 z-40 bg-gray-950/45 backdrop-blur-[1px] data-[state=open]:animate-in" />
-				<Dialog.Content aria-label="Surface Templates gallery" className="fixed left-1/2 top-[10vh] z-50 w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl outline-none -translate-x-1/2 dark:border-gray-700 dark:bg-gray-900">
+				<Dialog.Content aria-label="Surface Templates gallery" className={cn("fixed left-1/2 top-[10vh] z-50 w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-200 shadow-2xl outline-none -translate-x-1/2 dark:border-gray-700", SURFACE_BG)}>
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Surface Templates</Dialog.Title>
 						<Dialog.Close asChild>

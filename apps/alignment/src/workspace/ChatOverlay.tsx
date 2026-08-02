@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Composer, ConversationRow, ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import type { ChatPosition } from "./chat-drag.js";
 
 interface ChatOverlayProps {
@@ -70,7 +71,8 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 			}}
 			className={cn(
 				// A floating pill, not a drawer anchored to the bottom edge -- rounded on every corner, bordered on every side.
-				"pointer-events-auto absolute bottom-0 left-1/2 z-40 flex w-3/4 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-gray-300 bg-white shadow-2xl outline-none dark:border-gray-700 dark:bg-gray-900",
+				SURFACE_BG,
+				"pointer-events-auto absolute bottom-0 left-1/2 z-40 flex w-3/4 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-gray-300 shadow-2xl outline-none dark:border-gray-700",
 				expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]",
 				// No transition while actively dragging -- the position should track the
 				// pointer 1:1, not lag behind it easing toward a stale target.

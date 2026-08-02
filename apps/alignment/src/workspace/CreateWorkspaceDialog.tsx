@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useState } from "react";
 import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID, WORKSPACE_GLYPH_OPTIONS } from "./workspace-catalog.js";
 
 interface CreateWorkspaceDialogProps {
@@ -27,7 +28,7 @@ export function CreateWorkspaceDialog({ open, onClose, onCreate }: CreateWorkspa
 		>
 			<Dialog.Portal>
 				<Dialog.Overlay className="fixed inset-0 z-40 bg-gray-950/45 backdrop-blur-[1px] data-[state=open]:animate-in" />
-				<Dialog.Content aria-label="New Workspace" className="fixed left-1/2 top-[20vh] z-50 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl outline-none dark:border-gray-700 dark:bg-gray-900">
+				<Dialog.Content aria-label="New Workspace" className={cn("fixed left-1/2 top-[20vh] z-50 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-gray-200 shadow-2xl outline-none dark:border-gray-700", SURFACE_BG)}>
 					<form
 						onSubmit={(event) => {
 							event.preventDefault();

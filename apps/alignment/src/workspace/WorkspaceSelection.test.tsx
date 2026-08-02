@@ -69,15 +69,15 @@ describe("expanded Workspace selection", () => {
 		expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
 	});
 
-	it("gives every Workspace row's icon the same inverted logo-chip style, independent of the row's own selected-state background", () => {
+	it("gives every Workspace row's icon the same Glyph Badge, active or idle per selection", () => {
 		renderExpanded();
-		for (const entry of WORKSPACE_CATALOG) {
-			const row = screen.getByRole("button", { name: entry.title });
-			const chip = row.querySelector("span");
-			expect(chip).not.toBeNull();
-			expect(chip).toHaveClass("bg-gray-950");
-			expect(chip).toHaveClass("text-white");
-		}
+		const activeRow = screen.getByRole("button", { name: WORKSPACE_CATALOG[0]!.title });
+		const activeChip = activeRow.querySelector("span")!;
+		expect(activeChip).toHaveClass("border-gray-300", "bg-gray-100", "text-gray-950");
+
+		const idleRow = screen.getByRole("button", { name: WORKSPACE_CATALOG[1]!.title });
+		const idleChip = idleRow.querySelector("span")!;
+		expect(idleChip.className).not.toMatch(/(?<!:)border-gray-300|(?<!:)bg-gray-100/);
 	});
 
 	it("shows a 'New Workspace' affordance below the list that fires onCreateWorkspace", () => {
@@ -188,13 +188,12 @@ describe("collapsed Workspace quick selection", () => {
 		expect(createIndex).toBe(lastGlyphIndex + 1);
 	});
 
-	it("gives every Workspace glyph the same inverted logo-chip style (white icon, black border) regardless of selection", () => {
+	it("gives every Workspace glyph the same Glyph Badge treatment -- a bordered, filled chip when active, flush and muted when idle", () => {
 		renderCollapsed();
-		for (const entry of WORKSPACE_CATALOG) {
-			const button = screen.getByRole("button", { name: entry.title });
-			expect(button).toHaveClass("bg-gray-950");
-			expect(button).toHaveClass("text-white");
-			expect(button).toHaveClass("border-gray-950");
-		}
+		const active = screen.getByRole("button", { name: WORKSPACE_CATALOG[0]!.title });
+		expect(active).toHaveClass("border-gray-300", "bg-gray-100", "text-gray-950");
+
+		const idle = screen.getByRole("button", { name: WORKSPACE_CATALOG[1]!.title });
+		expect(idle.className).not.toMatch(/(?<!:)border-gray-300|(?<!:)bg-gray-100/);
 	});
 });

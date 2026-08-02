@@ -1,6 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Command, Keyboard, MoonStar, Settings, X } from "lucide-react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
+import { cn } from "../platform/cn.js";
+import { SURFACE_BG } from "../platform/surface-style.js";
 import { cornerRadiusPx, lineWidthPx, type VisualDna } from "../platform/visual-dna.js";
 import { VisualDnaSlider } from "./VisualDnaSlider.js";
 
@@ -33,7 +35,7 @@ export function VisualDnaDialog({ open, onClose, value, onVibeChange, onCornerSh
 		>
 			<Dialog.Portal>
 				<Dialog.Overlay className="fixed inset-0 z-40 bg-gray-950/45 backdrop-blur-[1px] data-[state=open]:animate-in" />
-				<Dialog.Content aria-label="Settings" className="fixed left-1/2 top-[14vh] z-50 w-[min(420px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl outline-none dark:border-gray-700 dark:bg-gray-900">
+				<Dialog.Content aria-label="Settings" className={cn("fixed left-1/2 top-[14vh] z-50 w-[min(420px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-gray-200 shadow-2xl outline-none dark:border-gray-700", SURFACE_BG)}>
 					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 						<Settings aria-hidden="true" size={16} className="text-gray-500" />
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Settings</Dialog.Title>
