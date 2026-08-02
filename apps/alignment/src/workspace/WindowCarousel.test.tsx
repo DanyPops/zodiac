@@ -28,6 +28,16 @@ function renderCarousel(windowCount: number, activeIndex: number, onSelect: (ind
 }
 
 describe("WindowCarousel", () => {
+	it("balances the '+' button with a matching spacer on the other end, so the pill's true center sits over the viewport, not the whole asymmetric row", () => {
+		const { container } = renderCarousel(3, 0, vi.fn());
+		const nav = container.querySelector("nav")!;
+		const spacer = nav.firstElementChild!;
+		expect(spacer).toHaveAttribute("aria-hidden", "true");
+		expect(spacer).toHaveClass("size-7");
+		const plusButton = screen.getByRole("button", { name: "New Window" });
+		expect(plusButton.className).toContain("size-7");
+	});
+
 	it("marks the active Window with aria-current", () => {
 		renderCarousel(3, 1, vi.fn());
 		expect(screen.getByRole("button", { name: "1" })).toHaveAttribute("aria-current", "true");

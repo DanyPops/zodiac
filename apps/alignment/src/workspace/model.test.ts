@@ -40,12 +40,19 @@ describe("Workspace window and Surface docking", () => {
 		expect(activeWindow(workspace).dockedSurfaces).toEqual([]);
 	});
 
-	it("gives every Window a plain default title -- 'Window 1', 'Window 2', ...", () => {
+	it("gives every Window a plain default title matching its own 0-based index -- the same number the Carousel pill displays", () => {
 		let workspace = fixtureWorkspace();
-		expect(activeWindow(workspace).title).toBe("Window 1");
+		expect(activeWindow(workspace).title).toBe("Window 0");
 
 		workspace = addWindow(workspace);
-		expect(activeWindow(workspace).title).toBe("Window 2");
+		expect(activeWindow(workspace).title).toBe("Window 1");
+	});
+
+	it("never disagrees with the Carousel's own displayed index -- every Window's default title number equals its real array index", () => {
+		let workspace = fixtureWorkspace();
+		workspace = addWindow(workspace);
+		workspace = addWindow(workspace);
+		workspace.windows.forEach((window, index) => expect(window.title).toBe(`Window ${index}`));
 	});
 
 	describe("renameWindow", () => {
@@ -124,7 +131,7 @@ describe("Workspace window and Surface docking", () => {
 			const scrolled = scrollWindow(workspace, 1);
 			expect(scrolled.windows).toHaveLength(3);
 			expect(scrolled.activeWindowIndex).toBe(2);
-			expect(scrolled.windows[2]).toMatchObject({ title: "Window 3", ephemeral: true, dockedSurfaces: [] });
+			expect(scrolled.windows[2]).toMatchObject({ title: "Window 2", ephemeral: true, dockedSurfaces: [] });
 		});
 
 		it("scrolling backward past the first Window creates one new ephemeral Window at the start and switches to it, instead of wrapping", () => {

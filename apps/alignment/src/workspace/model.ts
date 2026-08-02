@@ -72,15 +72,16 @@ function nextInstanceId(prefix: string): string {
 	return `${prefix}-${instanceCounter}`;
 }
 
-function createWindow(ordinal: number): WorkspaceWindow {
-	return { id: nextInstanceId("window"), title: `Window ${ordinal}`, dockedSurfaces: [] };
+/** `index` is the Window's own 0-based position -- the same number the Carousel pill itself displays, so a freshly created Window's default title never disagrees with its own glyph. */
+function createWindow(index: number): WorkspaceWindow {
+	return { id: nextInstanceId("window"), title: `Window ${index}`, dockedSurfaces: [] };
 }
 
 export function createWorkspace(definition: WorkspaceDefinition): Workspace {
 	return {
 		id: definition.id,
 		title: definition.title,
-		windows: [createWindow(1)],
+		windows: [createWindow(0)],
 		activeWindowIndex: 0,
 		chatVisible: false,
 		chatPinned: false,
@@ -142,7 +143,7 @@ export function selectWindow(workspace: Workspace, index: number): Workspace {
 
 /** Appends a new empty Window at the end (index -1, rightmost) and switches to it. */
 export function addWindow(workspace: Workspace): Workspace {
-	const windows = [...workspace.windows, createWindow(workspace.windows.length + 1)];
+	const windows = [...workspace.windows, createWindow(workspace.windows.length)];
 	return { ...workspace, windows, activeWindowIndex: windows.length - 1 };
 }
 
@@ -174,7 +175,8 @@ export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace
 
 	if (atEdge) {
 		if (isEmptyEphemeral(currentWindow)) return workspace; // already at the transient slot -- nothing further to create
-		const newWindow: WorkspaceWindow = { ...createWindow(workspace.windows.length + 1), ephemeral: true };
+		// Its real final index is 0 when prepended (every existing Window shifts up, but keeps its own already-assigned title -- a title is fixed at creation, not live-recomputed from position), or the current length when appended.
+		const newWindow: WorkspaceWindow = { ...createWindow(direction > 0 ? workspace.windows.length : 0), ephemeral: true };
 		const windows = direction > 0 ? [...workspace.windows, newWindow] : [newWindow, ...workspace.windows];
 		return withChatFollowing(workspace, { ...workspace, windows, activeWindowIndex: direction > 0 ? windows.length - 1 : 0 });
 	}
