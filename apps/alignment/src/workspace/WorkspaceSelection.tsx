@@ -85,6 +85,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 			{collapsed && (
 				<nav aria-label="Workspace quick selection" className="relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-50 dark:bg-gray-900">
 					<CollapsedToggle />
+					{/* The "+" lives inside this same flex column, right after the last Workspace glyph -- not a sibling pinned near the footer by the column's own flex-1 growth. */}
 					<div className="flex flex-1 flex-col items-center gap-1 overflow-auto py-2">
 						{catalog.map((entry) => (
 							<CollapsedCatalogItem
@@ -96,17 +97,17 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 								onWorkspaceFocus={onWorkspaceFocus}
 							/>
 						))}
+						<PillarTooltip side="right" label="Create a new Workspace">
+							<button
+								type="button"
+								onClick={onCreateWorkspace}
+								aria-label="Create a new Workspace"
+								className="grid size-9 shrink-0 place-items-center rounded-md border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-600 dark:hover:border-gray-500 dark:hover:text-gray-300"
+							>
+								<Plus aria-hidden="true" size={16} />
+							</button>
+						</PillarTooltip>
 					</div>
-					<PillarTooltip side="right" label="Create a new Workspace">
-						<button
-							type="button"
-							onClick={onCreateWorkspace}
-							aria-label="Create a new Workspace"
-							className="mx-auto mb-1 grid size-9 shrink-0 place-items-center rounded-md border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-600 dark:hover:border-gray-500 dark:hover:text-gray-300"
-						>
-							<Plus aria-hidden="true" size={16} />
-						</button>
-					</PillarTooltip>
 					{/* Command palette/shortcuts/theme fold into the one Settings entry (its own dialog exposes all three as rows) -- the collapsed pillar has no room for four separate icons. */}
 					<div className="flex flex-col items-center gap-1 border-t-[length:var(--app-line-width)] border-gray-200 py-2 dark:border-gray-700">
 						<PillarCommand commandId="appearance.open" label="Settings" icon={<Settings aria-hidden="true" size={16} />} />
@@ -187,7 +188,10 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
 				)}
 			>
-				<entry.icon aria-hidden="true" size={16} className="shrink-0" />
+				{/* Every Workspace's own logo chip: white icon, black border -- a fixed brand mark, not theme- or selection-dependent. */}
+				<span className="grid size-6 shrink-0 place-items-center rounded-md border-2 border-gray-950 bg-gray-950 text-white">
+					<entry.icon aria-hidden="true" size={13} />
+				</span>
 				<span className="truncate text-xs font-medium">{entry.title}</span>
 			</CommandButton>
 		</li>
@@ -208,8 +212,9 @@ function CollapsedCatalogItem({ entry, selected, toolCallTarget, selectedButtonR
 				tooltip={false}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
-					"grid size-9 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe focus-visible:animate-wisp-breathe",
-					selected ? "animate-wisp-breathe bg-accent-10 text-accent-60 dark:bg-accent-80 dark:text-accent-30" : "text-gray-600 hover:bg-gray-200 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
+					// Every Workspace's own logo chip: white icon, black border -- a fixed brand mark, not theme- or selection-dependent. Selection reads via the ring + breathing, not icon color.
+					"grid size-9 place-items-center rounded-md border-2 border-gray-950 bg-gray-950 text-white transition-opacity focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe hover:opacity-100 focus-visible:animate-wisp-breathe",
+					selected ? "animate-wisp-breathe opacity-100" : "opacity-70",
 					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
 				)}
 			>

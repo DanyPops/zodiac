@@ -69,7 +69,8 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 				transform: `translateX(calc(-50% + ${position.x}px)) translateY(${visible ? "0" : "100%"}) translateY(${position.y}px)`,
 			}}
 			className={cn(
-				"pointer-events-auto absolute bottom-0 left-1/2 z-40 flex w-3/4 flex-col overflow-hidden rounded-t-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-b-0 border-gray-300 bg-white shadow-2xl outline-none dark:border-gray-700 dark:bg-gray-900",
+				// A floating pill, not a drawer anchored to the bottom edge -- rounded on every corner, bordered on every side.
+				"pointer-events-auto absolute bottom-0 left-1/2 z-40 flex w-3/4 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)] border-[length:var(--app-line-width)] border-gray-300 bg-white shadow-2xl outline-none dark:border-gray-700 dark:bg-gray-900",
 				expanded ? "h-[60vh] max-h-[42rem]" : "max-h-[16rem]",
 				// No transition while actively dragging -- the position should track the
 				// pointer 1:1, not lag behind it easing toward a stale target.

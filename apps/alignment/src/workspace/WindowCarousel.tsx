@@ -77,7 +77,7 @@ export function WindowCarousel({ windowCount, activeIndex, onSelect, onScroll, a
 	}, []);
 
 	return (
-		<div className="flex flex-col items-center gap-1 self-start">
+		<div className="flex flex-col items-center gap-1 self-center">
 			<nav ref={navRef} aria-label="Window Carousel" className="inline-flex h-10 shrink-0 items-center gap-1 rounded-[var(--app-corner-radius,16px)] bg-gray-50 px-2 dark:bg-gray-900">
 				<CommandButton commandId="window.previous" label="Previous Window" className="grid size-7 shrink-0 place-items-center rounded-md text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800">
 					<ChevronLeft aria-hidden="true" size={15} />

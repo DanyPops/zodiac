@@ -69,6 +69,17 @@ describe("expanded Workspace selection", () => {
 		expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
 	});
 
+	it("gives every Workspace row's icon the same inverted logo-chip style, independent of the row's own selected-state background", () => {
+		renderExpanded();
+		for (const entry of WORKSPACE_CATALOG) {
+			const row = screen.getByRole("button", { name: entry.title });
+			const chip = row.querySelector("span");
+			expect(chip).not.toBeNull();
+			expect(chip).toHaveClass("bg-gray-950");
+			expect(chip).toHaveClass("text-white");
+		}
+	});
+
 	it("shows a 'New Workspace' affordance below the list that fires onCreateWorkspace", () => {
 		const registry = createCommandRegistry({
 			commands: [
@@ -165,5 +176,25 @@ describe("collapsed Workspace quick selection", () => {
 		expect(screen.queryByRole("button", { name: "Command palette" })).not.toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: "Color theme" })).not.toBeInTheDocument();
+	});
+
+	it("places 'Create a new Workspace' directly after the last Workspace glyph, not pinned near the footer by leftover flex space", () => {
+		renderCollapsed();
+		const nav = screen.getByRole("navigation", { name: "Workspace quick selection" });
+		const buttons = Array.from(nav.querySelectorAll("button"));
+		const lastGlyphIndex = buttons.findIndex((button) => button.getAttribute("aria-label") === WORKSPACE_CATALOG[WORKSPACE_CATALOG.length - 1]!.title);
+		const createIndex = buttons.findIndex((button) => button.getAttribute("aria-label") === "Create a new Workspace");
+		expect(lastGlyphIndex).toBeGreaterThanOrEqual(0);
+		expect(createIndex).toBe(lastGlyphIndex + 1);
+	});
+
+	it("gives every Workspace glyph the same inverted logo-chip style (white icon, black border) regardless of selection", () => {
+		renderCollapsed();
+		for (const entry of WORKSPACE_CATALOG) {
+			const button = screen.getByRole("button", { name: entry.title });
+			expect(button).toHaveClass("bg-gray-950");
+			expect(button).toHaveClass("text-white");
+			expect(button).toHaveClass("border-gray-950");
+		}
 	});
 });
