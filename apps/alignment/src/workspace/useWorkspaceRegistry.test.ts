@@ -125,4 +125,23 @@ describe("useWorkspaceRegistry", () => {
 		expect(result.current.isChatDocked).toBe(false);
 		expect(result.current.workspace.chatVisible).toBe(true);
 	});
+
+	it("pinChat/unpinChat toggle chatPinned, and docked Chat only follows the active Window while unpinned", () => {
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+		act(() => result.current.dockChat("Chat"));
+		expect(result.current.chatPinned).toBe(false);
+
+		act(() => result.current.addWindow()); // window 1, active; Chat still in window 0
+		act(() => result.current.pinChat());
+		expect(result.current.chatPinned).toBe(true);
+
+		act(() => result.current.previousWindow()); // -> window 0
+		expect(result.current.chatPinned).toBe(true);
+
+		act(() => result.current.unpinChat());
+		expect(result.current.chatPinned).toBe(false);
+
+		act(() => result.current.nextWindow()); // -> window 1: Chat follows now that it's unpinned
+		expect(result.current.activeWindow.dockedSurfaces.some((surface) => surface.templateId === "chat")).toBe(true);
+	});
 });

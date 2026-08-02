@@ -11,6 +11,7 @@ import {
 	hideChat,
 	isChatDocked,
 	nextWindow,
+	pinChat,
 	previousWindow,
 	renameWindow,
 	scrollWindow,
@@ -18,6 +19,7 @@ import {
 	showChat,
 	surfaceBindingKindForToolName,
 	toggleChat,
+	unpinChat,
 	undockChatToFloating,
 	undockSurface,
 	type Workspace,
@@ -190,6 +192,81 @@ describe("Workspace window and Surface docking", () => {
 		it("undockChatToFloating is a safe no-op-shaped call when Chat isn't docked", () => {
 			const workspace = fixtureWorkspace();
 			expect(isChatDocked(undockChatToFloating(workspace))).toBe(false);
+		});
+
+		it("dockChat always starts unpinned, even if a stale pinned flag was somehow set", () => {
+			const workspace = pinChat({ ...fixtureWorkspace(), chatPinned: false });
+			expect(dockChat(workspace, "Chat").workspace.chatPinned).toBe(false);
+		});
+
+		it("undockChatToFloating resets pin state", () => {
+			const pinned = pinChat(dockChat(fixtureWorkspace(), "Chat").workspace);
+			expect(undockChatToFloating(pinned).chatPinned).toBe(false);
+		});
+
+		describe("pinChat / unpinChat", () => {
+			it("pinChat/unpinChat toggle chatPinned, idempotently returning the same reference when already in that state", () => {
+				const unpinned = fixtureWorkspace();
+				const pinned = pinChat(unpinned);
+				expect(pinned.chatPinned).toBe(true);
+				expect(pinChat(pinned)).toBe(pinned);
+
+				const backToUnpinned = unpinChat(pinned);
+				expect(backToUnpinned.chatPinned).toBe(false);
+				expect(unpinChat(backToUnpinned)).toBe(backToUnpinned);
+			});
+		});
+
+		describe("Chat follows the active Window while unpinned", () => {
+			it("nextWindow relocates docked, unpinned Chat into the newly active Window", () => {
+				let workspace = dockChat(fixtureWorkspace(), "Chat").workspace; // Chat in window 0
+				workspace = addWindow(workspace); // window 1, active, empty
+				workspace = selectWindow(workspace, 0); // back to window 0 where Chat lives
+
+				workspace = nextWindow(workspace); // -> window 1
+				expect(workspace.windows[0]?.dockedSurfaces).toEqual([]);
+				expect(activeWindow(workspace).dockedSurfaces.some((s) => s.templateId === CHAT_TEMPLATE_ID)).toBe(true);
+			});
+
+			it("previousWindow, selectWindow, and scrollWindow all relocate Chat the same way", () => {
+				let base = dockChat(fixtureWorkspace(), "Chat").workspace;
+				base = addWindow(base); // window 1, active, empty; Chat still in window 0
+
+				for (const move of [(w: Workspace) => previousWindow(w), (w: Workspace) => selectWindow(w, 0), (w: Workspace) => scrollWindow(w, -1)]) {
+					const moved = move(base);
+					expect(activeWindow(moved).dockedSurfaces.some((s) => s.templateId === CHAT_TEMPLATE_ID)).toBe(true);
+				}
+			});
+
+			it("scrolling past the end into a fresh ephemeral Window relocates Chat there too", () => {
+				const workspace = dockChat(fixtureWorkspace(), "Chat").workspace; // single Window, Chat docked
+				const scrolled = scrollWindow(workspace, 1); // creates + activates a new ephemeral Window
+				expect(scrolled.windows).toHaveLength(2);
+				expect(activeWindow(scrolled).dockedSurfaces.some((s) => s.templateId === CHAT_TEMPLATE_ID)).toBe(true);
+				expect(scrolled.windows[0]?.dockedSurfaces).toEqual([]);
+			});
+
+			it("pinned Chat stays in its Window instead of following", () => {
+				let workspace = pinChat(dockChat(fixtureWorkspace(), "Chat").workspace); // Chat pinned in window 0
+				workspace = addWindow(workspace); // window 1, active
+				workspace = selectWindow(workspace, 0);
+
+				workspace = nextWindow(workspace); // -> window 1, but Chat is pinned
+				expect(activeWindow(workspace).dockedSurfaces).toEqual([]);
+				expect(workspace.windows[0]?.dockedSurfaces.some((s) => s.templateId === CHAT_TEMPLATE_ID)).toBe(true);
+			});
+
+			it("does nothing when Chat isn't docked at all", () => {
+				let workspace = addWindow(fixtureWorkspace());
+				workspace = selectWindow(workspace, 0);
+				expect(() => nextWindow(workspace)).not.toThrow();
+				expect(isChatDocked(nextWindow(workspace))).toBe(false);
+			});
+
+			it("does nothing when the active Window index doesn't actually change (e.g. a single-Window wrap-to-self)", () => {
+				const workspace = dockChat(fixtureWorkspace(), "Chat").workspace;
+				expect(nextWindow(workspace)).toEqual(workspace);
+			});
 		});
 	});
 

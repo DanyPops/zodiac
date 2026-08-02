@@ -208,6 +208,8 @@ export function App(): React.JSX.Element {
 								onDraftChange={setDraft}
 								onComposerFocus={contexts.enterTextInput}
 								onUndockChat={workspace.undockChatToFloating}
+								chatPinned={workspace.chatPinned}
+								onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
 							/>
 						</Suspense>
 					</section>

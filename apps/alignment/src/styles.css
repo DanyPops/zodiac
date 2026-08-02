@@ -63,6 +63,8 @@
 
 	/* A calmer pulse than Tailwind's own animate-pulse: slower, shallower opacity dip. */
 	--animate-wisp-breathe: wisp-breathe 4s ease-in-out infinite;
+	/* Plays once on mount (not infinite) -- a visual cue that unpinned, docked Chat just traveled here with the active Window. */
+	--animate-chat-follow-bounce: chat-follow-bounce 0.3s ease-out;
 }
 
 @keyframes wisp-breathe {
@@ -72,6 +74,18 @@
 	}
 	50% {
 		opacity: 0.85;
+	}
+}
+
+@keyframes chat-follow-bounce {
+	0% {
+		transform: translateY(0);
+	}
+	40% {
+		transform: translateY(-6px);
+	}
+	100% {
+		transform: translateY(0);
 	}
 }
 

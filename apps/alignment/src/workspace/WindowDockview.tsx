@@ -1,10 +1,11 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { DockviewDefaultTab, DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type Position } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
-import { PanelLeftOpen } from "lucide-react";
+import { Feather, PanelLeftOpen, Pin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
+import { cn } from "../platform/cn.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
@@ -67,13 +68,20 @@ export interface DockedChatParams {
 	readonly onComposerFocus: () => void;
 	readonly siblingTitles: readonly string[];
 	readonly onUndock: () => void;
+	/** Unpinned (false) means Chat travels with the active Window -- see model.ts's withChatFollowing. */
+	readonly pinned: boolean;
+	readonly onTogglePin: () => void;
 }
 
 // eslint-disable-next-line sonarjs/prefer-read-only-props -- see SurfaceTemplatePanel above
 function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JSX.Element {
-	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock } = props.params;
+	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock, pinned } = props.params;
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		// animate-chat-follow-bounce plays once on mount -- a fresh mount happens
+		// naturally every time Chat relocates to a new active Window (each
+		// Window is its own DockviewReact instance, keyed by windowId), so this
+		// doubles as "Chat just traveled here" without extra remount logic.
+		<div className={cn("flex h-full min-h-0 flex-col", !pinned && "animate-chat-follow-bounce")}>
 			<div className="flex h-8 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
 				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
 				<button type="button" onClick={onUndock} aria-label="Undock Chat back to the floating overlay" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
@@ -86,6 +94,32 @@ function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JS
 			</div>
 		</div>
 	);
+}
+
+/** Chat's own tab: a feather (following/unpinned) or pin (pinned) toggle, hovering the icon while unpinned previews the pin -- an affordance for "click to pin". */
+function makeChatTab() {
+	return function ChatTab(props: IDockviewPanelHeaderProps<DockedChatParams>): React.JSX.Element {
+		const [hovering, setHovering] = useState(false);
+		const { pinned, onTogglePin } = props.params;
+		const showPinGlyph = pinned || hovering;
+		return (
+			<div className="relative flex items-center">
+				<DockviewDefaultTab {...props} />
+				<button
+					type="button"
+					onPointerDown={(event) => event.stopPropagation()}
+					onClick={onTogglePin}
+					onMouseEnter={() => setHovering(true)}
+					onMouseLeave={() => setHovering(false)}
+					aria-label={pinned ? "Unpin Chat from this Window" : "Pin Chat to this Window"}
+					aria-pressed={pinned}
+					className="absolute right-7 grid size-5 place-items-center rounded text-gray-400 hover:bg-gray-500/10 hover:text-gray-700 dark:hover:text-gray-200"
+				>
+					{showPinGlyph ? <Pin aria-hidden="true" size={11} /> : <Feather aria-hidden="true" size={11} />}
+				</button>
+			</div>
+		);
+	};
 }
 
 /** A domain-docked instance still awaiting placement in the docking engine -- carries the split direction (or `undefined` for the engine's own default) a keyboard or drag placement chose. */
@@ -115,6 +149,8 @@ interface WindowDockviewProps {
 	readonly onDraftChange: (value: string) => void;
 	readonly onComposerFocus: () => void;
 	readonly onUndockChat: () => void;
+	readonly chatPinned: boolean;
+	readonly onTogglePinChat: () => void;
 	/** Extension-registered Surface Templates (e.g. an ExtensionHost's), resolved alongside the built-in registry when rendering a docked panel. */
 	readonly extensionTemplates?: readonly SurfaceTemplateDefinition[];
 	/** Saves a new Surface Template from a docked Surface's own tab context menu (see makeDockedSurfaceTab/SaveAsTemplateDialog). */
@@ -137,6 +173,8 @@ export function WindowDockview({
 	onDraftChange,
 	onComposerFocus,
 	onUndockChat,
+	chatPinned,
+	onTogglePinChat,
 	extensionTemplates = [],
 	onSaveAsTemplate,
 }: WindowDockviewProps): React.JSX.Element {
@@ -148,6 +186,9 @@ export function WindowDockview({
 	const panelComponents = useMemo(() => ({ surfaceTemplate: makeSurfaceTemplatePanel(extensionTemplates), chatSurface: DockedChatPanel }), []);
 	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
 	const defaultTabComponent = useMemo(() => makeDockedSurfaceTab(extensionTemplates, (templateId, defaultTitle) => setSaveAsTemplateRequest({ templateId, defaultTitle })), []);
+	const chatTabComponent = useMemo(() => makeChatTab(), []);
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
+	const tabComponents = useMemo(() => ({ chatSurface: chatTabComponent }), []);
 
 	function chatParams(instance: DockedSurfaceInstance): DockedChatParams {
 		return {
@@ -159,6 +200,8 @@ export function WindowDockview({
 			onComposerFocus,
 			siblingTitles: dockedSurfaces.filter((surface) => surface.id !== instance.id).map((surface) => surface.title),
 			onUndock: onUndockChat,
+			pinned: chatPinned,
+			onTogglePin: onTogglePinChat,
 		};
 	}
 
@@ -252,7 +295,7 @@ export function WindowDockview({
 		if (!chatInstance || !mountedIdsRef.current.has(chatInstance.id)) return;
 		api.getPanel(chatInstance.id)?.api.updateParameters(chatParams(chatInstance));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- chatParams is a stable closure over the same props already listed
-	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat]);
+	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat, chatPinned, onTogglePinChat]);
 
 	return (
 		// themeLightSpaced/themeDarkSpaced (not themeLight/themeDark +
@@ -272,6 +315,7 @@ export function WindowDockview({
 				className="h-full"
 				components={panelComponents}
 				defaultTabComponent={defaultTabComponent}
+				tabComponents={tabComponents}
 				// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
 				theme={isDark ? themeAbyssSpaced : themeLightSpaced}
 				onReady={onReady}

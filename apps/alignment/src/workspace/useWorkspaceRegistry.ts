@@ -8,12 +8,14 @@ import {
 	hideChat,
 	isChatDocked,
 	nextWindow,
+	pinChat,
 	previousWindow,
 	renameWindow,
 	scrollWindow,
 	selectWindow,
 	showChat,
 	toggleChat,
+	unpinChat,
 	undockChatToFloating,
 	undockSurface,
 	type DockedSurfaceInstance,
@@ -46,6 +48,9 @@ export interface WorkspaceRegistryHandle {
 	isChatDocked: boolean;
 	dockChat: (title: string) => DockedSurfaceInstance;
 	undockChatToFloating: () => void;
+	chatPinned: boolean;
+	pinChat: () => void;
+	unpinChat: () => void;
 }
 
 /**
@@ -128,5 +133,8 @@ export function useWorkspaceRegistry(
 		isChatDocked: isChatDocked(workspace),
 		dockChat: dockChatSurface,
 		undockChatToFloating: () => update(undockChatToFloating),
+		chatPinned: workspace.chatPinned,
+		pinChat: () => update(pinChat),
+		unpinChat: () => update(unpinChat),
 	};
 }

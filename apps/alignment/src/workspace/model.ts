@@ -50,6 +50,13 @@ export interface Workspace {
 	 * a keymap, never part of any Window's dockedSurfaces.
 	 */
 	chatVisible: boolean;
+	/**
+	 * Only meaningful while Chat is docked. Unpinned (the default the moment
+	 * it docks) means Chat travels with whichever Window becomes active --
+	 * see the window-navigation functions below. Pinned locks it to whatever
+	 * specific Window it's currently in.
+	 */
+	chatPinned: boolean;
 }
 
 export interface WorkspaceDefinition {
@@ -76,6 +83,7 @@ export function createWorkspace(definition: WorkspaceDefinition): Workspace {
 		windows: [createWindow(1)],
 		activeWindowIndex: 0,
 		chatVisible: false,
+		chatPinned: false,
 	};
 }
 
@@ -92,24 +100,44 @@ export function activeWindow(workspace: Workspace): WorkspaceWindow {
 	return window;
 }
 
+/** If Chat is docked, unpinned, and the active Window just changed, relocates it into the new active Window -- Chat "travels" with Carousel navigation unless pinned. A no-op otherwise (including when Chat isn't docked at all). */
+function withChatFollowing(before: Workspace, after: Workspace): Workspace {
+	if (after.activeWindowIndex === before.activeWindowIndex) return after;
+	if (after.chatPinned || !isChatDocked(after)) return after;
+	return relocateChatToActiveWindow(after);
+}
+
+function relocateChatToActiveWindow(workspace: Workspace): Workspace {
+	let title = "Chat";
+	for (const window of workspace.windows) {
+		const chat = window.dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+		if (chat) {
+			title = chat.title;
+			break;
+		}
+	}
+	const withoutChat = { ...workspace, windows: workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) })) };
+	return dockSurface(withoutChat, CHAT_TEMPLATE_ID, title).workspace;
+}
+
 /**
  * Moves to the next Window, wrapping from the last back to the first --
  * the Window Carousel is a ring, not a clamped strip.
  */
 export function nextWindow(workspace: Workspace): Workspace {
-	return { ...workspace, activeWindowIndex: (workspace.activeWindowIndex + 1) % workspace.windows.length };
+	return withChatFollowing(workspace, { ...workspace, activeWindowIndex: (workspace.activeWindowIndex + 1) % workspace.windows.length });
 }
 
 /** Moves to the previous Window, wrapping from the first back to the last. */
 export function previousWindow(workspace: Workspace): Workspace {
 	const count = workspace.windows.length;
-	return { ...workspace, activeWindowIndex: (workspace.activeWindowIndex - 1 + count) % count };
+	return withChatFollowing(workspace, { ...workspace, activeWindowIndex: (workspace.activeWindowIndex - 1 + count) % count });
 }
 
 /** Jumps directly to a Window by index (e.g. clicking a specific entry in the Window Carousel). Throws for an out-of-bounds index -- a stale or mistyped index is a defect, not a case to silently clamp. */
 export function selectWindow(workspace: Workspace, index: number): Workspace {
 	if (index < 0 || index >= workspace.windows.length) throw new Error(`Workspace ${workspace.id} has no Window at index ${index}`);
-	return { ...workspace, activeWindowIndex: index };
+	return withChatFollowing(workspace, { ...workspace, activeWindowIndex: index });
 }
 
 /** Appends a new empty Window at the end (index -1, rightmost) and switches to it. */
@@ -148,11 +176,12 @@ export function scrollWindow(workspace: Workspace, direction: 1 | -1): Workspace
 		if (isEmptyEphemeral(currentWindow)) return workspace; // already at the transient slot -- nothing further to create
 		const newWindow: WorkspaceWindow = { ...createWindow(workspace.windows.length + 1), ephemeral: true };
 		const windows = direction > 0 ? [...workspace.windows, newWindow] : [newWindow, ...workspace.windows];
-		return { ...workspace, windows, activeWindowIndex: direction > 0 ? windows.length - 1 : 0 };
+		return withChatFollowing(workspace, { ...workspace, windows, activeWindowIndex: direction > 0 ? windows.length - 1 : 0 });
 	}
 
 	const moved = { ...workspace, activeWindowIndex: currentIndex + direction };
-	return isEmptyEphemeral(currentWindow) ? removeWindowAt(moved, currentIndex) : moved;
+	const pruned = isEmptyEphemeral(currentWindow) ? removeWindowAt(moved, currentIndex) : moved;
+	return withChatFollowing(workspace, pruned);
 }
 
 /** Docks a new Surface instance of `templateId` into the active Window. `binding` is optional -- omit it for a Surface with no real external system behind it (e.g. Activity). Returns the new Workspace and the instance's id, so a caller (e.g. the docking engine) can place it. */
@@ -217,18 +246,29 @@ export function isChatDocked(workspace: Workspace): boolean {
 /**
  * Docks the Chat Surface into the active Window, turning off its floating
  * overlay. Chat is a singleton -- docking it again (from a different Window,
- * or the same one) moves it rather than creating a second instance.
+ * or the same one) moves it rather than creating a second instance. Always
+ * starts unpinned ("following") -- pinning is a separate, explicit step.
  */
 export function dockChat(workspace: Workspace, title: string): { workspace: Workspace; instance: DockedSurfaceInstance } {
 	const withoutExistingChat = { ...workspace, windows: workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) })) };
 	const { workspace: docked, instance } = dockSurface(withoutExistingChat, CHAT_TEMPLATE_ID, title);
-	return { workspace: { ...docked, chatVisible: false }, instance };
+	return { workspace: { ...docked, chatVisible: false, chatPinned: false }, instance };
 }
 
-/** Removes Chat from wherever it's docked (a no-op if it isn't) and returns it to the floating overlay, visible. */
+/** Removes Chat from wherever it's docked (a no-op if it isn't) and returns it to the floating overlay, visible. Pin state resets -- it's only meaningful while docked. */
 export function undockChatToFloating(workspace: Workspace): Workspace {
 	const windows = workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) }));
-	return { ...workspace, windows, chatVisible: true };
+	return { ...workspace, windows, chatVisible: true, chatPinned: false };
+}
+
+/** Locks docked Chat to whichever Window it's currently in, stopping it from traveling with the active Window. A no-op (same reference back) if already pinned. */
+export function pinChat(workspace: Workspace): Workspace {
+	return workspace.chatPinned ? workspace : { ...workspace, chatPinned: true };
+}
+
+/** Unpins docked Chat, letting it resume traveling with the active Window. A no-op (same reference back) if already unpinned. */
+export function unpinChat(workspace: Workspace): Workspace {
+	return workspace.chatPinned ? { ...workspace, chatPinned: false } : workspace;
 }
 
 export function showChat(workspace: Workspace): Workspace {
