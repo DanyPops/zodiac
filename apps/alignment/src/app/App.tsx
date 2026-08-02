@@ -179,24 +179,20 @@ export function App(): React.JSX.Element {
 					onCreateWorkspace={() => setCreatingWorkspace(true)}
 				/>
 
+				{/* Notifications/WatchPill sit in the gap between each side Pillar and the center column -- not spread across the column's own full width, which would strand them far from both. */}
+				<div className="shrink-0 self-start">
+					<NotificationsPill />
+				</div>
+
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
-					{/* A 3-column grid, not a flex row: the Carousel (auto-width, its own centered column) stays truly centered regardless of how wide Notifications/WatchPill are on either side. */}
-					<div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-						<div className="flex justify-start">
-							<NotificationsPill />
-						</div>
-						<WindowCarousel
-							windowCount={workspace.workspace.windows.length}
-							activeIndex={workspace.workspace.activeWindowIndex}
-							onSelect={workspace.selectWindow}
-							onScroll={workspace.scrollWindow}
-							activeWindowTitle={workspace.activeWindow.title}
-							onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow.id, title)}
-						/>
-						<div className="flex justify-end">
-							<WatchPill />
-						</div>
-					</div>
+					<WindowCarousel
+						windowCount={workspace.workspace.windows.length}
+						activeIndex={workspace.workspace.activeWindowIndex}
+						onSelect={workspace.selectWindow}
+						onScroll={workspace.scrollWindow}
+						activeWindowTitle={workspace.activeWindow.title}
+						onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow.id, title)}
+					/>
 					<section
 						ref={canvasRef}
 						tabIndex={-1}
@@ -252,6 +248,10 @@ export function App(): React.JSX.Element {
 						dragging={chatDrag.dragging}
 						onDragHandlePointerDown={chatDrag.onDragHandlePointerDown}
 					/>
+				</div>
+
+				<div className="shrink-0 self-start">
+					<WatchPill />
 				</div>
 
 				<SurfaceTemplatesPillar entries={surfaceTemplates.entries} onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)} />
