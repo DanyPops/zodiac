@@ -1,4 +1,4 @@
-import { Bug, GitPullRequest, LineChart, MessageCircle } from "lucide-react";
+import { Bug, Flag, GitPullRequest, LineChart, Megaphone, MessageCircle, Rocket, Terminal } from "lucide-react";
 import type { ComponentType } from "react";
 import { addWindow, createWorkspace, selectWindow, type Workspace } from "./model.js";
 
@@ -6,6 +6,25 @@ interface WorkspaceGlyphIconProps {
 	"aria-hidden"?: boolean | "true" | "false";
 	size?: number;
 	className?: string;
+}
+
+/** The fixed set of glyphs offered when creating a new Workspace -- a component reference can't round-trip through Preferences, so a SavedWorkspace persists one of these keys instead (see workspace-catalog.tsx's isSavedWorkspace/useUserWorkspaces). */
+export const WORKSPACE_GLYPH_OPTIONS: Readonly<Record<string, ComponentType<WorkspaceGlyphIconProps>>> = {
+	bug: Bug,
+	metrics: LineChart,
+	chat: MessageCircle,
+	prs: GitPullRequest,
+	rocket: Rocket,
+	terminal: Terminal,
+	flag: Flag,
+	announcement: Megaphone,
+};
+
+export const DEFAULT_WORKSPACE_GLYPH_ID = "flag";
+
+/** A glyph id that doesn't name a known option (e.g. one from a since-removed WORKSPACE_GLYPH_OPTIONS entry) falls back to the default rather than rendering nothing. */
+export function resolveWorkspaceGlyph(glyphId: string): ComponentType<WorkspaceGlyphIconProps> {
+	return WORKSPACE_GLYPH_OPTIONS[glyphId] ?? WORKSPACE_GLYPH_OPTIONS[DEFAULT_WORKSPACE_GLYPH_ID]!;
 }
 
 /** One selectable Workspace in the left pillar -- a glyph, not a first-letter-of-title initial, since a Workspace's identity is what kind of work it holds, not its name. */

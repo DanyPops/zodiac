@@ -27,7 +27,9 @@ import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
 import { useChatVisibility } from "../workspace/useChatVisibility.js";
 import { useSurfaceTemplates } from "../workspace/useSurfaceTemplates.js";
 import { useWorkspaceListNavigation } from "../workspace/useWorkspaceListNavigation.js";
+import { useUserWorkspaces } from "../workspace/useUserWorkspaces.js";
 import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
+import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
@@ -58,7 +60,10 @@ export function App(): React.JSX.Element {
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
 	const conversationWorkspace = useConversationWorkspace(conversationClient);
-	const workspace = useWorkspaceRegistry(WORKSPACE_CATALOG, createDemoWorkspace, extensionHost);
+	const userWorkspaces = useUserWorkspaces(preferences);
+	const catalog = useMemo(() => [...WORKSPACE_CATALOG, ...userWorkspaces.entries], [userWorkspaces.entries]);
+	const workspace = useWorkspaceRegistry(catalog, createDemoWorkspace, extensionHost);
+	const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
@@ -167,6 +172,7 @@ export function App(): React.JSX.Element {
 					selectedButtonRef={selectedButtonRef}
 					onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
 					toolCallWorkspaceId={toolCallWorkspaceId}
+					onCreateWorkspace={() => setCreatingWorkspace(true)}
 				/>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
@@ -263,6 +269,15 @@ export function App(): React.JSX.Element {
 					value={visualDna.value}
 					onVibeChange={visualDna.setVibe}
 					onCornerSharpnessChange={visualDna.setCornerSharpness}
+				/>
+				<CreateWorkspaceDialog
+					open={creatingWorkspace}
+					onClose={() => setCreatingWorkspace(false)}
+					onCreate={(title, glyphId) => {
+						const id = userWorkspaces.createWorkspace(title, glyphId);
+						if (id) workspace.selectWorkspace(id);
+						setCreatingWorkspace(false);
+					}}
 				/>
 			</div>
 		</CommandProvider>

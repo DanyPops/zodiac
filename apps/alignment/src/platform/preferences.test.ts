@@ -57,6 +57,16 @@ describe("Alignment preferences", () => {
 		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([]);
 	});
 
+	it("round-trips bounded user-created Workspaces and rejects malformed storage", () => {
+		const storage = memoryStorage();
+		const preferences = createPreferences(storage);
+		preferences.setUserWorkspaces([{ id: "ws-1", title: "Deploys", glyphId: "rocket" }]);
+		expect(createPreferences(storage).userWorkspaces()).toEqual([{ id: "ws-1", title: "Deploys", glyphId: "rocket" }]);
+
+		storage.setItem("alignment.user-workspaces", JSON.stringify([{ id: "", title: "x", glyphId: "y" }, { id: 7 }]));
+		expect(createPreferences(storage).userWorkspaces()).toEqual([]);
+	});
+
 	it("round-trips a bounded, clamped Visual DNA and falls back on malformed storage", () => {
 		const storage = memoryStorage();
 		const preferences = createPreferences(storage);

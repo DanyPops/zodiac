@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import { useWorkspaceRegistry } from "./useWorkspaceRegistry.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
+function icon() {
+	return null;
+}
+
 const CATALOG: readonly WorkspaceCatalogEntry[] = [
 	{ id: "bug", title: "Bug", icon: () => null },
 	{ id: "metrics", title: "Metrics", icon: () => null },
@@ -107,6 +111,35 @@ describe("useWorkspaceRegistry", () => {
 
 		act(() => result.current.renameWindow(windowId, "Debugging"));
 		expect(result.current.activeWindow.title).toBe("Debugging");
+	});
+
+	it("lazily creates a Workspace for a catalog entry that appears after mount (e.g. a user-created Workspace), instead of only using the mount-time catalog", () => {
+		const { result, rerender } = renderHook((catalog: readonly WorkspaceCatalogEntry[]) => useWorkspaceRegistry(catalog), { initialProps: CATALOG });
+
+		const grown = [...CATALOG, { id: "deploys", title: "Deploys", icon }];
+		rerender(grown);
+
+		act(() => result.current.selectWorkspace("deploys"));
+		expect(result.current.workspace.id).toBe("deploys");
+		expect(result.current.activeWindow.dockedSurfaces).toEqual([]);
+	});
+
+	it("selecting a brand-new catalog entry in the same render pass it first appears in (before the reactive effect has materialized it) never throws", () => {
+		// Simulates App.tsx's real create-then-select flow: catalog grows and
+		// selectWorkspace(newId) both happen before any effect has run.
+		const { result, rerender } = renderHook((catalog: readonly WorkspaceCatalogEntry[]) => useWorkspaceRegistry(catalog), { initialProps: CATALOG });
+
+		const grown = [...CATALOG, { id: "deploys", title: "Deploys", icon }];
+		expect(() => {
+			rerender(grown);
+			act(() => result.current.selectWorkspace("deploys"));
+		}).not.toThrow();
+		expect(result.current.workspace.id).toBe("deploys");
+	});
+
+	it("still throws for a genuinely unknown id -- absent from both state and the current catalog", () => {
+		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+		expect(() => act(() => result.current.selectWorkspace("does-not-exist"))).toThrow(/no Workspace registered/i);
 	});
 
 	it("dockChat/isChatDocked/undockChatToFloating drive Chat between floating and docked", () => {

@@ -1,4 +1,4 @@
-import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Settings } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Settings } from "lucide-react";
 import type { RefObject } from "react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
@@ -14,6 +14,7 @@ interface WorkspaceSelectionProps {
 	readonly onWorkspaceFocus: () => void;
 	/** Real tool-call telemetry says the agent is currently acting against this Workspace, and Chat is global (undocked) -- see "Global chat: cross-workspace visibility cue". Undefined most of the time. */
 	readonly toolCallWorkspaceId?: string;
+	readonly onCreateWorkspace: () => void;
 }
 
 /**
@@ -25,7 +26,7 @@ interface WorkspaceSelectionProps {
  * in this list. Surface docking itself lives in the Window Carousel/center/
  * Surface Templates pillar instead.
  */
-export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId }: WorkspaceSelectionProps): React.JSX.Element {
+export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace }: WorkspaceSelectionProps): React.JSX.Element {
 	return (
 		<>
 			{!collapsed && (
@@ -48,18 +49,30 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					<div className="border-b-[length:var(--app-line-width)] border-gray-200 px-3 py-2 dark:border-gray-700">
 						<p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-600 dark:text-gray-300">Workspaces</p>
 					</div>
-					<ul aria-label="Workspaces" className="min-h-0 flex-1 overflow-auto p-2">
-						{catalog.map((entry) => (
-							<ExpandedCatalogItem
-								key={entry.id}
-								entry={entry}
-								selected={entry.id === activeWorkspaceId}
-								toolCallTarget={entry.id === toolCallWorkspaceId}
-								selectedButtonRef={selectedButtonRef}
-								onWorkspaceFocus={onWorkspaceFocus}
-							/>
-						))}
-					</ul>
+					<div className="flex min-h-0 flex-1 flex-col">
+						<ul aria-label="Workspaces" className="overflow-auto p-2">
+							{catalog.map((entry) => (
+								<ExpandedCatalogItem
+									key={entry.id}
+									entry={entry}
+									selected={entry.id === activeWorkspaceId}
+									toolCallTarget={entry.id === toolCallWorkspaceId}
+									selectedButtonRef={selectedButtonRef}
+									onWorkspaceFocus={onWorkspaceFocus}
+								/>
+							))}
+						</ul>
+						{/* Fills the whole remaining empty space below the list -- hovering anywhere in it (not just the visible dashed frame) reveals "New Workspace". */}
+						<button
+							type="button"
+							onClick={onCreateWorkspace}
+							aria-label="Create a new Workspace"
+							className="m-2 flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-dashed border-transparent text-xs text-gray-400 opacity-0 transition-opacity hover:border-gray-300 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-500 dark:hover:border-gray-600"
+						>
+							<Plus aria-hidden="true" size={14} />
+							New Workspace
+						</button>
+					</div>
 					{/* Expanded keeps every action as its own icon -- only the collapsed pillar folds these under one Settings entry. */}
 					<div className="grid grid-cols-4 gap-1 border-t-[length:var(--app-line-width)] border-gray-200 p-2 dark:border-gray-700">
 						<FooterCommand commandId="palette.open" label="Command palette" icon={<Command aria-hidden="true" size={15} />} />
@@ -84,6 +97,16 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 							/>
 						))}
 					</div>
+					<PillarTooltip side="right" label="Create a new Workspace">
+						<button
+							type="button"
+							onClick={onCreateWorkspace}
+							aria-label="Create a new Workspace"
+							className="mx-auto mb-1 grid size-9 shrink-0 place-items-center rounded-md border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-accent dark:border-gray-600 dark:hover:border-gray-500 dark:hover:text-gray-300"
+						>
+							<Plus aria-hidden="true" size={16} />
+						</button>
+					</PillarTooltip>
 					{/* Command palette/shortcuts/theme fold into the one Settings entry (its own dialog exposes all three as rows) -- the collapsed pillar has no room for four separate icons. */}
 					<div className="flex flex-col items-center gap-1 border-t-[length:var(--app-line-width)] border-gray-200 py-2 dark:border-gray-700">
 						<PillarCommand commandId="appearance.open" label="Settings" icon={<Settings aria-hidden="true" size={16} />} />

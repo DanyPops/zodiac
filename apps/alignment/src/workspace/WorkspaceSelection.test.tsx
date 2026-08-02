@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { getHotkeyManager } from "@tanstack/react-hotkeys";
 import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +13,7 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string) {
+function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string, onCreateWorkspace = vi.fn()) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "workspace.toggleSelection", title: "Toggle workspace selection", description: "", execute },
@@ -35,10 +35,11 @@ function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string) {
 				selectedButtonRef={createRef()}
 				onWorkspaceFocus={vi.fn()}
 				toolCallWorkspaceId={toolCallWorkspaceId}
+				onCreateWorkspace={onCreateWorkspace}
 			/>
 		</CommandProvider>,
 	);
-	return { execute };
+	return { execute, onCreateWorkspace };
 }
 
 function renderExpanded() {
@@ -54,7 +55,7 @@ function renderExpanded() {
 	});
 	render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} />
+			<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} />
 		</CommandProvider>,
 	);
 }
@@ -66,6 +67,27 @@ describe("expanded Workspace selection", () => {
 		expect(screen.getByRole("button", { name: "Keyboard shortcuts" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Cycle color theme" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+	});
+
+	it("shows a 'New Workspace' affordance below the list that fires onCreateWorkspace", () => {
+		const registry = createCommandRegistry({
+			commands: [
+				{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() },
+				{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
+				{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
+				{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
+				{ id: "appearance.open", title: "Open Settings", description: "", execute: vi.fn() },
+			],
+			bindings: [],
+		});
+		const onCreateWorkspace = vi.fn();
+		render(
+			<CommandProvider registry={registry} activeContexts={["global"]}>
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={onCreateWorkspace} />
+			</CommandProvider>,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Create a new Workspace" }));
+		expect(onCreateWorkspace).toHaveBeenCalledOnce();
 	});
 });
 
@@ -129,6 +151,12 @@ describe("collapsed Workspace quick selection", () => {
 	it("shows no tool-call ring when nothing correlates", () => {
 		renderCollapsed();
 		for (const entry of WORKSPACE_CATALOG) expect(screen.getByRole("button", { name: entry.title })).not.toHaveClass("ring-accent");
+	});
+
+	it("shows a 'Create a new Workspace' glyph that fires onCreateWorkspace", () => {
+		const { onCreateWorkspace } = renderCollapsed();
+		fireEvent.click(screen.getByRole("button", { name: "Create a new Workspace" }));
+		expect(onCreateWorkspace).toHaveBeenCalledOnce();
 	});
 
 	it("folds Command Palette/Keyboard Shortcuts/Cycle Theme into one Settings entry, unlike the expanded footer's four separate icons", () => {

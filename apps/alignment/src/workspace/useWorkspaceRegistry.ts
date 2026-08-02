@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	activeWindow,
 	addWindow,
@@ -77,13 +77,36 @@ export function useWorkspaceRegistry(
 	});
 	const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(() => catalog[0]?.id ?? "");
 
+	// `catalog` can grow after mount (e.g. a user creates a new Workspace via
+	// useUserWorkspaces) -- the state initializer above only runs once, so a
+	// newly-appeared entry needs its own Workspace lazily added here, not
+	// silently missing until the whole hook remounts.
+	useEffect(() => {
+		setWorkspaces((current) => {
+			const missing = catalog.filter((entry) => !current[entry.id]);
+			if (missing.length === 0) return current;
+			const next = { ...current };
+			for (const entry of missing) next[entry.id] = createInitialWorkspace(entry.id, entry.title);
+			return next;
+		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- createInitialWorkspace is expected to be a stable, top-level function reference (App.tsx passes createDemoWorkspace); re-running for every new closure identity would defeat the point.
+	}, [catalog]);
+
 	const maybeWorkspace = workspaces[activeWorkspaceId];
-	if (!maybeWorkspace) throw new Error(`useWorkspaceRegistry: no Workspace registered for id "${activeWorkspaceId}"`);
+	const catalogEntry = catalog.find((entry) => entry.id === activeWorkspaceId);
+	// An id absent from *both* the materialized `workspaces` state and the
+	// current `catalog` prop is a genuine caller defect (a stale or mistyped
+	// id) -- still throws. An id that's in `catalog` but not yet materialized
+	// (selectWorkspace called in the same tick as just creating it, before
+	// the reactive effect above has run) is expected and transient, not a
+	// bug: fall back to a fresh Workspace for this render rather than
+	// crashing on a timing window that self-heals on the next effect flush.
+	if (!maybeWorkspace && !catalogEntry) throw new Error(`useWorkspaceRegistry: no Workspace registered for id "${activeWorkspaceId}"`);
 	// A fresh binding, not the destructured lookup above: TS can't carry a
 	// `Workspace | undefined` narrowing through into the closures below, since
 	// they could (as far as the type system can tell) run after activeWorkspaceId
 	// changes -- a plain const assigned once here has no such ambiguity.
-	const workspace: Workspace = maybeWorkspace;
+	const workspace: Workspace = maybeWorkspace ?? createInitialWorkspace(activeWorkspaceId, catalogEntry!.title);
 
 	function update(transform: (current: Workspace) => Workspace): void {
 		setWorkspaces((current) => {
