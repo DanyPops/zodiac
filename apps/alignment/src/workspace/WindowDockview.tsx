@@ -1,11 +1,13 @@
-import { DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewReadyEvent, type IDockviewPanelProps, type Position } from "dockview-react";
+import * as ContextMenu from "@radix-ui/react-context-menu";
+import { DockviewDefaultTab, DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type Position } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import { PanelLeftOpen } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
+import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
 import { findSurfaceTemplate, type SurfaceTemplateDefinition } from "./surface-templates.js";
 
 // The debounced/idle-gated drop-preview policy the redesign settled on: a
@@ -19,6 +21,39 @@ function makeSurfaceTemplatePanel(extensionTemplates: readonly SurfaceTemplateDe
 		const template = findSurfaceTemplate(props.params.templateId, extensionTemplates);
 		if (!template) return <div className="p-4 text-sm text-danger-80">Unknown Surface Template &quot;{props.params.templateId}&quot;.</div>;
 		return <>{template.render()}</>;
+	};
+}
+
+/**
+ * The default tab for every docked Surface, adding a right-click "Save as
+ * template" item -- reached here instead of the Surface Templates pillar
+ * (see SurfaceTemplatesPillar's own doc comment). Only offered for a real,
+ * resolvable Surface Template that isn't the Chat singleton; Chat and an
+ * unknown/stale templateId fall through to the plain default tab.
+ */
+function makeDockedSurfaceTab(extensionTemplates: readonly SurfaceTemplateDefinition[], onRequestSaveAsTemplate: (templateId: string, defaultTitle: string) => void) {
+	return function DockedSurfaceTab(props: IDockviewPanelHeaderProps<{ readonly templateId?: string }>): React.JSX.Element {
+		const templateId = props.params.templateId;
+		const canSave = templateId !== undefined && templateId !== CHAT_TEMPLATE_ID && findSurfaceTemplate(templateId, extensionTemplates) !== undefined;
+		if (!canSave) return <DockviewDefaultTab {...props} />;
+
+		return (
+			<ContextMenu.Root>
+				<ContextMenu.Trigger asChild>
+					<DockviewDefaultTab {...props} />
+				</ContextMenu.Trigger>
+				<ContextMenu.Portal>
+					<ContextMenu.Content className="z-50 min-w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg outline-none dark:border-gray-700 dark:bg-gray-900">
+						<ContextMenu.Item
+							onSelect={() => onRequestSaveAsTemplate(templateId, props.api.title ?? templateId)}
+							className="cursor-pointer rounded px-2 py-1.5 text-xs text-gray-700 outline-none data-[highlighted]:bg-gray-100 dark:text-gray-200 dark:data-[highlighted]:bg-gray-800"
+						>
+							Save as template…
+						</ContextMenu.Item>
+					</ContextMenu.Content>
+				</ContextMenu.Portal>
+			</ContextMenu.Root>
+		);
 	};
 }
 
@@ -69,8 +104,8 @@ interface WindowDockviewProps {
 	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too (or float it, for Chat). */
 	readonly onPanelClosed: (instanceId: string) => void;
 	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined) => void;
-	/** The active panel's docked-Surface instance id, or undefined when the Window is empty -- lets a caller (e.g. "save as template") know what's currently focused without reaching into dockview's own panel model. */
-	readonly onActivePanelChange: (instanceId: string | undefined) => void;
+	/** The active panel's docked-Surface instance id, or undefined when the Window is empty. Optional -- no current caller needs it ("save as template" is now reached per-tab via context menu, not by tracking the active panel), but the real dockview event is still wired through for whichever future caller does. */
+	readonly onActivePanelChange?: (instanceId: string | undefined) => void;
 	readonly isDark: boolean;
 	/** Conversation data/actions, threaded through only for a docked Chat panel (see DockedChatParams). */
 	readonly conversationItems: readonly ConversationItem[];
@@ -82,6 +117,8 @@ interface WindowDockviewProps {
 	readonly onUndockChat: () => void;
 	/** Extension-registered Surface Templates (e.g. an ExtensionHost's), resolved alongside the built-in registry when rendering a docked panel. */
 	readonly extensionTemplates?: readonly SurfaceTemplateDefinition[];
+	/** Saves a new Surface Template from a docked Surface's own tab context menu (see makeDockedSurfaceTab/SaveAsTemplateDialog). */
+	readonly onSaveAsTemplate: (templateId: string, title: string) => void;
 }
 
 export function WindowDockview({
@@ -91,7 +128,7 @@ export function WindowDockview({
 	onPendingDockConsumed,
 	onPanelClosed,
 	onExternalTemplateDrop,
-	onActivePanelChange,
+	onActivePanelChange = () => {},
 	isDark,
 	conversationItems,
 	conversationLoading,
@@ -101,12 +138,16 @@ export function WindowDockview({
 	onComposerFocus,
 	onUndockChat,
 	extensionTemplates = [],
+	onSaveAsTemplate,
 }: WindowDockviewProps): React.JSX.Element {
 	const apiRef = useRef<DockviewReadyEvent["api"]>(undefined);
 	const mountedIdsRef = useRef<Set<string>>(new Set());
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
+	const [saveAsTemplateRequest, setSaveAsTemplateRequest] = useState<{ templateId: string; defaultTitle: string } | undefined>(undefined);
 	// eslint-disable-next-line react-hooks/exhaustive-deps -- extensionTemplates is expected to be a caller-memoized, effectively-static reference (see App.tsx); re-keying every panel component on each new array identity would be wrong here, not a missing dependency.
 	const panelComponents = useMemo(() => ({ surfaceTemplate: makeSurfaceTemplatePanel(extensionTemplates), chatSurface: DockedChatPanel }), []);
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
+	const defaultTabComponent = useMemo(() => makeDockedSurfaceTab(extensionTemplates, (templateId, defaultTitle) => setSaveAsTemplateRequest({ templateId, defaultTitle })), []);
 
 	function chatParams(instance: DockedSurfaceInstance): DockedChatParams {
 		return {
@@ -225,19 +266,31 @@ export function WindowDockview({
 		// element's className outright). A later-nested 0px redeclaration wins
 		// over any outer ancestor's inherited 12px, confirmed by inspecting
 		// the rendered DOM's computed --dv-border-radius, not assumed.
-		<DockviewReact
-			key={windowId}
-			className="h-full"
-			components={panelComponents}
-			// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
-			theme={isDark ? themeAbyssSpaced : themeLightSpaced}
-			onReady={onReady}
-			onDidDrop={(event) => {
-				const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
-				const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
-				if (templateId) onExternalTemplateDrop(templateId, event.position, event.group?.id);
-			}}
-			watermarkComponent={() => <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>}
-		/>
+		<>
+			<DockviewReact
+				key={windowId}
+				className="h-full"
+				components={panelComponents}
+				defaultTabComponent={defaultTabComponent}
+				// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
+				theme={isDark ? themeAbyssSpaced : themeLightSpaced}
+				onReady={onReady}
+				onDidDrop={(event) => {
+					const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
+					const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
+					if (templateId) onExternalTemplateDrop(templateId, event.position, event.group?.id);
+				}}
+				watermarkComponent={() => <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>}
+			/>
+			<SaveAsTemplateDialog
+				open={saveAsTemplateRequest !== undefined}
+				defaultTitle={saveAsTemplateRequest?.defaultTitle ?? ""}
+				onClose={() => setSaveAsTemplateRequest(undefined)}
+				onSave={(title) => {
+					if (saveAsTemplateRequest) onSaveAsTemplate(saveAsTemplateRequest.templateId, title);
+					setSaveAsTemplateRequest(undefined);
+				}}
+			/>
+		</>
 	);
 }

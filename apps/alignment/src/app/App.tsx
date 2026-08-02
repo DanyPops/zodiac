@@ -60,7 +60,6 @@ export function App(): React.JSX.Element {
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
-	const [activeDockedInstanceId, setActiveDockedInstanceId] = useState<string | undefined>(undefined);
 
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
 	const latestToolName = latestToolCallName(conversationWorkspace.conversationItems);
@@ -96,8 +95,6 @@ export function App(): React.JSX.Element {
 		}
 		workspace.undockSurface(instanceId);
 	}
-
-	const activeTemplateId = workspace.activeWindow.dockedSurfaces.find((surface) => surface.id === activeDockedInstanceId)?.templateId;
 
 	const registry = createAlignmentCommandRegistry(
 		{
@@ -197,9 +194,9 @@ export function App(): React.JSX.Element {
 									const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
 									if (template) dockTemplate(templateId, template.title, position, referenceGroupId);
 								}}
-								onActivePanelChange={setActiveDockedInstanceId}
 								isDark={theme.isDark}
 								extensionTemplates={extensionSurfaceTemplates}
+								onSaveAsTemplate={(templateId, title) => surfaceTemplates.saveAsTemplate(title, templateId)}
 								conversationItems={conversationWorkspace.conversationItems}
 								conversationLoading={conversationWorkspace.conversationLoading}
 								conversationError={conversationWorkspace.conversationError}
@@ -229,14 +226,7 @@ export function App(): React.JSX.Element {
 					/>
 				</div>
 
-				<SurfaceTemplatesPillar
-					entries={surfaceTemplates.entries}
-					onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)}
-					canSaveCurrent={activeTemplateId !== undefined}
-					onSaveCurrentAsTemplate={(title) => {
-						if (activeTemplateId) surfaceTemplates.saveAsTemplate(title, activeTemplateId);
-					}}
-				/>
+				<SurfaceTemplatesPillar entries={surfaceTemplates.entries} onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)} />
 
 				<CommandDialog
 					mode={contexts.dialogMode}

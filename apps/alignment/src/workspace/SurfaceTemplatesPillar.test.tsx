@@ -19,13 +19,12 @@ const ENTRIES: SurfaceTemplateEntry[] = [{ id: "activity", title: "Activity", ic
 function renderPillar(props: Partial<Parameters<typeof SurfaceTemplatesPillar>[0]> = {}) {
 	const registry = createCommandRegistry({ commands: [{ id: "templates.open", title: "Browse Surface Templates", description: "d", execute: vi.fn() }], bindings: [] });
 	const onDockDefault = vi.fn();
-	const onSaveCurrentAsTemplate = vi.fn();
 	render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<SurfaceTemplatesPillar entries={ENTRIES} onDockDefault={onDockDefault} canSaveCurrent={false} onSaveCurrentAsTemplate={onSaveCurrentAsTemplate} {...props} />
+			<SurfaceTemplatesPillar entries={ENTRIES} onDockDefault={onDockDefault} {...props} />
 		</CommandProvider>,
 	);
-	return { onDockDefault, onSaveCurrentAsTemplate };
+	return { onDockDefault };
 }
 
 describe("SurfaceTemplatesPillar", () => {
@@ -45,29 +44,8 @@ describe("SurfaceTemplatesPillar", () => {
 		expect(dataTransfer.setData).toHaveBeenCalledWith(TEMPLATE_DRAG_MIME_TYPE, "activity");
 	});
 
-	it("the save-as-template control is disabled when there is nothing active to save", () => {
-		renderPillar({ canSaveCurrent: false });
-		expect(screen.getByRole("button", { name: "Save the active docked Surface as a new template" })).toBeDisabled();
-	});
-
-	it("saving a template with a non-blank title calls onSaveCurrentAsTemplate and closes the form", () => {
-		const { onSaveCurrentAsTemplate } = renderPillar({ canSaveCurrent: true });
-		fireEvent.click(screen.getByRole("button", { name: "Save the active docked Surface as a new template" }));
-
-		const input = screen.getByLabelText("New template title");
-		fireEvent.change(input, { target: { value: "My View" } });
-		fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-		expect(onSaveCurrentAsTemplate).toHaveBeenCalledWith("My View");
-		expect(screen.queryByLabelText("New template title")).not.toBeInTheDocument();
-	});
-
-	it("Escape closes the save-as-template form without saving", () => {
-		const { onSaveCurrentAsTemplate } = renderPillar({ canSaveCurrent: true });
-		fireEvent.click(screen.getByRole("button", { name: "Save the active docked Surface as a new template" }));
-		fireEvent.keyDown(screen.getByLabelText("New template title"), { key: "Escape" });
-
-		expect(screen.queryByLabelText("New template title")).not.toBeInTheDocument();
-		expect(onSaveCurrentAsTemplate).not.toHaveBeenCalled();
+	it("carries no save-as-template affordance of its own -- that's reached from a docked Surface's own tab context menu instead", () => {
+		renderPillar();
+		expect(screen.queryByLabelText(/save.*template/i)).not.toBeInTheDocument();
 	});
 });
