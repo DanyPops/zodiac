@@ -60,6 +60,19 @@
 	--color-warning-30: #ffcc17;
 	--color-warning-80: #54330b;
 	--color-warning: #ffcc17;
+
+	/* A calmer pulse than Tailwind's own animate-pulse: slower, shallower opacity dip. */
+	--animate-wisp-breathe: wisp-breathe 4s ease-in-out infinite;
+}
+
+@keyframes wisp-breathe {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.85;
+	}
 }
 
 @layer base {

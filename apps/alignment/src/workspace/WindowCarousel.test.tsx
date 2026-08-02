@@ -34,14 +34,14 @@ describe("WindowCarousel", () => {
 		expect(screen.getByRole("button", { name: "0" })).not.toHaveAttribute("aria-current");
 	});
 
-	it("breathes continuously on the active Window, and only on hover/keyboard-focus for every other one", () => {
+	it("breathes continuously (the calm wisp-breathe animation, not Tailwind's default pulse) on the active Window, and only on hover/keyboard-focus for every other one", () => {
 		renderCarousel(3, 1, vi.fn());
 		const active = screen.getByRole("button", { name: "1" });
-		expect(active).toHaveClass("animate-pulse");
+		expect(active).toHaveClass("animate-wisp-breathe");
 		const inactive = screen.getByRole("button", { name: "0" });
-		expect(inactive.className).not.toMatch(/(?<!:)animate-pulse/);
-		expect(inactive).toHaveClass("hover:animate-pulse");
-		expect(inactive).toHaveClass("focus-visible:animate-pulse");
+		expect(inactive.className).not.toMatch(/(?<!:)animate-wisp-breathe/);
+		expect(inactive).toHaveClass("hover:animate-wisp-breathe");
+		expect(inactive).toHaveClass("focus-visible:animate-wisp-breathe");
 		expect(inactive).toHaveClass("motion-reduce:animate-none");
 	});
 
