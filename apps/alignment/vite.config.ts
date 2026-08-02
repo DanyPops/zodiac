@@ -6,6 +6,8 @@ import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { readSessionEvents } from "./src/ingest/session-jsonl-source.js";
 import { scanConversations } from "./src/server/conversations-api.js";
+import { createPiHttpRoutes } from "./src/pi/http-routes.js";
+import { createPiSessionRegistry } from "./src/pi/session-registry.js";
 
 const MAX_EVENTS_PER_CONVERSATION = 5_000;
 const SESSIONS_ROOT = join(homedir(), ".local/share/alef/sessions");
@@ -61,6 +63,42 @@ function writeJson(res: { statusCode: number; setHeader(name: string, value: str
 	res.setHeader("Content-Type", "application/json");
 	res.setHeader("Cache-Control", "no-store");
 	res.end(JSON.stringify(body));
+}
+
+/**
+ * Live Pi RPC sessions (real `pi --mode rpc` child processes), one per Chat
+ * surface that has sent a message. Module-level so the registry survives
+ * across requests within one dev-server process; disposeAll() on the Vite
+ * dev server's own "close" hook ensures a restart or Ctrl+C never leaves an
+ * orphaned `pi` process behind.
+ */
+function piApiPlugin(): Plugin {
+	const registry = createPiSessionRegistry();
+	const routes = createPiHttpRoutes(registry);
+
+	return {
+		name: "alignment-pi-api",
+		configureServer(server) {
+			server.middlewares.use("/api/pi/sessions", (req, res) => {
+				if (req.method !== "POST") {
+					res.statusCode = 405;
+					res.end();
+					return;
+				}
+				routes.createSession(req, res);
+			});
+			server.middlewares.use("/api/pi/prompt", (req, res) => {
+				void routes.sendPrompt(req, res);
+			});
+			server.middlewares.use("/api/pi/abort", (req, res) => {
+				routes.abort(req, res);
+			});
+			server.middlewares.use("/api/pi/events", (req, res) => {
+				routes.streamEvents(req, res);
+			});
+			server.httpServer?.once("close", () => registry.disposeAll());
+		},
+	};
 }
 
 function alignmentApiPlugin(): Plugin {
@@ -120,7 +158,7 @@ function alignmentApiPlugin(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [react(), tailwindcss(), alignmentApiPlugin()],
+	plugins: [react(), tailwindcss(), alignmentApiPlugin(), piApiPlugin()],
 	build: {
 		rollupOptions: {
 			input: { alignment: resolve(__dirname, "index.html") },
