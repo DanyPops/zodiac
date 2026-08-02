@@ -17,11 +17,28 @@ import { findSurfaceTemplate, type SurfaceTemplateDefinition } from "./surface-t
 // since the last sampled frame is at or below this threshold.
 const DRAG_HINT_IDLE_VELOCITY_PX_PER_MS = 0.5;
 
+// How long the fade-out plays before the panel is actually removed from
+// dockview -- matches --animate-surface-spawn's own scale but a touch
+// slower, since closing reads calmer as a slightly longer fade than the
+// spawn's snappier entrance.
+const CLOSE_FADE_MS = 220;
+
+interface SurfaceTemplatePanelParams {
+	readonly templateId: string;
+	/** True while fading out, just before the panel is actually removed -- see requestClose. */
+	readonly closing?: boolean;
+}
+
 function makeSurfaceTemplatePanel(extensionTemplates: readonly SurfaceTemplateDefinition[]) {
-	return function SurfaceTemplatePanel(props: IDockviewPanelProps<{ readonly templateId: string }>): React.JSX.Element {
+	return function SurfaceTemplatePanel(props: IDockviewPanelProps<SurfaceTemplatePanelParams>): React.JSX.Element {
 		const template = findSurfaceTemplate(props.params.templateId, extensionTemplates);
-		if (!template) return <div className="p-4 text-sm text-danger-80">Unknown Surface Template &quot;{props.params.templateId}&quot;.</div>;
-		return <>{template.render()}</>;
+		const content = !template ? <div className="p-4 text-sm text-danger-80">Unknown Surface Template &quot;{props.params.templateId}&quot;.</div> : <>{template.render()}</>;
+		return (
+			// animate-surface-spawn plays once on mount (a bubble-expand-in); the
+			// opacity transition below only ever activates later, on close -- the
+			// two never run at the same time in practice.
+			<div className={cn("h-full animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", props.params.closing ? "opacity-0" : "opacity-100")}>{content}</div>
+		);
 	};
 }
 
@@ -32,16 +49,16 @@ function makeSurfaceTemplatePanel(extensionTemplates: readonly SurfaceTemplateDe
  * resolvable Surface Template that isn't the Chat singleton; Chat and an
  * unknown/stale templateId fall through to the plain default tab.
  */
-function makeDockedSurfaceTab(extensionTemplates: readonly SurfaceTemplateDefinition[], onRequestSaveAsTemplate: (templateId: string, defaultTitle: string) => void) {
-	return function DockedSurfaceTab(props: IDockviewPanelHeaderProps<{ readonly templateId?: string }>): React.JSX.Element {
+function makeDockedSurfaceTab(extensionTemplates: readonly SurfaceTemplateDefinition[], onRequestSaveAsTemplate: (templateId: string, defaultTitle: string) => void, onRequestClose: (instanceId: string) => void) {
+	return function DockedSurfaceTab(props: IDockviewPanelHeaderProps<SurfaceTemplatePanelParams>): React.JSX.Element {
 		const templateId = props.params.templateId;
-		const canSave = templateId !== undefined && templateId !== CHAT_TEMPLATE_ID && findSurfaceTemplate(templateId, extensionTemplates) !== undefined;
-		if (!canSave) return <DockviewDefaultTab {...props} />;
+		const canSave = templateId !== CHAT_TEMPLATE_ID && findSurfaceTemplate(templateId, extensionTemplates) !== undefined;
+		if (!canSave) return <DockviewDefaultTab {...props} closeActionOverride={() => onRequestClose(props.api.id)} />;
 
 		return (
 			<ContextMenu.Root>
 				<ContextMenu.Trigger asChild>
-					<DockviewDefaultTab {...props} />
+					<DockviewDefaultTab {...props} closeActionOverride={() => onRequestClose(props.api.id)} />
 				</ContextMenu.Trigger>
 				<ContextMenu.Portal>
 					<ContextMenu.Content className="z-50 min-w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg outline-none dark:border-gray-700 dark:bg-gray-900">
@@ -71,17 +88,19 @@ export interface DockedChatParams {
 	/** Unpinned (false) means Chat travels with the active Window -- see model.ts's withChatFollowing. */
 	readonly pinned: boolean;
 	readonly onTogglePin: () => void;
+	/** True while fading out, just before the panel is actually removed -- see requestClose. */
+	readonly closing: boolean;
 }
 
 // eslint-disable-next-line sonarjs/prefer-read-only-props -- see SurfaceTemplatePanel above
 function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JSX.Element {
-	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock, pinned } = props.params;
+	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock, pinned, closing } = props.params;
 	return (
-		// animate-chat-follow-bounce plays once on mount -- a fresh mount happens
-		// naturally every time Chat relocates to a new active Window (each
-		// Window is its own DockviewReact instance, keyed by windowId), so this
-		// doubles as "Chat just traveled here" without extra remount logic.
-		<div className={cn("flex h-full min-h-0 flex-col", !pinned && "animate-chat-follow-bounce")}>
+		// animate-chat-follow-bounce and animate-surface-spawn both play once on
+		// mount (a fresh mount happens naturally every time Chat relocates to a
+		// new active Window, each Window its own DockviewReact instance) -- the
+		// opacity transition only ever activates later, on close.
+		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", !pinned && "animate-chat-follow-bounce", closing ? "opacity-0" : "opacity-100")}>
 			<div className="flex h-8 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
 				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
 				<button type="button" onClick={onUndock} aria-label="Undock Chat back to the floating overlay" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
@@ -97,14 +116,14 @@ function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JS
 }
 
 /** Chat's own tab: a feather (following/unpinned) or pin (pinned) toggle, hovering the icon while unpinned previews the pin -- an affordance for "click to pin". */
-function makeChatTab() {
+function makeChatTab(onRequestClose: (instanceId: string) => void) {
 	return function ChatTab(props: IDockviewPanelHeaderProps<DockedChatParams>): React.JSX.Element {
 		const [hovering, setHovering] = useState(false);
 		const { pinned, onTogglePin } = props.params;
 		const showPinGlyph = pinned || hovering;
 		return (
 			<div className="relative flex items-center">
-				<DockviewDefaultTab {...props} />
+				<DockviewDefaultTab {...props} closeActionOverride={() => onRequestClose(props.api.id)} />
 				<button
 					type="button"
 					onPointerDown={(event) => event.stopPropagation()}
@@ -182,11 +201,29 @@ export function WindowDockview({
 	const mountedIdsRef = useRef<Set<string>>(new Set());
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
 	const [saveAsTemplateRequest, setSaveAsTemplateRequest] = useState<{ templateId: string; defaultTitle: string } | undefined>(undefined);
-	// eslint-disable-next-line react-hooks/exhaustive-deps -- extensionTemplates is expected to be a caller-memoized, effectively-static reference (see App.tsx); re-keying every panel component on each new array identity would be wrong here, not a missing dependency.
+	// Ids currently mid-fade, just before their real dockview removal --
+	// requestClose below owns the whole lifecycle (mark closing, wait
+	// CLOSE_FADE_MS, then the real api.close()).
+	const [closingIds, setClosingIds] = useState<ReadonlySet<string>>(new Set());
+
+	function requestClose(instanceId: string): void {
+		setClosingIds((current) => new Set(current).add(instanceId));
+		setTimeout(() => {
+			apiRef.current?.getPanel(instanceId)?.api.close();
+			setClosingIds((current) => {
+				if (!current.has(instanceId)) return current;
+				const next = new Set(current);
+				next.delete(instanceId);
+				return next;
+			});
+		}, CLOSE_FADE_MS);
+	}
+
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- extensionTemplates is expected to be a caller-memoized, effectively-static reference (see App.tsx); re-keying every panel component on each new array identity would be wrong here, not a missing dependency. requestClose is a stable closure over refs/setState, not reactive state.
 	const panelComponents = useMemo(() => ({ surfaceTemplate: makeSurfaceTemplatePanel(extensionTemplates), chatSurface: DockedChatPanel }), []);
 	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
-	const defaultTabComponent = useMemo(() => makeDockedSurfaceTab(extensionTemplates, (templateId, defaultTitle) => setSaveAsTemplateRequest({ templateId, defaultTitle })), []);
-	const chatTabComponent = useMemo(() => makeChatTab(), []);
+	const defaultTabComponent = useMemo(() => makeDockedSurfaceTab(extensionTemplates, (templateId, defaultTitle) => setSaveAsTemplateRequest({ templateId, defaultTitle }), requestClose), []);
+	const chatTabComponent = useMemo(() => makeChatTab(requestClose), []);
 	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
 	const tabComponents = useMemo(() => ({ chatSurface: chatTabComponent }), []);
 
@@ -202,7 +239,12 @@ export function WindowDockview({
 			onUndock: onUndockChat,
 			pinned: chatPinned,
 			onTogglePin: onTogglePinChat,
+			closing: closingIds.has(instance.id),
 		};
+	}
+
+	function surfaceTemplateParams(instance: DockedSurfaceInstance): SurfaceTemplatePanelParams {
+		return { templateId: instance.templateId, closing: closingIds.has(instance.id) };
 	}
 
 	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string): void {
@@ -213,7 +255,7 @@ export function WindowDockview({
 			id: instance.id,
 			component: isChat ? "chatSurface" : "surfaceTemplate",
 			title: instance.title,
-			params: isChat ? chatParams(instance) : { templateId: instance.templateId },
+			params: isChat ? chatParams(instance) : surfaceTemplateParams(instance),
 			position: position ? { direction: positionToDirection(position), referenceGroup: referenceGroupId } : undefined,
 		});
 		mountedIdsRef.current.add(instance.id);
@@ -295,7 +337,20 @@ export function WindowDockview({
 		if (!chatInstance || !mountedIdsRef.current.has(chatInstance.id)) return;
 		api.getPanel(chatInstance.id)?.api.updateParameters(chatParams(chatInstance));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- chatParams is a stable closure over the same props already listed
-	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat, chatPinned, onTogglePinChat]);
+	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat, chatPinned, onTogglePinChat, closingIds]);
+
+	// Pushes the fading-out `closing` flag live into every currently-mounted
+	// panel's params (chat's own effect above already covers chat's case via
+	// chatParams -- this one is for ordinary Surface Template panels).
+	useEffect(() => {
+		const api = apiRef.current;
+		if (!api) return;
+		for (const instance of dockedSurfaces) {
+			if (instance.templateId === CHAT_TEMPLATE_ID || !mountedIdsRef.current.has(instance.id)) continue;
+			api.getPanel(instance.id)?.api.updateParameters(surfaceTemplateParams(instance));
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- surfaceTemplateParams is a stable closure over closingIds, already listed
+	}, [dockedSurfaces, closingIds]);
 
 	return (
 		// themeLightSpaced/themeDarkSpaced (not themeLight/themeDark +
