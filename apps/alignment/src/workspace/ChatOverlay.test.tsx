@@ -86,4 +86,11 @@ describe("ChatOverlay", () => {
 		expect(screen.queryByText("First message")).not.toBeInTheDocument();
 		expect(screen.getByText("Most recent reply")).toBeInTheDocument();
 	});
+
+	it("the peek row shares the composer's own horizontal padding, so their edges line up", () => {
+		renderOverlay(true, MESSAGES);
+		const peekRow = screen.getByRole("button", { name: "Expand chat to the full conversation" });
+		expect(peekRow.className).toContain("p-3");
+		expect(peekRow.className).not.toContain("px-4");
+	});
 });

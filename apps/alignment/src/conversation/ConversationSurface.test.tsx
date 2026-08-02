@@ -86,4 +86,21 @@ describe("ConversationSurface", () => {
 		renderSurface(FIXTURES.fallback);
 		expect(screen.getByText("internal/session.name")).toBeInTheDocument();
 	});
+
+	describe("Composer", () => {
+		it("spans edge-to-edge of its own container, not inset by a separate max-w-3xl", () => {
+			renderSurface(FIXTURES.empty);
+			const input = screen.getByLabelText("Message Alef");
+			const row = input.parentElement as HTMLElement;
+			expect(row.className).not.toContain("max-w-3xl");
+			expect(row.className).not.toContain("mx-auto");
+		});
+
+		it("the send button's height tracks the composer row instead of a fixed square", () => {
+			renderSurface(FIXTURES.empty);
+			const button = screen.getByRole("button", { name: "Send message" });
+			expect(button.className).not.toContain("size-9");
+			expect(button.className).toContain("self-stretch");
+		});
+	});
 });

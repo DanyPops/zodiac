@@ -90,11 +90,12 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 				</div>
 			) : (
 				<>
+					{/* p-3, matching Composer's own outer padding below -- same left/right edges, not independently centered. */}
 					<button
 						type="button"
 						onClick={() => setExpanded(true)}
 						aria-label="Expand chat to the full conversation"
-						className="flex min-h-0 flex-1 flex-col items-stretch gap-1 overflow-hidden px-4 py-2 text-left hover:bg-gray-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent dark:hover:bg-gray-800/60"
+						className="flex min-h-0 flex-1 flex-col items-stretch gap-1 overflow-hidden p-3 text-left hover:bg-gray-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent dark:hover:bg-gray-800/60"
 					>
 						<span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
 							<ChevronUp aria-hidden="true" size={11} />
