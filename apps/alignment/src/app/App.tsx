@@ -1,5 +1,5 @@
 import type { Position } from "dockview-react";
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CommandDialog } from "../commands/CommandDialog.js";
 import { createAlignmentCommandRegistry } from "../commands/defaults.js";
 import { CommandProvider } from "../commands/react.js";
@@ -33,6 +33,8 @@ import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
 import { NotificationsPill } from "../workspace/NotificationsPill.js";
+import { DockRulerFrame, type DockRulerFrameBox } from "../workspace/DockRulerFrame.js";
+import type { DockRulerFrameMark } from "../workspace/dock-ruler.js";
 import { WatchPill } from "../workspace/WatchPill.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
@@ -70,6 +72,16 @@ export function App(): React.JSX.Element {
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
+	// The Dock Ruler frame's own visibility (the whole drag's duration, driven
+	// by the Surface Templates pillar's own dragstart/dragend -- not tied to
+	// hovering a specific drop target), its live highlighted mark (from
+	// WindowDockview's own onWillShowOverlay, converted to page space), and the
+	// dock canvas's own measured box to anchor the frame's bars around --
+	// canvasRef lives below, measured fresh whenever a drag starts since the
+	// frame's position: fixed bars need real page coordinates, not a layout ref.
+	const [templateDragging, setTemplateDragging] = useState(false);
+	const [dockRulerMark, setDockRulerMark] = useState<DockRulerFrameMark | undefined>(undefined);
+	const [dockCanvasBox, setDockCanvasBox] = useState<DockRulerFrameBox | undefined>(undefined);
 
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
 	const dragTracker = useMemo(() => createWindowDragTracker(), []);
@@ -84,6 +96,20 @@ export function App(): React.JSX.Element {
 	const selectionRef = useRef<HTMLElement>(null);
 	const canvasRef = useRef<HTMLElement>(null);
 	const workspaceNavigation = useWorkspaceListNavigation(selectionRef);
+
+	useEffect(() => {
+		if (!templateDragging) {
+			setDockCanvasBox(undefined);
+			return;
+		}
+		function measure(): void {
+			const rect = canvasRef.current?.getBoundingClientRect();
+			setDockCanvasBox(rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : undefined);
+		}
+		measure();
+		window.addEventListener("resize", measure);
+		return () => window.removeEventListener("resize", measure);
+	}, [templateDragging]);
 
 	function focusSelectedWorkspaceButton(): void {
 		requestAnimationFrame(() => selectedButtonRef.current?.focus());
@@ -226,6 +252,7 @@ export function App(): React.JSX.Element {
 								onUndockChat={workspace.undockChatToFloating}
 								chatPinned={workspace.chatPinned}
 								onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
+								onDockRulerHintChange={setDockRulerMark}
 							/>
 						</Suspense>
 					</section>
@@ -255,7 +282,13 @@ export function App(): React.JSX.Element {
 					<WatchPill />
 				</div>
 
-				<SurfaceTemplatesPillar entries={surfaceTemplates.entries} onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)} />
+				<SurfaceTemplatesPillar
+					entries={surfaceTemplates.entries}
+					onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)}
+					onTemplateDragStart={() => setTemplateDragging(true)}
+					onTemplateDragEnd={() => setTemplateDragging(false)}
+				/>
+				<DockRulerFrame visible={templateDragging} box={dockCanvasBox} mark={dockRulerMark} />
 
 				<CommandDialog
 					mode={contexts.dialogMode}

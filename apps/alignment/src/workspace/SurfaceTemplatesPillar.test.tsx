@@ -58,6 +58,20 @@ describe("SurfaceTemplatesPillar", () => {
 		expect(dataTransfer.setData).toHaveBeenCalledWith(TEMPLATE_DRAG_MIME_TYPE, "activity");
 	});
 
+	it("reports drag start/end so a parent can show the Dock Ruler frame for the drag's whole duration, not just while hovering a drop target", () => {
+		const onTemplateDragStart = vi.fn();
+		const onTemplateDragEnd = vi.fn();
+		renderPillar({ onTemplateDragStart, onTemplateDragEnd });
+		const glyph = screen.getByRole("button", { name: "Dock Activity" });
+
+		fireEvent.dragStart(glyph, { dataTransfer: { setData: vi.fn() } });
+		expect(onTemplateDragStart).toHaveBeenCalledOnce();
+		expect(onTemplateDragEnd).not.toHaveBeenCalled();
+
+		fireEvent.dragEnd(glyph);
+		expect(onTemplateDragEnd).toHaveBeenCalledOnce();
+	});
+
 	it("carries no save-as-template affordance of its own -- that's reached from a docked Surface's own tab context menu instead", () => {
 		renderPillar();
 		expect(screen.queryByLabelText(/save.*template/i)).not.toBeInTheDocument();

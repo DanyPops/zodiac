@@ -73,3 +73,31 @@ export function computeDockRulerHint(offsetX: number, offsetY: number, width: nu
 	}
 	return { axis: "vertical", edge: yRatio < 0.5 ? "top" : "bottom", guide: nearestDockRulerGuide(yRatio, guides) };
 }
+
+interface DockRulerTargetBox {
+	readonly left: number;
+	readonly top: number;
+	readonly width: number;
+	readonly height: number;
+}
+
+export interface DockRulerFrameMark {
+	readonly axis: DockRulerAxis;
+	/** Absolute page-space coordinate (an X for "horizontal", a Y for "vertical") of the live split point. */
+	readonly position: number;
+	readonly label: string;
+}
+
+/**
+ * Converts a hint computed relative to one drop target's own box (a nested
+ * split's sub-group, most of the time the same box as the whole dock
+ * canvas) into an absolute page-space mark. The DockRulerFrame renders
+ * around the *whole* canvas, not any one group inside it, so it needs a
+ * real page coordinate to place the live marker correctly -- one that can
+ * legitimately fall between the frame's own generic canvas-wide reference
+ * ticks when the target is a nested sub-group rather than the whole canvas.
+ */
+export function dockRulerFrameMark(hint: DockRulerHint, targetBox: DockRulerTargetBox): DockRulerFrameMark {
+	if (hint.axis === "horizontal") return { axis: "horizontal", position: targetBox.left + hint.guide.ratio * targetBox.width, label: hint.guide.label };
+	return { axis: "vertical", position: targetBox.top + hint.guide.ratio * targetBox.height, label: hint.guide.label };
+}

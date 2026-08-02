@@ -8,7 +8,7 @@ import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { DockRuler } from "./DockRuler.js";
-import { computeDockRulerHint, type DockRulerHint } from "./dock-ruler.js";
+import { computeDockRulerHint, dockRulerFrameMark, type DockRulerFrameMark, type DockRulerHint } from "./dock-ruler.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
@@ -183,6 +183,8 @@ interface WindowDockviewProps {
 	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too (or float it, for Chat). */
 	readonly onPanelClosed: (instanceId: string) => void;
 	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined, newGroupSizeRatio: number | undefined) => void;
+	/** The Dock Ruler's outer frame (DockRulerFrame, rendered outside this Window's own overflow-hidden canvas by a parent) needs the live hint too, converted into an absolute page-space mark -- undefined outside a drag, once the pointer leaves the target, or in the small center dead-zone. */
+	readonly onDockRulerHintChange?: (mark: DockRulerFrameMark | undefined) => void;
 	/** The active panel's docked-Surface instance id, or undefined when the Window is empty. Optional -- no current caller needs it ("save as template" is now reached per-tab via context menu, not by tracking the active panel), but the real dockview event is still wired through for whichever future caller does. */
 	readonly onActivePanelChange?: (instanceId: string | undefined) => void;
 	readonly isDark: boolean;
@@ -209,6 +211,7 @@ export function WindowDockview({
 	onPendingDockConsumed,
 	onPanelClosed,
 	onExternalTemplateDrop,
+	onDockRulerHintChange = () => {},
 	onActivePanelChange = () => {},
 	isDark,
 	conversationItems,
@@ -349,11 +352,13 @@ export function WindowDockview({
 				const hint = wrapper ? dockRulerHintFromEvent(overlayEvent.nativeEvent, overlayEvent.group.element) : undefined;
 				if (!hint || !wrapper) {
 					setDockRulerBox(undefined);
+					onDockRulerHintChange(undefined);
 					return;
 				}
 				const groupBox = overlayEvent.group.element.getBoundingClientRect();
 				const wrapperBox = wrapper.getBoundingClientRect();
 				setDockRulerBox({ left: groupBox.left - wrapperBox.left, top: groupBox.top - wrapperBox.top, width: groupBox.width, height: groupBox.height, hint });
+				onDockRulerHintChange(dockRulerFrameMark(hint, groupBox));
 				return;
 			}
 
@@ -361,6 +366,7 @@ export function WindowDockview({
 			// 'edge' overlay, tab/header_space) keeps its original debounced
 			// behavior, untouched by the Dock Ruler.
 			setDockRulerBox(undefined);
+			onDockRulerHintChange(undefined);
 			const point = overlayEvent.nativeEvent instanceof DragEvent || overlayEvent.nativeEvent instanceof PointerEvent ? { x: overlayEvent.nativeEvent.clientX, y: overlayEvent.nativeEvent.clientY, t: Date.now() } : null;
 			const last = lastMoveRef.current;
 			if (point) lastMoveRef.current = point;
@@ -446,7 +452,10 @@ export function WindowDockview({
 					// dragleave fires when moving between a wrapper's own children too --
 					// only actually clear the ruler once the pointer has left the whole
 					// wrapper, not just crossed an internal element boundary.
-					if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDockRulerBox(undefined);
+					if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+						setDockRulerBox(undefined);
+						onDockRulerHintChange(undefined);
+					}
 				}}
 			>
 				<DockviewReact
@@ -462,6 +471,7 @@ export function WindowDockview({
 						const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
 						const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
 						setDockRulerBox(undefined);
+						onDockRulerHintChange(undefined);
 						if (!templateId) return;
 						// Recompute the same hint fresh, rather than trusting dockview's own
 						// reported `event.position` -- its quadrant thresholds are much

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDockRulerHint, dockRulerGuides, nearestDockRulerGuide } from "./dock-ruler.js";
+import { computeDockRulerHint, dockRulerFrameMark, dockRulerGuides, nearestDockRulerGuide } from "./dock-ruler.js";
 
 describe("dockRulerGuides", () => {
 	it("produces every reduced fraction from denominators 2 through 6, deduped", () => {
@@ -73,5 +73,27 @@ describe("computeDockRulerHint", () => {
 
 	it("is undefined for a zero-sized target", () => {
 		expect(computeDockRulerHint(0, 0, 0, 0)).toBeUndefined();
+	});
+});
+
+describe("dockRulerFrameMark", () => {
+	const box = { left: 100, top: 50, width: 400, height: 200 };
+
+	it("projects a horizontal hint onto an absolute page-space X, relative to the target's own left edge", () => {
+		const mark = dockRulerFrameMark({ axis: "horizontal", edge: "left", guide: { ratio: 1 / 4, label: "1/4" } }, box);
+		expect(mark).toEqual({ axis: "horizontal", position: 200, label: "1/4" }); // 100 + 0.25 * 400
+	});
+
+	it("projects a vertical hint onto an absolute page-space Y, relative to the target's own top edge", () => {
+		const mark = dockRulerFrameMark({ axis: "vertical", edge: "bottom", guide: { ratio: 3 / 4, label: "3/4" } }, box);
+		expect(mark).toEqual({ axis: "vertical", position: 200, label: "3/4" }); // 50 + 0.75 * 200
+	});
+
+	it("a nested sub-group's own fraction can legitimately fall between the whole-canvas frame's own reference ticks", () => {
+		// A sub-group occupying only the right half of a wider canvas (left: 300) -- its own 1/2 doesn't land on any
+		// whole-canvas guide, which is expected: the frame shows a distinct marker, not a snap onto its own grid.
+		const subGroupBox = { left: 300, top: 50, width: 200, height: 200 };
+		const mark = dockRulerFrameMark({ axis: "horizontal", edge: "left", guide: { ratio: 1 / 2, label: "1/2" } }, subGroupBox);
+		expect(mark.position).toBe(400); // 300 + 0.5 * 200 -- not a round fraction of the outer 100..500 canvas
 	});
 });

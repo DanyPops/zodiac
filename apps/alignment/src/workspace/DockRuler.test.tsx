@@ -2,22 +2,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { DockRuler } from "./DockRuler.js";
-import { dockRulerGuides } from "./dock-ruler.js";
-
-const GUIDE_COUNT = dockRulerGuides().length;
 
 afterEach(cleanup);
 
 describe("DockRuler", () => {
 	it("never intercepts pointer/drag events -- it's a pure visual overlay above the native drag target", () => {
 		render(<DockRuler width={400} height={200} hint={{ axis: "horizontal", edge: "left", guide: { ratio: 1 / 3, label: "1/3" } }} />);
-		expect(screen.getByTestId("dock-ruler")).toHaveClass("pointer-events-none");
-	});
-
-	it("renders one tick per guide, plus the active one labeled", () => {
-		render(<DockRuler width={400} height={200} hint={{ axis: "horizontal", edge: "left", guide: { ratio: 1 / 3, label: "1/3" } }} />);
-		expect(screen.getAllByTestId("dock-ruler-tick")).toHaveLength(GUIDE_COUNT);
-		expect(screen.getByText("1/3")).toBeInTheDocument();
+		expect(screen.getByTestId("dock-ruler-shade")).toHaveClass("pointer-events-none");
 	});
 
 	it("shades from the left edge up to the guide's ratio when docking left", () => {

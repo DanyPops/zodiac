@@ -300,6 +300,31 @@ test("dragging a template onto the left edge of an already-docked Surface splits
 	expect(leftBox!.x).toBeLessThan(rightBox!.x); // genuinely a left/right split, not two stacked or tabbed panels
 });
 
+test("Dock Ruler: the frame appears the moment a Surface Template drag starts and wraps the dock area, not just while hovering a drop target", async ({ page }) => {
+	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
+	const canvas = page.getByRole("region", { name: "Window view" });
+	const canvasBox = (await canvas.boundingBox())!;
+
+	await expect(page.getByTestId("dock-ruler")).toBeHidden();
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	// Still over the pillar itself, nowhere near the dock canvas -- the frame's
+	// own visibility is driven by "a drag is active", not by hovering content.
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await expect(page.getByTestId("dock-ruler")).toBeVisible();
+
+	const bars = page.getByTestId("dock-ruler-bar");
+	await expect(bars).toHaveCount(4);
+	const boxes = await bars.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()));
+	// Every bar sits outside the canvas's own box on its own edge -- above,
+	// below, left, or right of it -- never overlapping the canvas interior.
+	const outside = boxes.some((box) => Math.abs(box.top + box.height - canvasBox.y) < 2) && boxes.some((box) => Math.abs(box.top - (canvasBox.y + canvasBox.height)) < 2);
+	expect(outside).toBe(true);
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+	await expect(page.getByTestId("dock-ruler")).toBeHidden();
+});
+
 test("Dock Ruler: dragging well inside an already-docked Surface (not the thin root-edge band) shows a granular fraction guide", async ({ page }) => {
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
@@ -324,8 +349,11 @@ test("Dock Ruler: dragging well inside an already-docked Surface (not the thin r
 	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
 
 	// The ruler tracks live -- no settle/debounce needed, unlike the root-edge case.
+	// The frame wraps the dock area with two bars per axis (above/below the
+	// canvas) -- both show the same live label, not drawn over the content itself.
 	await expect(page.getByTestId("dock-ruler")).toBeVisible();
-	await expect(page.getByText("1/4")).toBeVisible();
+	await expect(page.getByText("1/4").first()).toBeVisible();
+	expect(await page.getByText("1/4").count()).toBe(2);
 	// Dockview's own coarse overlay is superseded, not just visually covered.
 	await expect(page.locator(".dv-drop-target-dropzone")).toBeHidden();
 
@@ -355,7 +383,7 @@ test("Dock Ruler: dragging past the midpoint docks to the right, sized from the 
 	await glyph.dispatchEvent("dragstart", { dataTransfer });
 	await content.dispatchEvent("dragenter", { dataTransfer, clientX: threeQuarterX, clientY: midY });
 	await content.dispatchEvent("dragover", { dataTransfer, clientX: threeQuarterX, clientY: midY });
-	await expect(page.getByText("3/4")).toBeVisible();
+	await expect(page.getByText("3/4").first()).toBeVisible();
 
 	await content.dispatchEvent("drop", { dataTransfer, clientX: threeQuarterX, clientY: midY });
 	await glyph.dispatchEvent("dragend", { dataTransfer });
