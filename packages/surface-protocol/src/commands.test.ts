@@ -1,0 +1,31 @@
+import { describe, expect, it } from "vitest";
+import { CommandIntentSchema } from "./commands.js";
+
+describe("CommandIntentSchema", () => {
+	it("accepts a well-formed surface.dock intent", () => {
+		const result = CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "bug-triage", templateId: "activity", title: "Activity" });
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts surface.dock without the optional windowId", () => {
+		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", templateId: "activity", title: "Activity" }).success).toBe(true);
+	});
+
+	it("rejects an unknown intent type", () => {
+		expect(CommandIntentSchema.safeParse({ type: "surface.teleport", workspaceId: "w1" }).success).toBe(false);
+	});
+
+	it("rejects surface.dock missing a required field", () => {
+		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1" }).success).toBe(false);
+	});
+
+	it("rejects a plain string or null instead of an intent object", () => {
+		expect(CommandIntentSchema.safeParse("surface.dock").success).toBe(false);
+		expect(CommandIntentSchema.safeParse(null).success).toBe(false);
+	});
+
+	it("accepts window.next/window.previous with just a workspaceId", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.next", workspaceId: "w1" }).success).toBe(true);
+		expect(CommandIntentSchema.safeParse({ type: "window.previous", workspaceId: "w1" }).success).toBe(true);
+	});
+});
