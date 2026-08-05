@@ -1,9 +1,9 @@
 import {
 	type CommandIntent,
+	type IntegrationId,
 	type ParseResult,
 	type Surface,
 	type SurfaceId,
-	type SurfaceTemplateId,
 	type SurfaceViewModel,
 	type WindowViewModel,
 	type WorkspaceWindow,
@@ -31,7 +31,7 @@ export interface WorldStore {
 	snapshot: () => World;
 	createWorkspace: (workspaceId: WorkspaceId, title: string) => Workspace;
 	getWorkspace: (workspaceId: WorkspaceId) => Workspace | undefined;
-	dockSurface: (workspaceId: WorkspaceId, templateId: SurfaceTemplateId, title: string) => Surface;
+	dockSurface: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string) => Surface;
 	undockSurface: (workspaceId: WorkspaceId, surfaceId: SurfaceId) => void;
 	/** Applies one typed CommandIntent -- the same path a keybinding, a palette entry, a script/RPC call, or an agent action all go through. */
 	apply: (intent: CommandIntent) => void;
@@ -68,11 +68,11 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return workspace;
 	}
 
-	function dockSurface(workspaceId: WorkspaceId, templateId: SurfaceTemplateId, title: string): Surface {
+	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string): Surface {
 		const workspace = requireWorkspace(workspaceId);
 		const activeWindow = workspace.windows[workspace.activeWindowIndex];
 		if (!activeWindow) throw new Error(`Workspace "${workspaceId}" has an out-of-bounds activeWindowIndex ${workspace.activeWindowIndex}`);
-		const surface: Surface = { id: makeSurfaceId(nextSurfaceId()), templateId, title };
+		const surface: Surface = { id: makeSurfaceId(nextSurfaceId()), integrationId, title };
 		const updatedWindow: WorkspaceWindow = { ...activeWindow, surfaces: [...activeWindow.surfaces, surface] };
 		const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? updatedWindow : window));
 		workspaces.set(workspaceId, { ...workspace, windows });
@@ -98,7 +98,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				createWorkspace(intent.workspaceId, intent.title);
 				return;
 			case "surface.dock":
-				dockSurface(intent.workspaceId, intent.templateId, intent.title);
+				dockSurface(intent.workspaceId, intent.integrationId, intent.title);
 				return;
 			case "surface.undock":
 				undockSurface(intent.workspaceId, intent.surfaceId);
@@ -123,7 +123,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 			title: window.title,
 			active: window.id === activeWindow?.id,
 			surfaces: window.surfaces.map(
-				(surface): SurfaceViewModel => ({ id: surface.id, templateId: surface.templateId, title: surface.title, status: surface.resource?.status ?? "idle", selected: false }),
+				(surface): SurfaceViewModel => ({ id: surface.id, integrationId: surface.integrationId, title: surface.title, status: surface.resource?.status ?? "idle", selected: false }),
 			),
 		}));
 		const firstWindow = windows[0];

@@ -47,10 +47,10 @@ export function surfaceId(value: string): SurfaceId {
 	return SurfaceIdSchema.parse(value);
 }
 
-export const SurfaceTemplateIdSchema = brandedIdSchema("SurfaceTemplateId");
-export type SurfaceTemplateId = z.infer<typeof SurfaceTemplateIdSchema>;
-export function surfaceTemplateId(value: string): SurfaceTemplateId {
-	return SurfaceTemplateIdSchema.parse(value);
+export const IntegrationIdSchema = brandedIdSchema("IntegrationId");
+export type IntegrationId = z.infer<typeof IntegrationIdSchema>;
+export function integrationId(value: string): IntegrationId {
+	return IntegrationIdSchema.parse(value);
 }
 
 export const CommandIdSchema = brandedIdSchema("CommandId");

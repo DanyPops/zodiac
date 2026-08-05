@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ResourceIdSchema, SurfaceIdSchema, SurfaceTemplateIdSchema, WindowIdSchema, WorkspaceIdSchema, WorldIdSchema } from "./ids.js";
+import { IntegrationIdSchema, ResourceIdSchema, SurfaceIdSchema, WindowIdSchema, WorkspaceIdSchema, WorldIdSchema } from "./ids.js";
 import { ProvenanceSchema, ResourceStatusSchema } from "./status.js";
 
 /**
@@ -25,11 +25,28 @@ export type Resource = z.infer<typeof ResourceSchema>;
 /** The visible face of a typed Resource or external-system binding, docked into exactly one Window. */
 export const SurfaceSchema = z.object({
 	id: SurfaceIdSchema,
-	templateId: SurfaceTemplateIdSchema,
+	integrationId: IntegrationIdSchema,
 	title: z.string().trim().min(1),
 	resource: ResourceSchema.optional(),
 });
 export type Surface = z.infer<typeof SurfaceSchema>;
+
+/** An Integration's declared capability surface: renderable (has UI to dock into a Window's Surface), an API (exposes commands callable through the same dispatch path a human or an agent uses), or both. Neither flag set means the Integration is not addressable through the model at all. */
+export const IntegrationCapabilitiesSchema = z
+	.object({
+		renderable: z.boolean(),
+		hasApi: z.boolean(),
+	})
+	.refine((capabilities) => capabilities.renderable || capabilities.hasApi, { message: "An Integration must be renderable, expose an API, or both" });
+export type IntegrationCapabilities = z.infer<typeof IntegrationCapabilitiesSchema>;
+
+/** The minimal, framework-neutral contract an Integration's own (richer, host-specific) definition is expected to satisfy. */
+export const IntegrationDefinitionSchema = z.object({
+	id: IntegrationIdSchema,
+	title: z.string().trim().min(1),
+	capabilities: IntegrationCapabilitiesSchema,
+});
+export type IntegrationDefinition = z.infer<typeof IntegrationDefinitionSchema>;
 
 /** One Workspace's numbered arrangement slot; owns its own independent set of docked Surfaces. */
 export const WorkspaceWindowSchema = z.object({

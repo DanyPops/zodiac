@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SurfaceIdSchema, SurfaceTemplateIdSchema, WindowIdSchema, WorkspaceIdSchema } from "./ids.js";
+import { IntegrationIdSchema, SurfaceIdSchema, WindowIdSchema, WorkspaceIdSchema } from "./ids.js";
 
 /**
  * A typed interaction intent -- what a keybinding, a control, a palette
@@ -10,7 +10,7 @@ import { SurfaceIdSchema, SurfaceTemplateIdSchema, WindowIdSchema, WorkspaceIdSc
  */
 export const CommandIntentSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("workspace.create"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1) }),
-	z.object({ type: z.literal("surface.dock"), workspaceId: WorkspaceIdSchema, templateId: SurfaceTemplateIdSchema, title: z.string().trim().min(1), windowId: WindowIdSchema.optional() }),
+	z.object({ type: z.literal("surface.dock"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, title: z.string().trim().min(1), windowId: WindowIdSchema.optional() }),
 	z.object({ type: z.literal("surface.undock"), workspaceId: WorkspaceIdSchema, surfaceId: SurfaceIdSchema }),
 	z.object({ type: z.literal("window.next"), workspaceId: WorkspaceIdSchema }),
 	z.object({ type: z.literal("window.previous"), workspaceId: WorkspaceIdSchema }),

@@ -3,12 +3,12 @@ import { CommandIntentSchema } from "./commands.js";
 
 describe("CommandIntentSchema", () => {
 	it("accepts a well-formed surface.dock intent", () => {
-		const result = CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "bug-triage", templateId: "activity", title: "Activity" });
+		const result = CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "bug-triage", integrationId: "activity", title: "Activity" });
 		expect(result.success).toBe(true);
 	});
 
 	it("accepts surface.dock without the optional windowId", () => {
-		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", templateId: "activity", title: "Activity" }).success).toBe(true);
+		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", integrationId: "activity", title: "Activity" }).success).toBe(true);
 	});
 
 	it("rejects an unknown intent type", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { surfaceTemplateId, workspaceId, worldId } from "@alignment/surface-protocol";
+import { integrationId, workspaceId, worldId } from "@alignment/surface-protocol";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 
@@ -16,7 +16,7 @@ describe("WorldStore walking skeleton", () => {
 		const workspace = store.createWorkspace(workspaceId("bug-triage"), "Bug Triage");
 		expect(workspace.windows).toHaveLength(1);
 
-		const surface = store.dockSurface(workspaceId("bug-triage"), surfaceTemplateId("activity"), "Activity");
+		const surface = store.dockSurface(workspaceId("bug-triage"), integrationId("activity"), "Activity");
 		const updated = store.getWorkspace(workspaceId("bug-triage"));
 		expect(updated?.windows[0]?.surfaces).toEqual([surface]);
 
@@ -34,7 +34,7 @@ describe("WorldStore walking skeleton", () => {
 			description: "Dock a Surface into the Workspace's active Window.",
 			execute: (...args) => {
 				const [workspace, template, title] = args as [string, string, string];
-				store.apply({ type: "surface.dock", workspaceId: workspaceId(workspace), templateId: surfaceTemplateId(template), title });
+				store.apply({ type: "surface.dock", workspaceId: workspaceId(workspace), integrationId: integrationId(template), title });
 			},
 		};
 		const dispatcher = createCommandDispatcher<"global">({ commands: [dockCommand], bindings: [] });
@@ -49,7 +49,7 @@ describe("WorldStore walking skeleton", () => {
 	it("the resulting semantic view model can be consumed without React -- a plain, JSON-round-trippable object", () => {
 		const store = createWorldStore(worldId("w1"));
 		store.createWorkspace(workspaceId("bug-triage"), "Bug Triage");
-		store.dockSurface(workspaceId("bug-triage"), surfaceTemplateId("activity"), "Activity");
+		store.dockSurface(workspaceId("bug-triage"), integrationId("activity"), "Activity");
 
 		const viewModel = store.workspaceViewModel(workspaceId("bug-triage"));
 		expect(viewModel).toBeDefined();
@@ -72,7 +72,7 @@ describe("WorldStore walking skeleton", () => {
 
 	it("rejects an unknown Workspace id rather than silently no-op'ing", () => {
 		const store = createWorldStore(worldId("w1"));
-		expect(() => store.dockSurface(workspaceId("ghost"), surfaceTemplateId("activity"), "Activity")).toThrow(/no Workspace/i);
+		expect(() => store.dockSurface(workspaceId("ghost"), integrationId("activity"), "Activity")).toThrow(/no Workspace/i);
 	});
 
 	describe("invalid external or persisted input is rejected at runtime", () => {
@@ -90,12 +90,12 @@ describe("WorldStore walking skeleton", () => {
 		it("hydrateWorldStore accepts a well-formed snapshot and resumes real operations on it", () => {
 			const result = hydrateWorldStore({
 				id: "w1",
-				workspaces: [{ id: "ws", title: "WS", windows: [{ id: "window-3", title: "Window 0", surfaces: [{ id: "surface-7", templateId: "activity", title: "Activity" }] }], activeWindowIndex: 0 }],
+				workspaces: [{ id: "ws", title: "WS", windows: [{ id: "window-3", title: "Window 0", surfaces: [{ id: "surface-7", integrationId: "activity", title: "Activity" }] }], activeWindowIndex: 0 }],
 			});
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 
-			const surface = result.value.dockSurface(workspaceId("ws"), surfaceTemplateId("terminal"), "Terminal");
+			const surface = result.value.dockSurface(workspaceId("ws"), integrationId("terminal"), "Terminal");
 			// The id sequence resumed past the rehydrated "surface-7" instead of colliding with it.
 			expect(surface.id).not.toBe("surface-7");
 			expect(result.value.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(2);

@@ -1,5 +1,5 @@
 import type { ResourceStatus } from "./status.js";
-import type { SurfaceId, SurfaceTemplateId, WindowId, WorkspaceId } from "./ids.js";
+import type { IntegrationId, SurfaceId, WindowId, WorkspaceId } from "./ids.js";
 
 /**
  * Runtime-validated entities (entities.ts) describe what a World *stores*.
@@ -11,7 +11,7 @@ import type { SurfaceId, SurfaceTemplateId, WindowId, WorkspaceId } from "./ids.
  */
 export interface SurfaceViewModel {
 	readonly id: SurfaceId;
-	readonly templateId: SurfaceTemplateId;
+	readonly integrationId: IntegrationId;
 	readonly title: string;
 	readonly status: ResourceStatus;
 	readonly selected: boolean;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WorkspaceSchema, WorldSchema } from "./entities.js";
+import { IntegrationDefinitionSchema, WorkspaceSchema, WorldSchema } from "./entities.js";
 
 function validWorkspace() {
 	return {
@@ -37,9 +37,31 @@ describe("WorkspaceSchema", () => {
 		expect(WorkspaceSchema.safeParse(undefined).success).toBe(false);
 	});
 
-	it("rejects a Surface with a blank templateId nested inside a Window", () => {
-		const malformed = { ...validWorkspace(), windows: [{ id: "window-0", title: "Window 0", surfaces: [{ id: "s1", templateId: "", title: "Bad" }] }] };
+	it("rejects a Surface with a blank integrationId nested inside a Window", () => {
+		const malformed = { ...validWorkspace(), windows: [{ id: "window-0", title: "Window 0", surfaces: [{ id: "s1", integrationId: "", title: "Bad" }] }] };
 		expect(WorkspaceSchema.safeParse(malformed).success).toBe(false);
+	});
+});
+
+function validIntegrationDefinition(capabilities: { renderable: boolean; hasApi: boolean }) {
+	return { id: "activity", title: "Activity", capabilities };
+}
+
+describe("IntegrationDefinitionSchema", () => {
+	it("accepts a renderable-only Integration", () => {
+		expect(IntegrationDefinitionSchema.safeParse(validIntegrationDefinition({ renderable: true, hasApi: false })).success).toBe(true);
+	});
+
+	it("accepts an API-only Integration", () => {
+		expect(IntegrationDefinitionSchema.safeParse(validIntegrationDefinition({ renderable: false, hasApi: true })).success).toBe(true);
+	});
+
+	it("accepts an Integration that is both renderable and has an API", () => {
+		expect(IntegrationDefinitionSchema.safeParse(validIntegrationDefinition({ renderable: true, hasApi: true })).success).toBe(true);
+	});
+
+	it("rejects an Integration with neither capability flag set", () => {
+		expect(IntegrationDefinitionSchema.safeParse(validIntegrationDefinition({ renderable: false, hasApi: false })).success).toBe(false);
 	});
 });
 
