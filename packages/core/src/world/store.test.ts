@@ -11,6 +11,11 @@ import { createWorldStore, hydrateWorldStore } from "./store.js";
  * JSON view model, and malformed input is rejected rather than crashing.
  */
 describe("WorldStore walking skeleton", () => {
+	it("projects a fresh World as an explicit empty semantic view", () => {
+		const store = createWorldStore(worldId("empty"));
+		expect(store.worldViewModel()).toEqual({ state: "empty", workspaces: [], activeWorkspaceId: null });
+	});
+
 	it("a headless Workspace can create and update a Surface", () => {
 		const store = createWorldStore(worldId("w1"));
 		const workspace = store.createWorkspace(workspaceId("bug-triage"), "Bug Triage");

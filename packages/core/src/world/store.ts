@@ -12,6 +12,7 @@ import {
 	type WorkspaceViewModel,
 	type World,
 	type WorldId,
+	type WorldViewModel,
 	WorldSchema,
 	parseWithSchema,
 	surfaceId as makeSurfaceId,
@@ -36,6 +37,7 @@ export interface WorldStore {
 	/** Applies one typed CommandIntent -- the same path a keybinding, a palette entry, a script/RPC call, or an agent action all go through. */
 	apply: (intent: CommandIntent) => void;
 	workspaceViewModel: (workspaceId: WorkspaceId) => WorkspaceViewModel | undefined;
+	worldViewModel: () => WorldViewModel;
 }
 
 function assertNeverIntent(intent: never): never {
@@ -131,6 +133,12 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return { id: workspace.id, title: workspace.title, activeWindowId: activeWindow?.id ?? firstWindow.id, windows };
 	}
 
+	function worldViewModel(): WorldViewModel {
+		const projected = [...workspaces.keys()].map(workspaceViewModel).filter((workspace): workspace is WorkspaceViewModel => workspace !== undefined);
+		const first = projected[0];
+		return first ? { state: "ready", workspaces: projected, activeWorkspaceId: first.id } : { state: "empty", workspaces: [], activeWorkspaceId: null };
+	}
+
 	return {
 		id: worldId,
 		snapshot: () => ({ id: worldId, workspaces: [...workspaces.values()] }),
@@ -140,6 +148,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		undockSurface,
 		apply,
 		workspaceViewModel,
+		worldViewModel,
 	};
 }
 
