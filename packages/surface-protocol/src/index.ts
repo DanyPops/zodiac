@@ -18,3 +18,6 @@ export type { EmptyWorldViewModel, ReadyWorldViewModel, WorldViewModel, Region }
 export { RegionRectSchema, RegionSchema, layoutWorldRegions } from "./regions.js";
 
 export type { SurfaceRenderer } from "./renderer.js";
+
+export type { AlignmentContribution, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
+export { ContributionReadBoundsSchema, ContributionResourceReferenceSchema } from "./contributions.js";
