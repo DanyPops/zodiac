@@ -1,0 +1,8 @@
+# Vendored packages
+
+Neither package below is resolvable as a normal registry dependency from this monorepo today, so each is vendored as an exact packed tarball and referenced by a relative `file:` path -- never an absolute, machine-local path.
+
+- `danypops-alignment-lector-0.0.1.tgz` -- `@danypops/alignment-lector` is not published to npm at all yet (it is a PoC-stage package owned by the Lector repository). Re-pack from `packages/alignment-lector` in that repo (`npm pack`) whenever its contribution surface changes.
+- `danypops-lector-0.18.1.tgz` -- `@danypops/lector` **is** published (npm has real `0.18.1`), but that published release predates the Git-resource work (`unified-diff.ts`, `revision-not-found.ts`, `truncate-utf8.ts`, and the related `git-handlers`/`local-git` changes) `@danypops/alignment-lector` now depends on. This tarball is a temporary stand-in for the next real `@danypops/lector` release. **Once a new version is published to npm, remove this file and change `apps/alignment-tui/package.json`'s `@danypops/lector` entry (and the root `package.json` `overrides` entry that pins `@danypops/alignment-lector`'s own copy to it) back to a real semver range.**
+
+The root `package.json`'s `overrides` field forces every copy of `@alignment/surface-protocol` and `@danypops/lector` in this tree (including the ones `@danypops/alignment-lector` declares on its own) to resolve to this monorepo's own workspace package / this one vendored tarball respectively -- one real module identity per package, never a second, structurally-distinct copy nested under `node_modules/@danypops/alignment-lector/node_modules`.

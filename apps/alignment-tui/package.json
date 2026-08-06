@@ -17,11 +17,15 @@
   },
   "dependencies": {
     "@alignment/surface-protocol": "*",
+    "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.1.tgz",
     "@earendil-works/pi-tui": "^0.84.0"
   },
   "devDependencies": {
     "@alignment/core": "*",
+    "@danypops/lector": "file:vendor/danypops-lector-0.18.1.tgz",
     "@danypops/pi-tui-harness": "^0.0.2",
+    "@danypops/vehicle-server": "^0.3.2",
+    "@types/picomatch": "^4.0.3",
     "esbuild": "^0.28.1",
     "node-pty": "^1.1.0",
     "typescript": "^5.9.3",
