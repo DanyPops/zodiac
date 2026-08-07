@@ -28,8 +28,11 @@ export interface BootstrappedFile {
 }
 
 export interface BootstrappedWorkspace {
+	/** Local-only: used to resolve a bare file's path relative to its workspace root. Never enters World state -- see workspaceId. */
 	readonly rootPath: string;
 	readonly rootTitle: string;
+	/** Lector's own opaque, content-derived workspace identity (see deriveWorkspaceId) -- the only identifier that may become an Alignment WorkspaceId. */
+	readonly workspaceId: string;
 	readonly workspace: ContributionResourceReference;
 	readonly kind: "directory" | "file";
 	readonly tree?: BootstrappedTree;
@@ -103,7 +106,7 @@ export async function bootstrapWorkspace(
 		if (!listing.ok) return listing;
 		const tree = parseTree(listing.value);
 		if (!tree) return failure("invalid-response", "Lector returned an unrecognized directory listing");
-		return { ok: true, value: { rootPath, rootTitle, workspace, kind: "directory", tree } };
+		return { ok: true, value: { rootPath, rootTitle, workspaceId, workspace, kind: "directory", tree } };
 	}
 
 	const relativePath = relative(rootPath, classified.path);
@@ -114,5 +117,5 @@ export async function bootstrapWorkspace(
 	if (!text.ok) return text;
 	const content = parseFileContent(text.value);
 	if (content === undefined) return failure("invalid-response", "Lector returned an unrecognized file read");
-	return { ok: true, value: { rootPath, rootTitle, workspace, kind: "file", file: { path: relativePath, content, resource: fileResource } } };
+	return { ok: true, value: { rootPath, rootTitle, workspaceId, workspace, kind: "file", file: { path: relativePath, content, resource: fileResource } } };
 }
