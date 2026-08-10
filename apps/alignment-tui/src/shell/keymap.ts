@@ -14,6 +14,8 @@ export type ShellCommand =
   | { readonly type: "exit-fullscreen" }
   | { readonly type: "expand-footer" }
   | { readonly type: "collapse-footer" }
+  | { readonly type: "scroll-footer-up" }
+  | { readonly type: "scroll-footer-down" }
   | { readonly type: "footer-submit" }
   | { readonly type: "footer-backspace" }
   | { readonly type: "footer-type"; readonly char: string };
@@ -80,6 +82,14 @@ export function resolveShellCommand(data: string, context: KeymapContext): Shell
   // keybinding could apply to.
   if (matchesKey(data, Key.ctrl("up"))) return { type: "expand-footer" };
   if (matchesKey(data, Key.ctrl("down"))) return { type: "collapse-footer" };
+  // A distinct family from Ctrl+Up/Down's own *resize* -- Page Up/Down
+  // *scrolls within* whatever height the footer already has, matching tmux
+  // copy-mode and opentui ScrollBox's own line-scroll convention exactly.
+  // Key.pageUp/pageDown have real hardcoded legacy CSI fallbacks in pi-tui's
+  // own matcher (\x1b[5~/\x1b[6~), the same reliability bar every other
+  // binding in this file was checked against.
+  if (matchesKey(data, Key.pageUp)) return { type: "scroll-footer-up" };
+  if (matchesKey(data, Key.pageDown)) return { type: "scroll-footer-down" };
   if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) return { type: "footer-submit" };
   if (matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) return { type: "footer-backspace" };
   const char = decodeKittyPrintable(data) ?? plainPrintableChar(data);

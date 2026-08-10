@@ -82,6 +82,33 @@ describe("SemanticShellApplication lifecycle", () => {
     expect(app.focusedRegion()).toBe("footer");
   });
 
+  it("Page Up/Page Down scroll the expanded footer's history, distinct from Ctrl+Up/Down's own resize", async () => {
+    const footerChat = fakeFooterChat({
+      kind: "idle",
+      draft: "",
+      items: [
+        { role: "assistant", text: "oldest" },
+        { role: "assistant", text: "newest" },
+      ],
+    });
+    const writes: string[] = [];
+    const app = new SemanticShellApplication(createWorldStore(worldId("empty")), { write: data => writes.push(data) }, footerChat);
+    app.boot(80, 24);
+    for (let i = 0; i < 4; i++) app.handleInput("\t"); // -> footer
+    app.handleInput("\x1b[1;5A"); // expand once -- 1 history row available
+
+    async function currentText(): Promise<string> {
+      const terminal = await renderToTerminal([writes.join("")], { cols: 80, rows: 24 });
+      try { return terminal.plainLines().join("\n"); } finally { terminal.dispose(); }
+    }
+
+    expect(await currentText()).toContain("newest");
+    app.handleInput("\x1b[5~"); // Page Up
+    expect(await currentText()).toContain("oldest");
+    app.handleInput("\x1b[6~"); // Page Down
+    expect(await currentText()).toContain("newest");
+  });
+
   it("Ctrl+Down collapses an expanded footer back toward its minimum single row", async () => {
     const footerChat = fakeFooterChat({ kind: "idle", draft: "", items: [{ role: "assistant", text: "hi there" }] });
     const writes: string[] = [];

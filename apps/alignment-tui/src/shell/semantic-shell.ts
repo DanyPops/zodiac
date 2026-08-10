@@ -1,7 +1,8 @@
 import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type WorldViewModel } from "@alignment/surface-protocol";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
 import { createGridFrame, createRect, gridId, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "../frame/index.js";
-import type { FooterChatItem, FooterChatStatus } from "../pi/footer-chat-controller.js";
+import type { FooterChatStatus } from "../pi/footer-chat-controller.js";
+import { wrapFooterHistory } from "./footer-history-wrap.js";
 
 /** How many rows one Ctrl+Up/Ctrl+Down expandFooter()/collapseFooter() step changes -- see SemanticShellApplication's own footer-focused keybinding. */
 const FOOTER_RESIZE_STEP = 3;
@@ -23,11 +24,6 @@ const ERROR_STYLE: CellStyle = { foreground: 1 };
 // GridTerminal only encodes the 8 basic ANSI colors (see its own SGR mapping), so
 // exact hex parity with Pi's real theme is impossible -- these reproduce the same
 // role/status-driven color-coding *convention* with that smaller palette.
-const USER_BUBBLE_BG = 4; // blue
-const TOOL_PENDING_BG = 3; // yellow
-const TOOL_SUCCESS_BG = 2; // green
-const TOOL_ERROR_BG = 1; // red
-
 /** Shows the tail of `text` when it doesn't fit `maxWidth` -- the Footer is a single row (see paintRegion's own footer comment), so a draft's cursor position and a response's most recent tokens matter more than its start. */
 function truncateToWidth(text: string, maxWidth: number): string {
   if (maxWidth <= 0) return "";
@@ -50,28 +46,6 @@ function footerChatLine(status: FooterChatStatus, maxWidth: number): { text: str
     case "error":
       return { text: truncateToWidth(`\u2717 ${status.message}`, maxWidth), style: ERROR_STYLE };
   }
-}
-
-/**
- * One line of real conversation history -- used once the Footer is expanded
- * (Neovim/tmux-style Ctrl+Up) past its default single row. `background`,
- * when present, is filled across the *entire* row width by the caller
- * (paintRegion), not just under the text -- a full-row bubble/status block
- * matching Pi TUI's own convention, not an inline color on the characters
- * alone. There is deliberately no "You:"/"Pi:" role-label text -- Pi TUI
- * signals role purely by that background treatment.
- */
-function footerHistoryLine(item: FooterChatItem, maxWidth: number): { text: string; style: CellStyle; background?: number } {
-  if (item.role === "user") {
-    const style: CellStyle = { foreground: 7, background: USER_BUBBLE_BG };
-    return { text: truncateToWidth(item.text, maxWidth), style, background: USER_BUBBLE_BG };
-  }
-  if (item.role === "assistant") {
-    return { text: truncateToWidth(item.text, maxWidth), style: BASE };
-  }
-  const background = item.status === "pending" ? TOOL_PENDING_BG : item.status === "success" ? TOOL_SUCCESS_BG : TOOL_ERROR_BG;
-  const style: CellStyle = { foreground: 7, background, bold: true };
-  return { text: truncateToWidth(item.text, maxWidth), style, background };
 }
 
 /**
@@ -152,6 +126,32 @@ export class SemanticShell {
   expandFooter(): void { this.requestedFooterHeight = Math.min(this.requestedFooterHeight + FOOTER_RESIZE_STEP, MAX_REQUESTED_FOOTER_HEIGHT); }
   /** Shrinks the Footer by one step, down to its default single-row size -- never smaller, since MIN_FOOTER_HEIGHT is the smallest a footer can render at all. */
   collapseFooter(): void { this.requestedFooterHeight = Math.max(this.requestedFooterHeight - FOOTER_RESIZE_STEP, MIN_FOOTER_HEIGHT); }
+
+  /**
+   * Absolute row offset into the Footer's wrapped history buffer (0 = the
+   * very first row ever wrapped) -- deliberately *not* "distance from the
+   * live bottom": that alternative was tried and rejected here, because it
+   * silently drifts forward whenever new rows are appended while scrolled
+   * up (the "bottom" it's measured from keeps moving), which is exactly the
+   * scrolled-away-content-changes-under-you bug this feature exists to fix.
+   * An absolute offset is stable under append-only growth: rows already on
+   * screen keep the same index forever, so appending below them never
+   * moves them. Paired with footerFollowingEnd exactly as pi-tui's own
+   * ScrollView pairs currentScrollTop with followingEnd -- both re-synced
+   * against the real content/viewport size on every render (paintRegion),
+   * not just clamped reactively when a scroll method happens to run.
+   */
+  private footerScrollTop = 0;
+  /** True by default -- tmux/pi-tui/opentui's own convention for chat/logs: always show the newest rows as they arrive, until the user deliberately scrolls away. */
+  private footerFollowingEnd = true;
+
+  /** Reveals older rows -- Page Up while the footer is focused, tmux copy-mode/opentui ScrollBox's own line-scroll convention. Pauses following; re-arms automatically (see paintRegion) once scrolled back down to the live bottom. */
+  scrollFooterUp(lines: number): void {
+    this.footerFollowingEnd = false;
+    this.footerScrollTop = Math.max(0, this.footerScrollTop - Math.max(0, lines));
+  }
+  /** Scrolls back toward the live bottom -- Page Down. */
+  scrollFooterDown(lines: number): void { this.footerScrollTop += Math.max(0, lines); }
 
   project(world: WorldViewModel, width: number, height: number, footerChat?: FooterChatStatus): Outcome<GridFrame> {
     // A footer taller than what layoutWorldRegions accepts for this exact
@@ -269,11 +269,25 @@ export class SemanticShell {
       const hasStatusRow = contentRows >= 3;
       const historyRows = Math.max(0, contentRows - (hasStatusRow ? 3 : 2));
       const items = "items" in footerChat ? footerChat.items : [];
-      const recent = items.slice(-historyRows);
-      const startPad = historyRows - recent.length;
-      for (let index = 0; index < recent.length; index++) {
+      // Wrap-then-window (tmux's own scrollback, pi-tui's ScrollView, opentui's
+      // ScrollBox all converge on this split): every item is wrapped into as
+      // many real rows as it needs -- never truncated to fit one row -- and
+      // *that* flat row buffer is what a scroll offset windows into, not the
+      // item list itself.
+      const allRows = wrapFooterHistory(items, Math.max(0, area.width - 2));
+      // Re-synced every render, exactly like pi-tui's own ScrollView.updateLayout():
+      // following pins to the true bottom as content grows; not-following clamps
+      // whatever scrollTop is already held against the current max (never past
+      // it, e.g. after the terminal shrinks or history is trimmed by MAX_ITEMS),
+      // and re-arms following the moment that clamp lands exactly on the bottom.
+      const maxScrollTop = Math.max(0, allRows.length - historyRows);
+      this.footerScrollTop = this.footerFollowingEnd ? maxScrollTop : Math.min(this.footerScrollTop, maxScrollTop);
+      if (this.footerScrollTop >= maxScrollTop) this.footerFollowingEnd = true;
+      const visible = allRows.slice(this.footerScrollTop, this.footerScrollTop + historyRows);
+      const startPad = historyRows - visible.length;
+      for (let index = 0; index < visible.length; index++) {
         const y = 2 + startPad + index;
-        const line = footerHistoryLine(recent[index]!, Math.max(0, area.width - 2));
+        const line = visible[index]!;
         if (line.background !== undefined) {
           const rowFill = paint(frame, area, 0, y, " ".repeat(area.width), { background: line.background });
           if (!rowFill.ok) return rowFill;

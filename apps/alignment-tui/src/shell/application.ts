@@ -8,6 +8,9 @@ import { SemanticShell, type ShellFocus } from "./semantic-shell.js";
 
 export interface WorldProjection { worldViewModel(): WorldViewModel }
 
+/** How many history rows one Page Up/Page Down step scrolls -- tmux copy-mode/opentui ScrollBox's own arrow-key-scrolls-by-line, Page-scrolls-by-page convention; a fixed row count rather than the exact current viewport height, matching SemanticShell's own FOOTER_RESIZE_STEP precedent for footer height. */
+const FOOTER_SCROLL_STEP = 5;
+
 export class SemanticShellApplication {
   private readonly shell = new SemanticShell();
   private readonly output: GridTerminal;
@@ -51,6 +54,8 @@ export class SemanticShellApplication {
       case "exit-fullscreen": this.shell.exitFullscreen(); return;
       case "expand-footer": this.shell.expandFooter(); return;
       case "collapse-footer": this.shell.collapseFooter(); return;
+      case "scroll-footer-up": this.shell.scrollFooterUp(FOOTER_SCROLL_STEP); return;
+      case "scroll-footer-down": this.shell.scrollFooterDown(FOOTER_SCROLL_STEP); return;
       case "footer-submit": this.footerChat?.submit(); return;
       case "footer-backspace": this.footerChat?.backspace(); return;
       case "footer-type": this.footerChat?.typeChar(command.char); return;

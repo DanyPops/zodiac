@@ -34,6 +34,16 @@ describe("resolveShellCommand -- the facade between raw keymap wiring and the ac
     expect(resolveShellCommand("h", withFooter)).toEqual({ type: "footer-type", char: "h" });
   });
 
+  it("maps Page Up/Page Down to scroll-footer-up/scroll-footer-down when the footer is focused -- distinct from Ctrl+Up/Down's own footer *resize*, matching tmux copy-mode/opentui ScrollBox's own line-scroll convention", () => {
+    expect(resolveShellCommand("\x1b[5~", withFooter)).toEqual({ type: "scroll-footer-up" });
+    expect(resolveShellCommand("\x1b[6~", withFooter)).toEqual({ type: "scroll-footer-down" });
+  });
+
+  it("suppresses Page Up/Page Down the same as every other footer-scoped command when the footer isn't focused or no live footer chat exists", () => {
+    expect(resolveShellCommand("\x1b[5~", bodyFocused)).toBeUndefined();
+    expect(resolveShellCommand("\x1b[5~", withoutFooterChat)).toBeUndefined();
+  });
+
   it("suppresses every footer-scoped command when the footer isn't focused, even if a live footer chat exists", () => {
     expect(resolveShellCommand("\x1b[1;5A", bodyFocused)).toBeUndefined();
     expect(resolveShellCommand("\r", bodyFocused)).toBeUndefined();

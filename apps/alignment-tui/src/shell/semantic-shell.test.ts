@@ -381,4 +381,130 @@ describe("semantic empty Alignment shell", () => {
       expect(shell.focusedRegion()).toBe("body");
     });
   });
+
+  describe("Footer scrollback -- wraps long/multi-line messages across real rows and windows them, instead of truncating to one row per item", () => {
+    const FOOTER_HEIGHT_TWO_ROWS = 9; // MIN_FOOTER_HEIGHT (3) + two FOOTER_RESIZE_STEP (3 each) -- 4 history rows available (contentRows 7, minus heading+status+composer's own 3)
+
+    it("wraps a long message across multiple real rows instead of tail-truncating it behind an ellipsis", async () => {
+      const shell = new SemanticShell();
+      shell.expandFooter();
+      const longText = "one two three four five six seven eight nine ten eleven twelve";
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items: [{ role: "assistant", text: longText }] });
+      if (!frame.ok) throw new Error(frame.error.message);
+      const update = diffFrames(undefined, frame.value);
+      if (!update.ok) throw new Error(update.error.message);
+      const encoded = encodeGridUpdate(update.value);
+      if (!encoded.ok) throw new Error(encoded.error.message);
+      const terminal = await renderToTerminal([encoded.value], { cols: 80, rows: 24 });
+      try {
+        const text = terminal.plainLines().join(" ");
+        for (const word of longText.split(" ")) expect(text).toContain(word);
+        expect(text).not.toContain("\u2026"); // no ellipsis -- nothing was truncated
+      } finally { terminal.dispose(); }
+    });
+
+    it("never joins two logical messages onto the same visual row -- each gets its own row(s)", () => {
+      const shell = new SemanticShell();
+      shell.expandFooter();
+      shell.expandFooter();
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, {
+        kind: "idle",
+        draft: "",
+        items: [
+          { role: "assistant", text: "first reply" },
+          { role: "assistant", text: "second reply" },
+        ],
+      });
+      if (!frame.ok) throw new Error(frame.error.message);
+      const firstRow = renderRowText(frame.value, 78, footerCellIndex(80, 24, FOOTER_HEIGHT_TWO_ROWS, 1, historyRowFor(FOOTER_HEIGHT_TWO_ROWS, 2, 0)));
+      const secondRow = renderRowText(frame.value, 78, footerCellIndex(80, 24, FOOTER_HEIGHT_TWO_ROWS, 1, historyRowFor(FOOTER_HEIGHT_TWO_ROWS, 2, 1)));
+      expect(firstRow.trim()).toBe("first reply");
+      expect(secondRow.trim()).toBe("second reply");
+    });
+
+
+
+    it("defaults to showing only the newest row (follow-bottom) when there are more rows than the single-row viewport can hold", () => {
+      const shell = new SemanticShell();
+      shell.expandFooter(); // 1 history row available at MIN + one step
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, {
+        kind: "idle",
+        draft: "",
+        items: [
+          { role: "assistant", text: "oldest" },
+          { role: "assistant", text: "middle" },
+          { role: "assistant", text: "newest" },
+        ],
+      });
+      if (!frame.ok) throw new Error(frame.error.message);
+      const text = frame.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("newest");
+      expect(text).not.toContain("middle");
+      expect(text).not.toContain("oldest");
+    });
+
+    it("scrollFooterUp steps backwards through history one row at a time, and scrollFooterDown steps back to the live bottom -- absolute position, not disturbed between steps", () => {
+      const shell = new SemanticShell();
+      shell.expandFooter(); // 1 history row available
+      const items = [
+        { role: "assistant" as const, text: "oldest" },
+        { role: "assistant" as const, text: "middle" },
+        { role: "assistant" as const, text: "newest" },
+      ];
+      function visibleRow(): string {
+        const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items });
+        if (!frame.ok) throw new Error(frame.error.message);
+        return frame.value.cells.map((cell) => cell.grapheme).join("");
+      }
+      expect(visibleRow()).toContain("newest");
+
+      shell.scrollFooterUp(1);
+      const oneUp = visibleRow();
+      expect(oneUp).toContain("middle");
+      expect(oneUp).not.toContain("newest");
+
+      shell.scrollFooterUp(1);
+      const twoUp = visibleRow();
+      expect(twoUp).toContain("oldest");
+      expect(twoUp).not.toContain("middle");
+
+      shell.scrollFooterDown(1);
+      const oneDown = visibleRow();
+      expect(oneDown).toContain("middle");
+      expect(oneDown).not.toContain("oldest");
+
+      shell.scrollFooterDown(1);
+      expect(visibleRow()).toContain("newest");
+    });
+
+    it("clamps scrollFooterUp when there is nothing older to reveal, instead of showing blank rows", () => {
+      const shell = new SemanticShell();
+      shell.expandFooter();
+      const items = [{ role: "assistant" as const, text: "only message" }];
+      shell.scrollFooterUp(50);
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items });
+      if (!frame.ok) throw new Error(frame.error.message);
+      expect(frame.value.cells.map((cell) => cell.grapheme).join("")).toContain("only message");
+    });
+
+    it("staying scrolled up doesn't get yanked back to the bottom when a new message arrives -- the same historical rows remain visible", () => {
+      const shell = new SemanticShell();
+      shell.expandFooter();
+      const items = [
+        { role: "assistant" as const, text: "oldest" },
+        { role: "assistant" as const, text: "middle" },
+      ];
+      shell.scrollFooterUp(1);
+      const scrolledUp = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items });
+      if (!scrolledUp.ok) throw new Error(scrolledUp.error.message);
+      expect(scrolledUp.value.cells.map((cell) => cell.grapheme).join("")).toContain("oldest");
+
+      const withNewMessage = [...items, { role: "assistant" as const, text: "brand new" }];
+      const afterArrival = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items: withNewMessage });
+      if (!afterArrival.ok) throw new Error(afterArrival.error.message);
+      const text = afterArrival.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("oldest");
+      expect(text).not.toContain("brand new");
+    });
+  });
 });
