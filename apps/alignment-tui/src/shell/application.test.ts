@@ -123,11 +123,13 @@ describe("SemanticShellApplication lifecycle", () => {
     const terminal = await renderToTerminal([writes.join("")], { cols: 80, rows: 24 });
     try {
       const lines = terminal.plainLines();
-      // Collapsed back to the single joined "Chat ... hi there" row -- the
-      // "Chat" heading and the message text share one line again, not the
-      // expanded view's own separate heading/history/composer rows.
+      // Collapsed back to the single joined status row -- just the live
+      // status text, not the expanded view's own separate history/composer
+      // rows. "Chat" itself now lives on the outer bottom border regardless
+      // of collapsed/expanded state (see semantic-shell.ts's paintFrameBorders).
       const joinedLine = lines.find((line) => line.includes("hi there"));
-      expect(joinedLine).toContain("Chat");
+      expect(joinedLine).toBeDefined();
+      expect(lines.at(-1)).toContain("Chat");
     } finally { terminal.dispose(); }
   });
 

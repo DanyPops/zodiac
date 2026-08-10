@@ -24,11 +24,11 @@ function renderRowText(frame: GridFrame, width: number, startIndex: number): str
   return frame.cells.slice(startIndex, startIndex + width).map((cell) => cell.grapheme).join("");
 }
 
-/** Mirrors paintRegion's own bottom-alignment formula (history rows are padded from the top when there are fewer items than available rows) -- computed here instead of assuming a fixed row, since a single-item test would otherwise land on the wrong row. Reserves heading (row 1), a dedicated status row directly above the composer (see the "spinner lives in its own row" tests below), and the composer's own last row -- 3 rows total, not 2. */
+/** Mirrors paintRegion's own bottom-alignment formula (history rows are padded from the top when there are fewer items than available rows) -- computed here instead of assuming a fixed row, since a single-item test would otherwise land on the wrong row. "Chat" now lives on the outer border (not a content heading), so this reserves only a dedicated status row directly above the composer (see the "spinner lives in its own row" tests below) and the composer's own last row -- 2 rows total, not 3. */
 function historyRowFor(footerHeight: number, itemCount: number, itemIndex: number): number {
-  const historyRows = footerHeight - 2 - 3;
+  const historyRows = footerHeight - 2 - 2;
   const startPad = historyRows - itemCount;
-  return 2 + startPad + itemIndex;
+  return 1 + startPad + itemIndex;
 }
 
 /** The dedicated status row directly above the composer's own last row -- mirrors Pi TUI's own statusContainer, which sits structurally above (never inside) editorContainer. */
@@ -61,7 +61,25 @@ describe("semantic empty Alignment shell", () => {
       expect(text).toContain("Workspaces");
       expect(text).toContain("No workspace open");
       expect(text).toContain("Integrations");
+      expect(text).toContain("Chat");
       expect(text).toContain("Agent unavailable");
+    } finally { result.terminal.dispose(); }
+  });
+
+  it("embeds Workspaces/Integrations/Chat into the border itself, like the header's own brand used to, rather than as separate content headings", async () => {
+    const result = await render(80, 24);
+    try {
+      const lines = result.terminal.plainLines();
+      // The top border row carries both pillar names now -- "Alignment" is gone entirely.
+      expect(lines[0]).toContain("Workspaces");
+      expect(lines[0]).toContain("Integrations");
+      expect(lines[0]).not.toContain("Alignment");
+      // The outer bottom border row carries "Chat", centered.
+      expect(lines.at(-1)).toContain("Chat");
+      // Each pillar's own content starts immediately at row 1 (no heading row
+      // eating the first content line above the item list) -- "(none)" (the
+      // empty-items placeholder) is the very first thing painted there.
+      expect(lines[2]?.slice(1).trimEnd().startsWith("(none)")).toBe(true);
     } finally { result.terminal.dispose(); }
   });
 
@@ -383,7 +401,7 @@ describe("semantic empty Alignment shell", () => {
   });
 
   describe("Footer scrollback -- wraps long/multi-line messages across real rows and windows them, instead of truncating to one row per item", () => {
-    const FOOTER_HEIGHT_TWO_ROWS = 9; // MIN_FOOTER_HEIGHT (3) + two FOOTER_RESIZE_STEP (3 each) -- 4 history rows available (contentRows 7, minus heading+status+composer's own 3)
+    const FOOTER_HEIGHT_TWO_ROWS = 9; // MIN_FOOTER_HEIGHT (3) + two FOOTER_RESIZE_STEP (3 each) -- 5 history rows available (contentRows 7, minus status+composer's own 2)
 
     it("wraps a long message across multiple real rows instead of tail-truncating it behind an ellipsis", async () => {
       const shell = new SemanticShell();
@@ -424,31 +442,34 @@ describe("semantic empty Alignment shell", () => {
 
 
 
-    it("defaults to showing only the newest row (follow-bottom) when there are more rows than the single-row viewport can hold", () => {
+    it("defaults to showing only the newest rows (follow-bottom) when there are more rows than the viewport can hold", () => {
       const shell = new SemanticShell();
-      shell.expandFooter(); // 1 history row available at MIN + one step
+      shell.expandFooter(); // 2 history rows available
       const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, {
         kind: "idle",
         draft: "",
         items: [
           { role: "assistant", text: "oldest" },
-          { role: "assistant", text: "middle" },
+          { role: "assistant", text: "second" },
+          { role: "assistant", text: "third" },
           { role: "assistant", text: "newest" },
         ],
       });
       if (!frame.ok) throw new Error(frame.error.message);
       const text = frame.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("third");
       expect(text).toContain("newest");
-      expect(text).not.toContain("middle");
+      expect(text).not.toContain("second");
       expect(text).not.toContain("oldest");
     });
 
     it("scrollFooterUp steps backwards through history one row at a time, and scrollFooterDown steps back to the live bottom -- absolute position, not disturbed between steps", () => {
       const shell = new SemanticShell();
-      shell.expandFooter(); // 1 history row available
+      shell.expandFooter(); // 2 history rows available
       const items = [
         { role: "assistant" as const, text: "oldest" },
-        { role: "assistant" as const, text: "middle" },
+        { role: "assistant" as const, text: "second" },
+        { role: "assistant" as const, text: "third" },
         { role: "assistant" as const, text: "newest" },
       ];
       function visibleRow(): string {
@@ -460,17 +481,20 @@ describe("semantic empty Alignment shell", () => {
 
       shell.scrollFooterUp(1);
       const oneUp = visibleRow();
-      expect(oneUp).toContain("middle");
+      expect(oneUp).toContain("second");
+      expect(oneUp).toContain("third");
       expect(oneUp).not.toContain("newest");
 
       shell.scrollFooterUp(1);
       const twoUp = visibleRow();
       expect(twoUp).toContain("oldest");
-      expect(twoUp).not.toContain("middle");
+      expect(twoUp).toContain("second");
+      expect(twoUp).not.toContain("third");
 
       shell.scrollFooterDown(1);
       const oneDown = visibleRow();
-      expect(oneDown).toContain("middle");
+      expect(oneDown).toContain("second");
+      expect(oneDown).toContain("third");
       expect(oneDown).not.toContain("oldest");
 
       shell.scrollFooterDown(1);
@@ -489,10 +513,11 @@ describe("semantic empty Alignment shell", () => {
 
     it("staying scrolled up doesn't get yanked back to the bottom when a new message arrives -- the same historical rows remain visible", () => {
       const shell = new SemanticShell();
-      shell.expandFooter();
+      shell.expandFooter(); // 2 history rows available
       const items = [
         { role: "assistant" as const, text: "oldest" },
-        { role: "assistant" as const, text: "middle" },
+        { role: "assistant" as const, text: "second" },
+        { role: "assistant" as const, text: "third" },
       ];
       shell.scrollFooterUp(1);
       const scrolledUp = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items });

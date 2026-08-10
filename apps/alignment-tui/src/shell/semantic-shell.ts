@@ -235,10 +235,11 @@ export class SemanticShell {
   private paintRegion(frame: GridFrame, area: Rect, region: Region, title: CellStyle, footerChat?: FooterChatStatus): Outcome<void> {
     if (region.kind === "header") return { ok: true, value: undefined }; // embedded into the top border row by paintFrameBorders
     if (region.kind === "pillar") {
-      const heading = region.navigation === "workspaces" ? "Workspaces" : "Integrations";
-      const result = paint(frame, area, 1, 1, heading, title);
-      if (!result.ok) return result;
-      return paint(frame, area, 1, 3, region.items.length === 0 ? "(none)" : region.items[0]!.label, MUTED);
+      // "Workspaces"/"Integrations" now live on this pillar's own top border
+      // segment (see paintFrameBorders), the same "embedded in the border, not
+      // painted as content" convention the header region itself already uses --
+      // so the panel's own content starts immediately at row 1, not row 3.
+      return paint(frame, area, 1, 1, region.items.length === 0 ? "(none)" : region.items[0]!.label, MUTED);
     }
     if (region.kind === "body") {
       const label = region.content.state === "empty" ? region.content.watermark : region.content.title;
@@ -246,29 +247,27 @@ export class SemanticShell {
     }
     // Footer row 0 is the border separator and row (height-1) is the bottom
     // border. At the default MIN_FOOTER_HEIGHT there's exactly one content
-    // row, shared by the "Chat" heading and the live status (unchanged from
-    // before expand/collapse existed). Once expanded past that (see
-    // expandFooter()), row 1 becomes a heading of its own, the composer moves
-    // to the last content row, and everything between shows real history --
-    // presentation-only in both cases, not fed back through World/CommandIntent
-    // (see the driven-session-port task's own notes on why).
+    // row, holding the live status line. Once expanded past that (see
+    // expandFooter()), the composer moves to the last content row, and
+    // everything between shows real history -- presentation-only in both
+    // cases, not fed back through World/CommandIntent (see the driven-session-
+    // port task's own notes on why).
+    // "Chat" now lives on the outer bottom border, centered (see
+    // paintFrameBorders) -- the same "embedded in the border, not painted as
+    // content" convention the header region already uses -- so every content
+    // row here starts immediately at row 1, one row earlier than before.
     const contentRows = area.height - 2;
-    const heading = paint(frame, area, 1, 1, "Chat", title);
-    if (!heading.ok) return heading;
     if (footerChat) {
       if (contentRows <= 1) {
-        const contentX = 7;
-        const line = footerChatLine(footerChat, Math.max(0, area.width - contentX - 1));
-        return paint(frame, area, contentX, 1, line.text, line.style);
+        const line = footerChatLine(footerChat, Math.max(0, area.width - 2));
+        return paint(frame, area, 1, 1, line.text, line.style);
       }
       // A dedicated status row sits directly above the composer -- see
       // footerStatusLine's own doc comment for why (Pi TUI's statusContainer
-      // vs. editorContainer split). Reserved whenever there's room for one
-      // (contentRows >= 3: heading + status + composer); a footer expanded
-      // only barely past its minimum degrades to the old heading+composer
-      // layout with no history and no separate status row, same as before.
-      const hasStatusRow = contentRows >= 3;
-      const historyRows = Math.max(0, contentRows - (hasStatusRow ? 3 : 2));
+      // vs. editorContainer split). Always reachable here: the contentRows <= 1
+      // guard above already excludes the only case (a single content row) too
+      // small to hold both a status row and the composer.
+      const historyRows = Math.max(0, contentRows - 2);
       const items = "items" in footerChat ? footerChat.items : [];
       // Wrap-then-window (tmux's own scrollback, pi-tui's ScrollView, opentui's
       // ScrollBox all converge on this split): every item is wrapped into as
@@ -287,7 +286,7 @@ export class SemanticShell {
       const visible = allRows.slice(this.footerScrollTop, this.footerScrollTop + historyRows);
       const startPad = historyRows - visible.length;
       for (let index = 0; index < visible.length; index++) {
-        const y = 2 + startPad + index;
+        const y = 1 + startPad + index;
         const line = visible[index]!;
         if (line.background !== undefined) {
           const rowFill = paint(frame, area, 0, y, " ".repeat(area.width), { background: line.background });
@@ -306,16 +305,14 @@ export class SemanticShell {
           x += visibleWidth(segment.text);
         }
       }
-      if (hasStatusRow) {
-        const statusLine = footerStatusLine(footerChat, Math.max(0, area.width - 2));
-        const paintedStatus = paint(frame, area, 1, area.height - 3, statusLine.text, statusLine.style);
-        if (!paintedStatus.ok) return paintedStatus;
-      }
+      const statusLine = footerStatusLine(footerChat, Math.max(0, area.width - 2));
+      const paintedStatus = paint(frame, area, 1, area.height - 3, statusLine.text, statusLine.style);
+      if (!paintedStatus.ok) return paintedStatus;
       const composerLine = footerComposerLine(footerChat, Math.max(0, area.width - 2));
       return paint(frame, area, 1, area.height - 2, composerLine.text, composerLine.style);
     }
     const status = region.chat.state === "unavailable" ? "Agent unavailable" : "Agent ready";
-    return paint(frame, area, 6, 1, ` \u00b7 ${status}`, MUTED);
+    return paint(frame, area, 1, 1, status, MUTED);
   }
 
   private paintFrameBorders(frame: GridFrame, regions: readonly Region[], width: number, height: number): Outcome<void> {
@@ -327,12 +324,36 @@ export class SemanticShell {
     const focus = this.focusedRegion();
     const bordered = paintBorders(frame, t, width, height, focus, { base: MUTED, active: BORDER_ACTIVE });
     if (!bordered.ok) return bordered;
-    const header = regions.find((region): region is Extract<Region, { kind: "header" }> => region.kind === "header");
-    if (!header) return { ok: true, value: undefined };
+    // Pillar names ride their own top-border segment, the same slot
+    // "Alignment" used to sit in, rather than a separate content heading one
+    // row down -- one fewer thing painted per frame, and it reads exactly
+    // like tmux/zellij's own pane-title-in-the-border convention.
+    const leftPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "left");
+    const rightPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "right");
+    const pillarLabel = (pillar: Extract<Region, { kind: "pillar" }> | undefined): string => (pillar?.navigation === "workspaces" ? "Workspaces" : "Integrations");
+    // Each segment's own inverse-when-focused styling mirrors exactly which
+    // ShellFocus value highlights that segment's own region -- the header
+    // region's real focus for the middle ("Windows") segment, but
+    // left-pillar/right-pillar focus for the two segments now carrying what
+    // used to be each pillar's own focus-aware content heading style.
+    const leftStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "left-pillar" };
     const headerStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "header" };
-    const brand = labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalLeftSplit, t.horizontalTop, "Alignment", headerStyle);
-    if (!brand.ok) return brand;
-    const carouselText = header.carousel.state === "empty" ? "Windows: none" : "Windows";
-    return labelSegment(frame, fullArea.value, t.verticalLeftSplit + 1, t.verticalRightSplit, t.horizontalTop, carouselText, headerStyle);
+    const rightStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "right-pillar" };
+    const leftLabel = labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalLeftSplit, t.horizontalTop, pillarLabel(leftPillar), leftStyle);
+    if (!leftLabel.ok) return leftLabel;
+    const header = regions.find((region): region is Extract<Region, { kind: "header" }> => region.kind === "header");
+    if (header) {
+      const carouselText = header.carousel.state === "empty" ? "Windows: none" : "Windows";
+      const windows = labelSegment(frame, fullArea.value, t.verticalLeftSplit + 1, t.verticalRightSplit, t.horizontalTop, carouselText, headerStyle);
+      if (!windows.ok) return windows;
+    }
+    const rightLabel = labelSegment(frame, fullArea.value, t.verticalRightSplit + 1, t.verticalOuterRight, t.horizontalTop, pillarLabel(rightPillar), rightStyle);
+    if (!rightLabel.ok) return rightLabel;
+    // "Chat" rides the outer bottom border, centered across the footer's full
+    // width (the footer has no left/right vertical split the way the header
+    // row does) -- see paintRegion's own footer branch for the corresponding
+    // content-row shift.
+    const footerStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "footer" };
+    return labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalOuterRight, t.horizontalBottom, "Chat", footerStyle);
   }
 }
