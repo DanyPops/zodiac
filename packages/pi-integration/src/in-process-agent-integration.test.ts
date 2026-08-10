@@ -12,8 +12,8 @@ import { createInProcessAgentIntegration } from "./in-process-agent-integration.
  * no API key) registered directly into a fresh ModelRuntime, matching
  * @earendil-works/pi-ai/compat's own documented test-provider pattern.
  */
-async function createHermeticSession(toolNames: string[] = []): Promise<{ session: AgentSession; faux: FauxProviderHandle }> {
-	const faux = fauxProvider();
+async function createHermeticSession(toolNames: string[] = [], fauxOptions: Parameters<typeof fauxProvider>[0] = {}): Promise<{ session: AgentSession; faux: FauxProviderHandle }> {
+	const faux = fauxProvider(fauxOptions);
 	const model = faux.getModel();
 	const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });
 	modelRuntime.registerNativeProvider(faux.provider);
@@ -68,6 +68,41 @@ describe("createInProcessAgentIntegration", () => {
 		expect(types.at(-1)).toBe("agent-settled");
 		const end = events.find((event) => event.type === "assistant-message-end");
 		expect(end).toMatchObject({ text: "hello from faux" });
+	});
+
+	it("accumulates real multi-chunk streaming text across successive deltas, instead of replacing it with only the latest chunk", async () => {
+		// A real bug found live: text_delta's own `delta` field is genuinely just
+		// the newest chunk (confirmed against @earendil-works/pi-ai's own type:
+		// `{ delta: string; partial: AssistantMessage }`), never the accumulated
+		// text -- and real prior art in this exact SDK family (pi-mono commit
+		// b939f2b5, "Fix README: use assistantMessageEvent.delta for streaming,
+		// not accumulated message") shows *why* that split exists: `delta` is
+		// correct for an append-only stdout writer (each write naturally grows
+		// the terminal's own scrollback), but Alignment's Footer is a stateful
+		// full-repaint renderer -- every frame redraws an item's *entire*
+		// current text from scratch, so it needs the accumulated value, not an
+		// increment. Forcing tiny (1-char) faux chunks to make the distinction
+		// observable -- a single-chunk response (the other test above) never
+		// exercises accumulation across more than one delta at all.
+		const { session, faux } = await createHermeticSession([], { tokenSize: { min: 1, max: 1 } });
+		const integration = createInProcessAgentIntegration(session);
+		disposers.push(integration.dispose);
+
+		const events: AlignmentAgentEvent[] = [];
+		integration.onEvent((event) => events.push(event));
+
+		faux.setResponses([fauxAssistantMessage("hello there world")]);
+		await integration.prompt("hi");
+
+		const deltas = events.filter((event) => event.type === "assistant-message-delta") as Array<{ text: string }>;
+		expect(deltas.length).toBeGreaterThan(1); // otherwise this test isn't exercising accumulation at all
+		// Each successive delta's text must be a strict extension of the last --
+		// growing, never shrinking back down to a single fragment.
+		for (let index = 1; index < deltas.length; index++) {
+			expect(deltas[index]!.text.length).toBeGreaterThan(deltas[index - 1]!.text.length);
+			expect(deltas[index]!.text.startsWith(deltas[index - 1]!.text)).toBe(true);
+		}
+		expect(deltas.at(-1)!.text).toBe("hello there world");
 	});
 
 	it("translates a message_end whose stopReason is 'error' into a real error event, not a swallowed empty assistant message", async () => {

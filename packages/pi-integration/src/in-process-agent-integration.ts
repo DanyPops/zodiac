@@ -14,6 +14,21 @@ import type { AgentIntegrationPort, AlignmentAgentEvent } from "./agent-integrat
 export function createInProcessAgentIntegration(session: AgentSession): AgentIntegrationPort {
 	const eventListeners = new Set<(event: AlignmentAgentEvent) => void>();
 	let unsubscribeSession: (() => void) | undefined;
+	/**
+	 * Accumulated text of the assistant message currently streaming, reset on
+	 * every message_start. Built ourselves from `assistantMessageEvent.delta`
+	 * -- the one genuinely immutable value in this whole event family -- 
+	 * rather than trusting any "accumulated" snapshot the SDK itself hands us
+	 * (`event.message` or `assistantMessageEvent.partial`). Confirmed live,
+	 * with a hermetic faux-provider reproduction: both of those snapshot
+	 * objects are mutated in place by the underlying stream (pi-ai's own
+	 * `streamWithDeltas` shallow-clones its wrapper per event but reuses the
+	 * same `content` array/block objects throughout), so reading either one
+	 * from inside a message_update listener can observe the *final* text
+	 * immediately, even on the very first delta -- there is no reliable
+	 * point-in-time snapshot to read there at all, only the delta itself.
+	 */
+	let streamingText = "";
 
 	function emit(event: AlignmentAgentEvent): void {
 		for (const listener of eventListeners) listener(event);
@@ -38,10 +53,26 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 			case "agent_end":
 				return undefined;
 			case "message_start":
-				return event.message.role === "assistant" ? { type: "assistant-message-start" } : undefined;
+				if (event.message.role !== "assistant") return undefined;
+				streamingText = "";
+				return { type: "assistant-message-start" };
 			case "message_update":
+				// A real reported bug lived here: this used to read an "accumulated"
+				// snapshot (either `event.message.content` or
+				// `assistantMessageEvent.partial.content`) directly, on the theory
+				// that message_update carries the same shape as message_end's own
+				// accumulated message ("Fired during assistant message streaming
+				// with token-by-token updates", per the SDK's own doc comment).
+				// Confirmed live via a hermetic reproduction that both snapshots are
+				// unsafe to read progressively -- see streamingText's own doc
+				// comment. `delta` alone (a real per-chunk increment,
+				// @earendil-works/pi-ai's own text_delta type) is the only value
+				// here that's actually safe to trust point-in-time, so this
+				// AlignmentAgentEvent's `text` is built by accumulating it
+				// ourselves, never by reading a snapshot the SDK owns.
 				if (event.assistantMessageEvent.type !== "text_delta") return undefined;
-				return { type: "assistant-message-delta", text: event.assistantMessageEvent.delta };
+				streamingText += event.assistantMessageEvent.delta;
+				return { type: "assistant-message-delta", text: streamingText };
 			case "message_end":
 				if (event.message.role !== "assistant") return undefined;
 				// A real API failure (auth expired, out of credits, rate limited, ...)
