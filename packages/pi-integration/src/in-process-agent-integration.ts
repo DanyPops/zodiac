@@ -43,7 +43,17 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 				if (event.assistantMessageEvent.type !== "text_delta") return undefined;
 				return { type: "assistant-message-delta", text: event.assistantMessageEvent.delta };
 			case "message_end":
-				return event.message.role === "assistant" ? { type: "assistant-message-end", text: contentText(event.message.content, "") } : undefined;
+				if (event.message.role !== "assistant") return undefined;
+				// A real API failure (auth expired, out of credits, rate limited, ...)
+				// arrives here as an assistant message_end with empty content and
+				// stopReason "error"/"aborted" -- found live: contentText() on empty
+				// content silently produces "", which the Footer then rendered as a
+				// meaningless "(empty response)" with no indication anything had
+				// actually gone wrong. Surface the real errorMessage instead.
+				if (event.message.stopReason === "error" || event.message.stopReason === "aborted") {
+					return { type: "error", message: event.message.errorMessage ?? "The agent stopped unexpectedly." };
+				}
+				return { type: "assistant-message-end", text: contentText(event.message.content, "") };
 			case "tool_execution_start":
 				return { type: "tool-call-start", toolCallId: event.toolCallId, toolName: event.toolName, input: event.args };
 			case "tool_execution_end":

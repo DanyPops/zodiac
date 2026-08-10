@@ -27,9 +27,14 @@ describe("real CLI boot with a real per-workspace pi-setup.json/profiles.json, a
 		writeFileSync(join(root, "a.ts"), "export const a = 1;\n");
 
 		terminal = spawnLiveTerminal(process.execPath, [cli, root], { cols: 80, rows: 24 });
-		await terminal.waitForText("Chat", 10_000);
+		// This machine's real ~/.pi/agent/settings.json loads several real
+		// global extensions (pi-anthropic-vertex, pi-packed, pi-lector, ...),
+		// and dist/cli.js's own unbundled @earendil-works/* (a real, deliberate
+		// build-config fix -- see start-footer-chat.ts's doc comment) makes
+		// this genuinely slower to cold-start than a self-contained bundle.
+		await terminal.waitForText("Chat", 20_000);
 		const snapshot = terminal.snapshot();
 		expect(snapshot).toContain("Chat");
 		expect(snapshot).not.toContain("Alignment: ");
-	}, 15_000);
+	}, 25_000);
 });

@@ -128,7 +128,14 @@ export function spawnLiveTerminal(command: string, args: readonly string[], opti
     return lines.join("\n");
   }
 
-  function waitForText(expected: string, timeoutMs = 5_000): Promise<void> {
+  // 12s, not 5s: dist/cli.js no longer bundles @earendil-works/* (a real,
+  // deliberate build-config fix -- a bundled copy is invisible to a
+  // dynamically-loaded extension's own separate copy of the same package,
+  // silently breaking custom model providers). Resolving that larger,
+  // unbundled dependency tree from disk is measurably slower to cold-start,
+  // especially with several of this file's own PTY tests spawning real
+  // processes concurrently in CI/local test runs.
+  function waitForText(expected: string, timeoutMs = 12_000): Promise<void> {
     const startedAt = Date.now();
     return new Promise((resolveWait, reject) => {
       const tick = () => {

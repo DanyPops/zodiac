@@ -8,7 +8,8 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const workspaceRoot = resolve(packageRoot, "../..");
 const cli = resolve(packageRoot, "dist/cli.js");
 
-function waitFor(read: () => string, expected: string, timeoutMs = 5_000): Promise<void> {
+// 12s, not 5s: dist/cli.js no longer bundles @earendil-works/* (see live-pty-terminal.ts's own doc comment on the same constant) -- a real, deliberate build-config fix that trades a slower cold start for correctness.
+function waitFor(read: () => string, expected: string, timeoutMs = 12_000): Promise<void> {
   return new Promise((resolveWait, reject) => {
     const started = Date.now();
     const poll = () => {
@@ -47,5 +48,5 @@ describe("packaged TUI process boundary", () => {
     } finally {
       try { child.kill(); } catch { /* already exited */ }
     }
-  }, 15_000);
+  }, 20_000); // headroom above waitFor's own 12s default -- see its doc comment
 });

@@ -53,5 +53,5 @@ describe("Ctrl+Right/Ctrl+Left fullscreen, against a real running process", () =
     terminal.write("\x1b[1;5D"); // Ctrl+Left -- exit fullscreen
     await terminal.waitForText("Workspaces");
     expect(terminal.snapshot()).toBe(original);
-  }, 15_000);
+  }, 20_000); // headroom above waitForText's own 12s default -- see live-pty-terminal.ts's doc comment
 });

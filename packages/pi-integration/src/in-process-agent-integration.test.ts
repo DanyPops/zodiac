@@ -70,6 +70,27 @@ describe("createInProcessAgentIntegration", () => {
 		expect(end).toMatchObject({ text: "hello from faux" });
 	});
 
+	it("translates a message_end whose stopReason is 'error' into a real error event, not a swallowed empty assistant message", async () => {
+		// A real bug found live: an actual API failure (e.g. "no credits
+		// remaining") arrives as message_end with an empty content array and
+		// stopReason: "error" -- contentText() on empty content silently
+		// produces "", rendered by the Footer as a meaningless "(empty
+		// response)" with no indication anything actually went wrong.
+		const { session, faux } = await createHermeticSession();
+		const integration = createInProcessAgentIntegration(session);
+		disposers.push(integration.dispose);
+
+		const events: AlignmentAgentEvent[] = [];
+		integration.onEvent((event) => events.push(event));
+
+		faux.setResponses([fauxAssistantMessage([], { stopReason: "error", errorMessage: "You have no credits remaining." })]);
+		await integration.prompt("hi");
+
+		const error = events.find((event) => event.type === "error");
+		expect(error).toMatchObject({ message: "You have no credits remaining." });
+		expect(events.some((event) => event.type === "assistant-message-end")).toBe(false);
+	});
+
 	it("translates a tool call turn into tool-call-start/end, in order, before the follow-up response", async () => {
 		const { session, faux } = await createHermeticSession(["echo"]);
 		const integration = createInProcessAgentIntegration(session);
