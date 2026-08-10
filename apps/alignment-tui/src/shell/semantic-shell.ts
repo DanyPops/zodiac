@@ -1,5 +1,6 @@
 import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type WorldViewModel } from "@alignment/surface-protocol";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { createGridFrame, createRect, gridId, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "../frame/index.js";
 import type { FooterChatStatus } from "../pi/footer-chat-controller.js";
 import { wrapFooterHistory } from "./footer-history-wrap.js";
@@ -292,8 +293,18 @@ export class SemanticShell {
           const rowFill = paint(frame, area, 0, y, " ".repeat(area.width), { background: line.background });
           if (!rowFill.ok) return rowFill;
         }
-        const painted = paint(frame, area, 1, y, line.text, line.style);
-        if (!painted.ok) return painted;
+        // Markdown rendering (footer-history-wrap.ts's markdownRows) can split
+        // one row into several differently-styled segments -- a bold word next
+        // to plain text, a heading's color next to nothing -- so each row is
+        // painted run by run, advancing by each run's own display width
+        // (never just its character count: wide graphemes exist in real
+        // assistant replies) rather than assuming one style per row.
+        let x = 1;
+        for (const segment of line.segments) {
+          const painted = paint(frame, area, x, y, segment.text, segment.style);
+          if (!painted.ok) return painted;
+          x += visibleWidth(segment.text);
+        }
       }
       if (hasStatusRow) {
         const statusLine = footerStatusLine(footerChat, Math.max(0, area.width - 2));
