@@ -7,8 +7,13 @@ import { parseRpcLine, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
  * piApiPlugin) rather than talking to a `pi` process directly -- the browser
  * never spawns or manages processes itself.
  */
+export interface PiClientCreateSessionOptions {
+	/** The spawned `pi --mode rpc` process's working directory -- lets a caller bind one session to a specific Workspace's project root. Omitted keeps today's default (the dev server's own cwd). */
+	readonly cwd?: string;
+}
+
 export interface PiClient {
-	createSession: (signal?: AbortSignal) => Promise<string>;
+	createSession: (options?: PiClientCreateSessionOptions, signal?: AbortSignal) => Promise<string>;
 	sendPrompt: (sessionId: string, message: string, signal?: AbortSignal) => Promise<void>;
 	/** Subscribes to a session's live event stream; returns an unsubscribe function that closes the underlying connection. */
 	streamEvents: (sessionId: string, onEvent: (event: PiRpcEvent) => void, onError?: (error: unknown) => void) => () => void;
@@ -25,8 +30,17 @@ export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClien
 	const fetcher = options.fetcher ?? fetch;
 
 	return {
-		async createSession(signal) {
-			const response = await fetcher("/api/pi/sessions", { method: "POST", signal });
+		async createSession(createOptions, signal) {
+			// A request body is only ever attached when there's something to say --
+			// keeps the common no-options call identical to today's plain POST,
+			// both on the wire and in every existing test that asserts its exact
+			// shape.
+			const requestBody = createOptions?.cwd ? JSON.stringify({ cwd: createOptions.cwd }) : undefined;
+			const response = await fetcher("/api/pi/sessions", {
+				method: "POST",
+				...(requestBody ? { headers: { "Content-Type": "application/json" }, body: requestBody } : {}),
+				signal,
+			});
 			if (!response.ok) throw new Error(`pi-create-session:${response.status}`);
 			const body = (await response.json()) as { sessionId?: unknown };
 			if (typeof body.sessionId !== "string") throw new Error("pi-create-session:invalid-response");

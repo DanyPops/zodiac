@@ -85,7 +85,7 @@ function piApiPlugin(): Plugin {
 					res.end();
 					return;
 				}
-				routes.createSession(req, res);
+				void routes.createSession(req, res);
 			});
 			server.middlewares.use("/api/pi/prompt", (req, res) => {
 				void routes.sendPrompt(req, res);

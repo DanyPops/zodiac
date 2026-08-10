@@ -54,6 +54,40 @@ describe("createPiHttpRoutes", () => {
 		expect(registry.get(body.sessionId)).toBeDefined();
 	});
 
+	it("createSession forwards a requested cwd to the registry", async () => {
+		const create = vi.fn(() => fakeSession());
+		const registry = createPiSessionRegistry(create);
+		const routes = createPiHttpRoutes(registry);
+		const base = await listen((req, res) => {
+			void routes.createSession(req, res);
+		});
+
+		await fetch(`${base}/api/pi/sessions`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ cwd: "/repos/pipes" }),
+		});
+		expect(create).toHaveBeenCalledWith({ cwd: "/repos/pipes" });
+	});
+
+	it("createSession ignores a missing or malformed body and still creates a session", async () => {
+		const create = vi.fn(() => fakeSession());
+		const registry = createPiSessionRegistry(create);
+		const routes = createPiHttpRoutes(registry);
+		const base = await listen((req, res) => {
+			void routes.createSession(req, res);
+		});
+
+		const noBody = await fetch(`${base}/api/pi/sessions`, { method: "POST" });
+		expect(noBody.status).toBe(200);
+
+		const malformed = await fetch(`${base}/api/pi/sessions`, { method: "POST", body: "not json" });
+		expect(malformed.status).toBe(200);
+
+		expect(create).toHaveBeenCalledWith(undefined);
+		expect(create).toHaveBeenCalledTimes(2);
+	});
+
 	it("sendPrompt rejects a missing sessionId, an unknown sessionId, and an empty message", async () => {
 		const registry = createPiSessionRegistry(() => fakeSession());
 		const routes = createPiHttpRoutes(registry);

@@ -38,8 +38,21 @@ function sessionIdFrom(req: IncomingMessage): string | undefined {
 /** Real production-quality Node HTTP handlers for driving a live Pi RPC session -- registered as Vite dev-server middleware in vite.config.ts, exercised directly here without needing a Vite server. */
 export function createPiHttpRoutes(registry: PiSessionRegistry) {
 	return {
-		createSession(_req: IncomingMessage, res: ServerResponse): void {
-			const sessionId = registry.create();
+		async createSession(req: IncomingMessage, res: ServerResponse): Promise<void> {
+			// cwd is the only option a client can request today, and it's optional
+			// -- an empty body (the common case, unchanged from before this
+			// option existed) or a malformed one both fall back to the registry's
+			// own default rather than failing the request, since nothing here is
+			// required for a session to start.
+			let cwd: string | undefined;
+			try {
+				const body = await readJsonBody(req);
+				const requestedCwd = (body as { cwd?: unknown } | undefined)?.cwd;
+				if (typeof requestedCwd === "string" && requestedCwd.trim()) cwd = requestedCwd;
+			} catch {
+				// Malformed JSON body -- ignored, same fallback as no body at all.
+			}
+			const sessionId = registry.create(cwd ? { cwd } : undefined);
 			writeJson(res, 200, { sessionId });
 		},
 

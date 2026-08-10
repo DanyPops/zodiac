@@ -31,6 +31,18 @@ describe("createHttpPiClient", () => {
 		expect(fetcher).toHaveBeenCalledWith("/api/pi/sessions", { method: "POST", signal: undefined });
 	});
 
+	it("createSession posts a JSON body with cwd when given options, unlike the plain no-options call", async () => {
+		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { sessionId: "abc" }));
+		const client = createHttpPiClient({ fetcher });
+		await expect(client.createSession({ cwd: "/repos/lector" })).resolves.toBe("abc");
+		expect(fetcher).toHaveBeenCalledWith("/api/pi/sessions", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ cwd: "/repos/lector" }),
+			signal: undefined,
+		});
+	});
+
 	it("createSession rejects on a non-ok response", async () => {
 		const fetcher = vi.fn().mockResolvedValue(jsonResponse(500, {}));
 		const client = createHttpPiClient({ fetcher });
