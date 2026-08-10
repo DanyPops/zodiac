@@ -15,7 +15,7 @@ export { CommandIntentSchema } from "./commands.js";
 
 export type { SurfaceViewModel, WindowViewModel, WorkspaceViewModel } from "./view-models.js";
 export type { EmptyWorldViewModel, ReadyWorldViewModel, WorldViewModel, Region } from "./regions.js";
-export { RegionRectSchema, RegionSchema, layoutWorldRegions } from "./regions.js";
+export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions } from "./regions.js";
 
 export type { SurfaceRenderer } from "./renderer.js";
 

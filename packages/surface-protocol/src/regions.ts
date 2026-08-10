@@ -17,11 +17,23 @@ export const RegionSchema = z.discriminatedUnion("kind", [
 ]);
 export type Region = z.infer<typeof RegionSchema>;
 
-export function layoutWorldRegions(world: WorldViewModel, width: number, height: number): ParseResult<readonly Region[]> {
+/** A footer needs at least one content row plus its two border rows -- the original, and still default, fixed size. */
+export const MIN_FOOTER_HEIGHT = 3;
+
+/**
+ * `footerHeight` defaults to the original fixed size (MIN_FOOTER_HEIGHT) --
+ * every existing caller that never passes it keeps today's exact layout.
+ * A caller (the TUI's own Neovim/tmux-style expand/collapse) can request a
+ * taller footer to show real conversation history instead of one status
+ * line; the header/body/pillars shrink to make room, same as resizing any
+ * other pane in a tiling layout.
+ */
+export function layoutWorldRegions(world: WorldViewModel, width: number, height: number, footerHeight: number = MIN_FOOTER_HEIGHT): ParseResult<readonly Region[]> {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 20 || height < 8 || width > 500 || height > 300) return { ok: false, issues: [`viewport must be integer 20..500 x 8..300; received ${width}x${height}`] };
+  if (!Number.isInteger(footerHeight) || footerHeight < MIN_FOOTER_HEIGHT || footerHeight > height - 2) return { ok: false, issues: [`footerHeight must be an integer ${MIN_FOOTER_HEIGHT}..${height - 2} for a ${height}-row viewport; received ${footerHeight}`] };
   const pillar = Math.max(13, Math.min(18, Math.floor(width / 4)));
-  const contentHeight = height - 4;
-  const rects = { header: { x: 0, y: 0, width, height: 1 }, left: { x: 0, y: 1, width: pillar, height: contentHeight }, body: { x: pillar, y: 1, width: width - pillar * 2, height: contentHeight }, right: { x: width - pillar, y: 1, width: pillar, height: contentHeight }, footer: { x: 0, y: height - 3, width, height: 3 } };
+  const contentHeight = height - 1 - footerHeight;
+  const rects = { header: { x: 0, y: 0, width, height: 1 }, left: { x: 0, y: 1, width: pillar, height: contentHeight }, body: { x: pillar, y: 1, width: width - pillar * 2, height: contentHeight }, right: { x: width - pillar, y: 1, width: pillar, height: contentHeight }, footer: { x: 0, y: height - footerHeight, width, height: footerHeight } };
   const empty = world.state === "empty";
   const regions: Region[] = [
     { kind: "header", rect: rects.header, carousel: empty ? { state: "empty", windows: [] } : { state: "ready", windows: world.workspaces[0]!.windows.map(w => ({ id: w.id, label: w.title, active: w.active })) } },

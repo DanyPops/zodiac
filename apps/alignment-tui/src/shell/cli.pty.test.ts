@@ -36,7 +36,13 @@ describe("packaged TUI process boundary", () => {
       await waitFor(() => output.slice(beforeResize), "\x1b[2J\x1b[H");
       child.write("\x03");
       await waitFor(() => output, "__RAW_RESTORED__");
-      expect(stripTerminalSequences(output)).toContain("Agent unavailable");
+      // Not "Agent unavailable" specifically: since this app now tries a real
+      // Pi Agent Integration at boot (see cli.ts's startFooterChat), whether
+      // the Footer shows a live composer or "unavailable" depends on this
+      // machine's own ~/.pi/agent credentials -- not something this PTY-boundary
+      // test should assume either way. The Footer's own heading renders
+      // regardless of that outcome.
+      expect(stripTerminalSequences(output)).toContain("Chat");
       expect(output).toContain("\x1b[?25h");
     } finally {
       try { child.kill(); } catch { /* already exited */ }
