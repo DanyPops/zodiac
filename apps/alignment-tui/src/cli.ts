@@ -79,7 +79,7 @@ async function main(): Promise<void> {
       // "external" excluded for the same reason "footer" already is: Escape
       // is real, meaningful input to whatever owns focus there (a footer
       // draft, or a mounted extension Component's own modal-editing Escape,
-      // e.g. pi-lector's Neovim-style insert-to-normal-mode transition) --
+      // e.g. pi-lector's modal editor's insert-to-normal-mode transition) --
       // never Alignment's own "quit" shortcut while either holds focus.
       else if (matchesKey(data, Key.escape) && application.focusedRegion() !== "footer" && application.focusedRegion() !== "external") void stop();
       else application.handleInput(data);

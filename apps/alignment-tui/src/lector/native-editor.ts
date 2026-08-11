@@ -1,6 +1,6 @@
 import { dirname, relative } from "node:path";
 import type { ContributionReadBounds, ContributionResourceReference } from "@alignment/surface-protocol";
-import { NeovimEditorComponent, type NeovimEditorHost } from "@danypops/pi-lector/editor";
+import { ModalEditorComponent, type ModalEditorHost } from "@danypops/pi-lector/editor";
 import type { Component } from "@earendil-works/pi-tui";
 import { Input } from "@earendil-works/pi-tui";
 import { nearestGitRoot } from "../bootstrap/nearest-git-root.js";
@@ -71,7 +71,7 @@ function hoverContents(value: unknown): string | undefined {
 }
 
 /**
- * Builds a NeovimEditorHost backed entirely by Alignment's own existing lector-host.ts
+ * Builds a ModalEditorHost backed entirely by Alignment's own existing lector-host.ts
  * contribution commands (lector.file.open/save, lector.symbol.hover) -- confirmed by direct
  * source read that both already exist in @danypops/alignment-lector, no new contribution code
  * needed. save() reaches into the tracked resource's own GuardedLiveBuffer (returned as the
@@ -79,7 +79,7 @@ function hoverContents(value: unknown): string | undefined {
  * lector.file.save, since that command persists whatever is currently in the tracked buffer
  * rather than accepting an arbitrary text parameter directly.
  */
-function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, absolutePath: string, relativePath: string): NeovimEditorHost {
+function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, absolutePath: string, relativePath: string): ModalEditorHost {
 	async function currentResource(): Promise<ContributionResourceReference> {
 		const opened = await lectorHost.execute("lector.file.open", { workspaceId, path: relativePath });
 		if (!opened.ok) throw new Error(`Could not open "${absolutePath}": ${opened.message}`);
@@ -114,7 +114,7 @@ function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, abs
  * Opens `absolutePath` in a real Lector editor, mounted natively -- no AgentSession, no
  * ExtensionRunner, no Pi extension involvement at all. Resolves the file's nearest git root as
  * its Lector workspace (mirroring bootstrapWorkspace's own convention), opens both through the
- * existing lector-host.ts contribution commands, constructs a real NeovimEditorComponent against
+ * existing lector-host.ts contribution commands, constructs a real ModalEditorComponent against
  * a fake tui/theme (the same real, working substitutes AlignmentExtensionUIContext already
  * proved live against this exact Component), and mounts it via host.showExternalComponent() --
  * the same full-viewport mechanism the Pi-extension-facade path already uses, reused here because
@@ -146,11 +146,11 @@ export async function openLectorEditorNatively(host: NativeEditorHost, lectorHos
 			resolve();
 		}
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- same pragmatic
-		// cast AlignmentExtensionUIContext already relies on: NeovimEditorComponent's real coupling
+		// cast AlignmentExtensionUIContext already relies on: ModalEditorComponent's real coupling
 		// surface is exactly {requestRender, terminal.rows} and {fg, bg}, proven by direct source
 		// read, not pi-coding-agent's full TUI/Theme classes (which have private fields no plain
 		// object can satisfy structurally).
-		const component = new NeovimEditorComponent(fakeTui(host) as any, theme as any, editorHost, content, done);
+		const component = new ModalEditorComponent(fakeTui(host) as any, theme as any, editorHost, content, done);
 		host.showExternalComponent(component);
 		host.refresh();
 	});

@@ -100,7 +100,7 @@ export class SemanticShellApplication {
     }
   }
 
-  /** Fire-and-forget, matching every other dispatch branch's own void-returning contract -- a real failure (e.g. an unreachable Lector daemon) surfaces as a thrown error inside the prompted editor's own status line (NeovimEditorComponent's own performActionSafely convention), not here. */
+  /** Fire-and-forget, matching every other dispatch branch's own void-returning contract -- a real failure (e.g. an unreachable Lector daemon) surfaces as a thrown error inside the prompted editor's own status line (ModalEditorComponent's own performActionSafely convention), not here. */
   private openLectorEditor(): void {
     if (!this.lectorHost) return;
     void promptAndOpenLectorEditorNatively(this, this.lectorHost).catch(() => {

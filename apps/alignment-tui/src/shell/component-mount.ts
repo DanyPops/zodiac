@@ -12,7 +12,7 @@ import { parseAnsiLine } from "./ansi-segments.js";
  * wrapFooterHistory" to "rows produced by any real `Component.render()`".
  *
  * This is the whole trick that lets an extension-mounted Component (e.g.
- * pi-lector's `NeovimEditorComponent`, shown via
+ * pi-lector's `ModalEditorComponent`, shown via
  * `ExtensionUIContext.custom()`) actually get pixels onto Alignment's own
  * cell grid: it renders itself exactly as it would for a real pi-tui `TUI`
  * (plain strings with embedded SGR escapes), and this adapter is the only

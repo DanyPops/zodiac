@@ -5,7 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "bin": { "alignment-tui": "./dist/cli.js" },
+  "bin": {
+    "alignment-tui": "./dist/cli.js"
+  },
   "exports": {
     ".": "./src/index.ts"
   },

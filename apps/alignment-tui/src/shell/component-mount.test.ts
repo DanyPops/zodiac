@@ -30,7 +30,7 @@ describe("mountComponent", () => {
 		expect(cellAt(frame, 0, 1).grapheme).toBe("w");
 	});
 
-	it("recovers inverse:true from a literal \\x1b[7m...\\x1b[0m cursor cell -- pi-lector's NeovimEditorComponent's own cursor convention", () => {
+	it("recovers inverse:true from a literal \\x1b[7m...\\x1b[0m cursor cell -- pi-lector's ModalEditorComponent's own cursor convention", () => {
 		const frame = frameAt(20, 5);
 		const area = createRect(0, 0, 20, 5);
 		if (!area.ok) throw new Error(area.error.message);

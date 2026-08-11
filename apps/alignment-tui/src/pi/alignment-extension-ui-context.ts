@@ -21,7 +21,7 @@ export interface AlignmentExtensionUIContextHost {
  * 8-color ANSI space semantic-shell.ts's own BASE/MUTED/ERROR_STYLE
  * constants already commit to project-wide (see ansi-segments.ts's own
  * applyCodes doc comment), not a full theme reimplementation. Covers
- * exactly the ThemeColor names pi-lector's own NeovimEditorComponent/
+ * exactly the ThemeColor names pi-lector's own ModalEditorComponent/
  * ExplorerComponent actually call (confirmed by reading both files
  * directly) plus the handful of generic ones (error/warning/success) any
  * other real EditorTheme-narrowed consumer would plausibly reach for.
@@ -58,7 +58,7 @@ function sgrFg(code: number, text: string): string {
  * touches a tiny, now-verified slice of these classes' full declared
  * surface).
  */
-/** Exported for reuse by any other native (non-Pi-extension) host that needs the same small, real theme substitute -- e.g. native-editor.ts's own direct NeovimEditorComponent construction. */
+/** Exported for reuse by any other native (non-Pi-extension) host that needs the same small, real theme substitute -- e.g. native-editor.ts's own direct ModalEditorComponent construction. */
 export function createAlignmentEditorTheme(): { fg(color: string, text: string): string; bg(color: string, text: string): string } {
 	return {
 		fg(color, text) {
@@ -66,7 +66,7 @@ export function createAlignmentEditorTheme(): { fg(color: string, text: string):
 			return code === undefined ? text : sgrFg(code, text);
 		},
 		// No real consumer calls bg() today (confirmed: neither
-		// NeovimEditorComponent nor ExplorerComponent does) -- kept only for
+		// ModalEditorComponent nor ExplorerComponent does) -- kept only for
 		// EditorTheme's own interface completeness.
 		bg(_color, text) {
 			return text;
@@ -108,7 +108,7 @@ export class TitledComponent implements Component {
  * end to end (not assumed): `TUI`/`KeybindingsManager` are real
  * pi-coding-agent/pi-tui classes with private fields, so no object literal
  * can satisfy them structurally; every real `.custom()` factory this was
- * proven against (pi-lector's NeovimEditorComponent/ExplorerComponent)
+ * proven against (pi-lector's ModalEditorComponent/ExplorerComponent)
  * only ever calls `tui.requestRender()`/`tui.terminal.rows` and ignores
  * `keybindings` entirely (both name the parameter `_keybindings`), so a
  * small fake object cast at the boundary is correct, not a shortcut.

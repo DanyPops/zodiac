@@ -54,7 +54,7 @@ function typeKeys(component: Component, keys: readonly string[]): void {
 }
 
 describe("openLectorEditorNatively", () => {
-	it("mounts a real NeovimEditorComponent showing the real file's own content -- no AgentSession, no Pi extension involvement at all", async () => {
+	it("mounts a real ModalEditorComponent showing the real file's own content -- no AgentSession, no Pi extension involvement at all", async () => {
 		root = mkdtempSync(join(tmpdir(), "alignment-native-editor-"));
 		writeFileSync(join(root, "greet.ts"), "export function greet() {\n\treturn 'hi';\n}\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
