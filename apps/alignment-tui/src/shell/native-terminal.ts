@@ -20,7 +20,7 @@ interface XtermHeadlessTerminal {
 
 interface SerializeAddonInstance {
 	activate(terminal: XtermHeadlessTerminal): void;
-	serialize(options?: { range?: { start: number; end: number } }): string;
+	serialize(options?: { range?: { start: number; end: number }; excludeModes?: boolean }): string;
 }
 
 /** Same shape as native-editor.ts's/native-explorer.ts's own NativeEditorHost/NativeExplorerHost -- all three ultimately mount into the exact same SemanticShellApplication machinery (showExternalComponent/hideExternalComponent/refresh/terminalRows). */
@@ -139,8 +139,14 @@ export class TerminalPaneComponent implements Component {
 				/* child may have already exited between the resize check and this call */
 			}
 		}
+		// excludeModes: true -- confirmed directly (a real shell's own bracketed-paste-mode enable
+		// sequence, \x1b[?2004h, leaked as literal visible "[?2004h" text on every rendered line
+		// before this) that serialize()'s default behavior appends whatever terminal modes are
+		// currently active to its output, meant for "replay this into a fresh real terminal to
+		// restore state" -- a concept that only makes sense for that literal replay use case, never
+		// for handing a row's own visible content to mountComponent's SGR-only parser.
 		const lines: string[] = [];
-		for (let row = 0; row < rows; row++) lines.push(this.serializeAddon.serialize({ range: { start: row, end: row } }));
+		for (let row = 0; row < rows; row++) lines.push(this.serializeAddon.serialize({ range: { start: row, end: row }, excludeModes: true }));
 		lines.push(HINT_LINE);
 		return lines;
 	}

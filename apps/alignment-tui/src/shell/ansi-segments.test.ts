@@ -56,4 +56,29 @@ describe("parseAnsiLine", () => {
 			{ text: " plain", style: {} },
 		]);
 	});
+
+	/**
+	 * A real, previously-shipped bug: a real shell's own bracketed-paste-mode enable sequence
+	 * (\x1b[?2004h, a DEC private mode toggle, final byte `h` not `m`) leaked as literal visible
+	 * "[?2004h" text -- the old SGR-only regex simply never matched it, so the whole raw sequence
+	 * fell through as plain "rest" text. Fixed at this layer (a general CSI-sequence match, with an
+	 * explicit isSgr check deciding what's real styling vs. what's silently dropped) as
+	 * defense-in-depth alongside native-terminal.ts's own excludeModes fix -- this test pins the
+	 * parser's own contract regardless of which future caller might emit a non-SGR CSI sequence.
+	 */
+	it("silently drops a non-SGR CSI sequence (e.g. a DEC private mode toggle) instead of leaking it as literal text", () => {
+		expect(parseAnsiLine("before\x1b[?2004hafter")).toEqual([{ text: "before", style: {} }, { text: "after", style: {} }]);
+	});
+
+	it("drops a non-SGR CSI sequence sitting between two styled spans without disturbing either span's own style", () => {
+		const line = "\x1b[1mbold\x1b[?2004h\x1b[0m plain";
+		expect(parseAnsiLine(line, { foreground: 7 })).toEqual([
+			{ text: "bold", style: { foreground: 7, bold: true } },
+			{ text: " plain", style: { foreground: 7 } },
+		]);
+	});
+
+	it("still treats a real SGR sequence as styling even though the general CSI match now also covers non-SGR final bytes", () => {
+		expect(parseAnsiLine("\x1b[1mbold\x1b[0m")).toEqual([{ text: "bold", style: { bold: true } }]);
+	});
 });

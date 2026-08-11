@@ -37,6 +37,50 @@ async function waitForRender(component: Component, width: number, expected: stri
 	}
 }
 
+/**
+ * A real ECMA-48 CSI sequence's own general grammar (ESC [ params intermediates final-byte),
+ * matching ansi-segments.ts's own hardened CSI_RE -- used here independently (not by importing
+ * that file's own regex) so this test can't pass merely because it shares a bug with the parser
+ * it's meant to catch a leak past. A *legitimate* SGR sequence (final byte `m`, no DEC-private
+ * parameter marker) is real, intended content -- exactly what parseAnsiLine consumes and paints as
+ * styling, not a leak -- so it's explicitly excluded; anything else matching this grammar is real
+ * leaked escape-sequence garbage: mountComponent's own contract is plain text plus SGR only,
+ * nothing else should ever reach a person looking at the screen.
+ */
+const CSI_RE = /\x1b\[([0-?]*)([ -/]*)([@-~])/g;
+function isLegitimateSgr(params: string, final: string): boolean {
+	return final === "m" && !/[<=>?]/.test(params);
+}
+function hasStrayEscapeSequence(line: string): boolean {
+	CSI_RE.lastIndex = 0;
+	let match: RegExpExecArray | null;
+	while ((match = CSI_RE.exec(line))) {
+		if (!isLegitimateSgr(match[1] ?? "", match[3] ?? "")) return true;
+	}
+	return false;
+}
+
+/**
+ * These exist specifically because every other assertion in this file (and this session's own
+ * earlier work) only ever checked *presence* of expected text via .includes()/toContain -- a line
+ * containing "hello-from-real-shell\x1b[?2004h" passes `.includes("hello-from-real-shell")`
+ * exactly as cleanly as a garbage-free line would. A real, user-reported bug (a real shell's own
+ * bracketed-paste-mode enable sequence, \x1b[?2004h, leaking as literal visible "[?2004h" text on
+ * every rendered line) was structurally invisible to every test in this file until this one:
+ * `@xterm/addon-serialize`'s serialize() defaults to appending whatever terminal modes are
+ * currently active to its own output (meant for "replay this into a fresh real terminal", a
+ * concept that never applies here), and this app's own ansi-segments.ts parser only stripped
+ * SGR (`\x1b[...m`) sequences -- any other CSI sequence fell through as literal text. Fixed at
+ * both layers (serialize({excludeModes: true}) plus a hardened, general CSI-stripping
+ * parseAnsiLine) -- this test pins the outward-visible symptom regardless of which layer a future
+ * regression comes from.
+ */
+function assertNoLeakedEscapeSequences(lines: readonly string[]): void {
+	for (const line of lines) {
+		if (hasStrayEscapeSequence(line)) throw new Error(`render() leaked a non-SGR escape sequence into a line meant to be plain text + SGR only: ${JSON.stringify(line)}`);
+	}
+}
+
 describe("TerminalPaneComponent -- a real shell mounted natively, no Lector, no AgentSession, no Pi extension involvement at all", () => {
 	it("mounts a real shell and reflects its real output through render()", async () => {
 		const { host, mounted } = fakeNativeHost();
@@ -47,6 +91,26 @@ describe("TerminalPaneComponent -- a real shell mounted natively, no Lector, no 
 
 		component.handleInput?.("echo hello-from-real-shell\r");
 		await waitForRender(component, 80, "hello-from-real-shell");
+	});
+
+	it("never leaks a raw escape sequence into any rendered line -- the real regression: a real shell's own bracketed-paste-mode toggle (\\x1b[?2004h), genuinely emitted as real output (confirmed directly, not assumed), must never surface as literal visible text", async () => {
+		const { host, mounted } = fakeNativeHost();
+		openTerminalPaneNatively(host, process.cwd());
+		const component = mounted();
+		if (!component) throw new Error("no component mounted");
+
+		// $SHELL on the machine this runs on is a real interactive shell (zsh/bash), which toggles
+		// bracketed paste on its own on every prompt -- no synthetic injection needed to exercise the
+		// real path. waitForRender alone is NOT enough here and was directly confirmed (not assumed)
+		// to mask this exact bug: it returns the instant "settle-marker" first appears, which can be a
+		// transient moment *before* the shell re-enables paste mode while redrawing its next prompt --
+		// a real race that let this same test pass against the unfixed code the first time it was
+		// written. The extra settle wait below lets that redraw actually finish before checking.
+		component.handleInput?.("echo settle-marker\r");
+		await waitForRender(component, 80, "settle-marker");
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		const lines = component.render(80);
+		assertNoLeakedEscapeSequences(lines);
 	});
 
 	it("shows the permanent hint line at the bottom row", async () => {

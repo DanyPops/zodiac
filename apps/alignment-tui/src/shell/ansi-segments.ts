@@ -6,7 +6,24 @@ export interface StyledSegment {
 	readonly style: CellStyle;
 }
 
-const SGR_RE = /\x1b\[([\d;]*)m/g;
+/**
+ * A real ECMA-48 CSI sequence's own general grammar (ESC [ parameter-bytes intermediate-bytes
+ * final-byte) -- not just SGR's own `m`-terminated subset. Real, previously-missing case,
+ * confirmed live (not hypothetical): a real shell's own bracketed-paste-mode enable sequence
+ * (`\x1b[?2004h`, DEC private mode, final byte `h`) leaked as literal visible "[?2004h" text
+ * through this parser's own prior SGR-only regex -- it simply never matched, so the whole raw
+ * sequence fell through as plain "rest" text (see native-terminal.ts's own doc comment on
+ * excludeModes for the full story of where that sequence came from). isSgr below is the one place
+ * that decides which matched CSI sequences are real, intended styling to apply (SGR, final byte
+ * `m`, no DEC-private parameter marker) versus anything else, which is silently dropped --
+ * consumed here, never leaked -- matching this parser's own documented contract that a caller only
+ * ever hands it plain text plus SGR.
+ */
+const CSI_RE = /\x1b\[([0-?]*)[ -/]*([@-~])/g;
+
+function isSgr(params: string, final: string): boolean {
+	return final === "m" && !/[<=>?]/.test(params);
+}
 
 /**
  * Folds one SGR parameter list onto a style, in the standard numeric space
@@ -87,17 +104,23 @@ export function parseAnsiLine(line: string, base: CellStyle = {}): StyledSegment
 	const stack: (readonly number[])[] = [];
 	const currentStyle = (): CellStyle => stack.reduce((style: CellStyle, codes) => applyCodes(style, codes), base);
 
-	SGR_RE.lastIndex = 0;
+	CSI_RE.lastIndex = 0;
 	let lastIndex = 0;
 	let match: RegExpExecArray | null;
-	while ((match = SGR_RE.exec(line))) {
+	while ((match = CSI_RE.exec(line))) {
 		const text = line.slice(lastIndex, match.index);
 		if (text.length > 0) segments.push({ text, style: currentStyle() });
-		const codesText = match[1] ?? "";
-		const codes = codesText === "" ? [0] : codesText.split(";").map(Number);
-		if (codes.length === 1 && codes[0] === 0) stack.pop();
-		else stack.push(codes);
-		lastIndex = SGR_RE.lastIndex;
+		const params = match[1] ?? "";
+		const final = match[2] ?? "";
+		if (isSgr(params, final)) {
+			const codes = params === "" ? [0] : params.split(";").map(Number);
+			if (codes.length === 1 && codes[0] === 0) stack.pop();
+			else stack.push(codes);
+		}
+		// Any other CSI sequence this matched (DEC private mode toggles, cursor positioning, ...) is
+		// intentionally not applied to the style stack -- it's still consumed (lastIndex still
+		// advances past it below), just never treated as styling or re-emitted as text.
+		lastIndex = CSI_RE.lastIndex;
 	}
 	const rest = line.slice(lastIndex);
 	if (rest.length > 0) segments.push({ text: rest, style: currentStyle() });
