@@ -3,6 +3,7 @@ import type { WorldViewModel } from "@alignment/surface-protocol";
 import type { GridUpdate, Outcome } from "../frame/index.js";
 import type { LectorHost } from "../lector/lector-host.js";
 import { promptAndOpenLectorEditorNatively } from "../lector/native-editor.js";
+import { openLectorExplorerNatively } from "../lector/native-explorer.js";
 import type { FooterChatController } from "../pi/footer-chat-controller.js";
 import { GridTerminal } from "../terminal/grid-terminal.js";
 import { resolveShellCommand, type ShellCommand } from "./keymap.js";
@@ -28,6 +29,8 @@ export class SemanticShellApplication {
     footerChat?: FooterChatController,
     /** Absent exactly when cli.ts started with no path argument at all (see its own `classified.kind === "none"` branch) -- "open-lector-editor" is then a silent no-op rather than throwing, matching how footer-submit is already a no-op with no footerChat. */
     private readonly lectorHost?: LectorHost,
+    /** The resolved workspace root "open-lector-explorer" browses from -- absent under the exact same condition as lectorHost (no path argument at boot), and for the same reason: there is nothing to browse. */
+    private readonly rootPath?: string,
   ) {
     this.output = new GridTerminal(terminal);
     this.footerChat = footerChat;
@@ -97,6 +100,7 @@ export class SemanticShellApplication {
       case "footer-backspace": this.footerChat?.backspace(); return;
       case "footer-type": this.footerChat?.typeChar(command.char); return;
       case "open-lector-editor": this.openLectorEditor(); return;
+      case "open-lector-explorer": this.openLectorExplorer(); return;
     }
   }
 
@@ -107,6 +111,15 @@ export class SemanticShellApplication {
       // Opening failed before any Component ever mounted (e.g. the initial workspace/file open
       // itself rejected) -- nothing is showing external focus in that case, so just refresh back
       // to Alignment's own chrome instead of leaving a dead promise with no user-visible outcome.
+      this.hideExternalComponent();
+      this.refresh();
+    });
+  }
+
+  /** Same fire-and-forget/failure-recovery contract as openLectorEditor -- no Input prompt needed, unlike the editor, since the explorer always starts at the already-resolved workspace root. */
+  private openLectorExplorer(): void {
+    if (!this.lectorHost || !this.rootPath) return;
+    void openLectorExplorerNatively(this, this.lectorHost, this.rootPath).catch(() => {
       this.hideExternalComponent();
       this.refresh();
     });

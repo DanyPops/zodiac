@@ -36,7 +36,8 @@ function record(value: unknown): Record<string, unknown> | undefined {
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 }
 
-function fakeTui(host: NativeEditorHost): { requestRender(): void; terminal: { rows: number } } {
+/** Shared with native-explorer.ts -- both mount a real pi-lector Component against the exact same narrow {requestRender, terminal.rows} coupling surface, proven live for ModalEditorComponent and structurally identical for ExplorerComponent (same EditorState engine underneath). */
+export function fakeTui(host: NativeEditorHost): { requestRender(): void; terminal: { rows: number } } {
 	return {
 		requestRender: () => host.refresh(),
 		terminal: {

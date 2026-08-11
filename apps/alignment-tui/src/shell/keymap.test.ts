@@ -26,6 +26,12 @@ describe("resolveShellCommand -- the facade between raw keymap wiring and the ac
     expect(resolveShellCommand("\x1b[1;5C", { focusedRegion: "header", hasFooterChat: false })).toEqual({ type: "enter-fullscreen" });
   });
 
+  it("maps Ctrl+E/Ctrl+O to open-lector-editor/open-lector-explorer regardless of focus, the same global reach as fullscreen's own Ctrl+Right/Left", () => {
+    expect(resolveShellCommand("\x05", bodyFocused)).toEqual({ type: "open-lector-editor" });
+    expect(resolveShellCommand("\x0f", bodyFocused)).toEqual({ type: "open-lector-explorer" });
+    expect(resolveShellCommand("\x05", { focusedRegion: "header", hasFooterChat: false })).toEqual({ type: "open-lector-editor" });
+  });
+
   it("maps footer-scoped commands only when the footer is focused and a live footer chat exists", () => {
     expect(resolveShellCommand("\x1b[1;5A", withFooter)).toEqual({ type: "expand-footer" });
     expect(resolveShellCommand("\x1b[1;5B", withFooter)).toEqual({ type: "collapse-footer" });

@@ -31,6 +31,7 @@ async function main(): Promise<void> {
 
   const world = createWorldStore(worldId("alignment"));
   let host: LectorHost | undefined;
+  let rootPath: string | undefined;
   if (classified.kind !== "none") {
     host = createLectorHost();
     await host.activate();
@@ -40,6 +41,7 @@ async function main(): Promise<void> {
       return fail(bootstrapped.message);
     }
     applyBootstrapToWorld(world, bootstrapped.value);
+    rootPath = resolveAgentCwd(classified);
   }
 
   // The application must exist *before* startFooterChat() runs:
@@ -49,7 +51,7 @@ async function main(): Promise<void> {
   // why this order (application, then uiContext, then startFooterChat, then
   // attach) is the one that actually breaks that cycle.
   const terminal = new ProcessTerminal();
-  const application = new SemanticShellApplication(world, terminal, undefined, host);
+  const application = new SemanticShellApplication(world, terminal, undefined, host, rootPath);
   const uiContext = createAlignmentExtensionUIContext(application);
   const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext });
   if (chat) application.attachFooterChat(chat.footerChat);

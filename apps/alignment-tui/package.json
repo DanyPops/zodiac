@@ -21,13 +21,13 @@
     "@alignment/core": "*",
     "@alignment/pi-integration": "*",
     "@alignment/surface-protocol": "*",
-    "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.1.tgz",
-    "@danypops/pi-lector": "file:vendor/danypops-pi-lector-0.12.7.tgz",
+    "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.2.tgz",
+    "@danypops/pi-lector": "file:vendor/danypops-pi-lector-0.12.9.tgz",
     "@earendil-works/pi-coding-agent": "^0.84.1",
     "@earendil-works/pi-tui": "^0.84.0"
   },
   "devDependencies": {
-    "@danypops/lector": "file:vendor/danypops-lector-0.18.1.tgz",
+    "@danypops/lector": "file:vendor/danypops-lector-0.18.15.tgz",
     "@danypops/pi-tui-harness": "^0.0.2",
     "@danypops/vehicle-server": "^0.3.2",
     "@types/picomatch": "^4.0.3",

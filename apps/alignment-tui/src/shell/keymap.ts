@@ -13,6 +13,7 @@ export type ShellCommand =
   | { readonly type: "enter-fullscreen" }
   | { readonly type: "exit-fullscreen" }
   | { readonly type: "open-lector-editor" }
+  | { readonly type: "open-lector-explorer" }
   | { readonly type: "expand-footer" }
   | { readonly type: "collapse-footer" }
   | { readonly type: "scroll-footer-up" }
@@ -81,6 +82,11 @@ export function resolveShellCommand(data: string, context: KeymapContext): Shell
   // way fullscreen's own Ctrl+Right/Left are -- opening the editor is meaningful regardless of
   // which region currently has focus.
   if (matchesKey(data, Key.ctrl("e"))) return { type: "open-lector-editor" };
+  // Same C0-control-byte reliability bar as Ctrl+E right above (Ctrl+O is 0x0F, universally
+  // delivered) -- a distinct global chord for the explorer rather than overloading Ctrl+E's own
+  // meaning, matching how oil.nvim itself keeps "open a file" and "browse a directory" as two
+  // separate real entry points rather than one that infers which the user wants.
+  if (matchesKey(data, Key.ctrl("o"))) return { type: "open-lector-explorer" };
   if (!context.hasFooterChat || context.focusedRegion !== "footer") return undefined;
   // Neovim/tmux-style incremental resize: repeatable, not a modal
   // resize-prefix step, and scoped to the footer being the focused region
