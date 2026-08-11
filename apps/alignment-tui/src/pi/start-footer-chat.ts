@@ -6,6 +6,7 @@ import {
 	SessionManager,
 	SettingsManager,
 	type AgentSession,
+	type ExtensionUIContext,
 	type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
 import { homedir } from "node:os";
@@ -33,6 +34,17 @@ export interface StartFooterChatOptions {
 	readonly resourceLoader?: ResourceLoader;
 	readonly sessionManager?: SessionManager;
 	readonly settingsManager?: SettingsManager;
+	/**
+	 * Routes an extension's `.custom()`/select()/confirm()/input() UI requests
+	 * (e.g. pi-lector's `/editor`) to Alignment's own mounted-Component facade
+	 * (see createAlignmentExtensionUIContext) instead of pi-coding-agent's own
+	 * default `noOpUIContext`, which silently drops every such request. Built
+	 * from a real SemanticShellApplication in cli.ts, constructed *before* this
+	 * function runs -- see AlignmentExtensionUIContextHost's own doc comment
+	 * for why that ordering is unavoidable. Absent means extensions requesting
+	 * interactive UI silently no-op, exactly like today.
+	 */
+	readonly uiContext?: ExtensionUIContext;
 }
 
 /**
@@ -91,7 +103,7 @@ export async function startFooterChat(options: StartFooterChatOptions): Promise<
 		// app's subprocess integration (a real `pi --mode rpc` process) doesn't
 		// have this gap: pi's own rpc-mode.js calls bindExtensions() internally
 		// as part of its own bootstrap.
-		await session.bindExtensions({ mode: "tui" });
+		await session.bindExtensions({ mode: "tui", uiContext: options.uiContext });
 		// createAgentSession()'s own internal default-model resolution
 		// (findInitialModel) runs *before* any extension has been activated --
 		// confirmed live: a custom-provider extension's own registerProvider()

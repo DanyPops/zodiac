@@ -1,8 +1,10 @@
 import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type WorldViewModel } from "@alignment/surface-protocol";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
+import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { createGridFrame, createRect, gridId, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "../frame/index.js";
 import type { FooterChatStatus } from "../pi/footer-chat-controller.js";
+import { mountComponent } from "./component-mount.js";
 import { wrapFooterHistory } from "./footer-history-wrap.js";
 
 /** How many rows one Ctrl+Up/Ctrl+Down expandFooter()/collapseFooter() step changes -- see SemanticShellApplication's own footer-focused keybinding. */
@@ -10,8 +12,16 @@ const FOOTER_RESIZE_STEP = 3;
 /** A generous cap on the *requested* footer height, independent of the current viewport -- project() always clamps the effective value to what the real viewport can hold, so this only bounds how far a request can run ahead of a terminal that later shrinks. */
 const MAX_REQUESTED_FOOTER_HEIGHT = 200;
 
-export type ShellFocus = "header" | "left-pillar" | "body" | "right-pillar" | "footer";
-const FOCUS_ORDER: readonly ShellFocus[] = ["header", "left-pillar", "body", "right-pillar", "footer"];
+/**
+ * "external" means a mounted extension Component (ExtensionUIContext.custom())
+ * now owns all keyboard input -- never part of the normal Tab/Shift+Tab
+ * five-region cycle (see FOCUS_ORDER, which deliberately excludes it), only
+ * ever entered via enterExternal() and left via exitExternal() (the
+ * facade's own done() callback).
+ */
+export type ShellFocus = "header" | "left-pillar" | "body" | "right-pillar" | "footer" | "external";
+type CyclableShellFocus = Exclude<ShellFocus, "external">;
+const FOCUS_ORDER: readonly CyclableShellFocus[] = ["header", "left-pillar", "body", "right-pillar", "footer"];
 const BASE: CellStyle = { foreground: 7 };
 const MUTED: CellStyle = { foreground: 6, dim: true };
 const BORDER_ACTIVE: CellStyle = { ...BASE, bold: true };
@@ -98,11 +108,29 @@ export class SemanticShell {
   private requestedFooterHeight = MIN_FOOTER_HEIGHT;
   /** Non-null means that Surface fills the entire viewport, hiding every other region -- see enterFullscreen's own doc comment. Only ever "body" or "footer": header/pillars are chrome, not a Surface. */
   private fullscreenTarget: "body" | "footer" | null = null;
+  /** Non-null means an extension-mounted Component (ExtensionUIContext.custom()) owns the entire viewport and all keyboard input -- see enterExternal's own doc comment. */
+  private externalComponent: Component | null = null;
 
-  focusedRegion(): ShellFocus { return FOCUS_ORDER[this.focusIndex]!; }
-  /** Fullscreen hides every region but the focused one, so there is nothing else to move focus to -- mirrors tmux disabling pane navigation while a pane is zoomed. */
-  focusNext(): ShellFocus { if (this.fullscreenTarget === null) this.focusIndex = (this.focusIndex + 1) % FOCUS_ORDER.length; return this.focusedRegion(); }
-  focusPrevious(): ShellFocus { if (this.fullscreenTarget === null) this.focusIndex = (this.focusIndex - 1 + FOCUS_ORDER.length) % FOCUS_ORDER.length; return this.focusedRegion(); }
+  /** "external" overrides whatever the underlying Tab-cycle position is -- restored automatically once exitExternal() runs, since focusIndex itself is never touched while external. */
+  focusedRegion(): ShellFocus { return this.externalComponent ? "external" : FOCUS_ORDER[this.focusIndex]!; }
+  /** Fullscreen (and external focus) hide every region but the focused one, so there is nothing else to move focus to -- mirrors tmux disabling pane navigation while a pane is zoomed. */
+  focusNext(): ShellFocus { if (this.fullscreenTarget === null && this.externalComponent === null) this.focusIndex = (this.focusIndex + 1) % FOCUS_ORDER.length; return this.focusedRegion(); }
+  focusPrevious(): ShellFocus { if (this.fullscreenTarget === null && this.externalComponent === null) this.focusIndex = (this.focusIndex - 1 + FOCUS_ORDER.length) % FOCUS_ORDER.length; return this.focusedRegion(); }
+
+  /**
+   * Gives an extension-mounted Component (ExtensionUIContext.custom()'s own
+   * return value) full ownership of the viewport and every keystroke --
+   * SemanticShellApplication.handleInput() checks hasExternalComponent()
+   * before ever reaching resolveShellCommand(), routing raw bytes straight
+   * to externalComponentHandle()!.handleInput(data) instead. Mirrors a real
+   * `pi` TUI session showing a `ctx.ui.custom()` overlay: while it's up,
+   * pi's own chrome (footer, pillars, ...) receives no input at all.
+   */
+  enterExternal(component: Component): void { this.externalComponent = component; }
+  /** Hands focus back to whatever region held it before enterExternal() -- focusIndex was never touched, so this is exact, not a guess. Called by the facade's own done() callback. */
+  exitExternal(): void { this.externalComponent = null; }
+  hasExternalComponent(): boolean { return this.externalComponent !== null; }
+  externalComponentHandle(): Component | null { return this.externalComponent; }
 
   /**
    * Pushes the currently focused Surface (body or footer -- header/pillars
@@ -167,6 +195,18 @@ export class SemanticShell {
     const created = createGridFrame(gridId("alignment-shell"), width, height);
     if (!created.ok) return created;
     const frame = created.value;
+    if (this.externalComponent !== null) {
+      // A real 100%/100% overlay -- no borders, no other region, exactly
+      // what an extension's ctx.ui.custom() overlay expects: it owns the
+      // whole viewport, not a tile within it. mountComponent's own bounds
+      // clipping (via paintText) is what keeps this safe even if the
+      // component renders more rows/columns than width/height provide.
+      const fullArea = createRect(0, 0, width, height);
+      if (!fullArea.ok) return fullArea;
+      const mounted = mountComponent(frame, fullArea.value, this.externalComponent);
+      if (!mounted.ok) return mounted;
+      return { ok: true, value: frame };
+    }
     if (this.fullscreenTarget !== null) {
       const target = this.fullscreenTarget;
       const region = layout.value.find((candidate) => candidate.kind === target);

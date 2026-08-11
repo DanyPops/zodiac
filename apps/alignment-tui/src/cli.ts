@@ -7,6 +7,7 @@ import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";
 import { bootstrapWorkspace } from "./bootstrap/workspace-bootstrap.js";
 import { createLectorHost, type LectorHost } from "./lector/lector-host.js";
+import { createAlignmentExtensionUIContext } from "./pi/alignment-extension-ui-context.js";
 import { startFooterChat } from "./pi/start-footer-chat.js";
 import { SemanticShellApplication } from "./shell/application.js";
 
@@ -41,10 +42,17 @@ async function main(): Promise<void> {
     applyBootstrapToWorld(world, bootstrapped.value);
   }
 
-  const chat = await startFooterChat({ cwd: resolveAgentCwd(classified) });
-
+  // The application must exist *before* startFooterChat() runs:
+  // AlignmentExtensionUIContext needs a real host to route .custom() through,
+  // but startFooterChat() is also what produces the FooterChatController the
+  // application itself renders -- see attachFooterChat's own doc comment for
+  // why this order (application, then uiContext, then startFooterChat, then
+  // attach) is the one that actually breaks that cycle.
   const terminal = new ProcessTerminal();
-  const application = new SemanticShellApplication(world, terminal, chat?.footerChat);
+  const application = new SemanticShellApplication(world, terminal);
+  const uiContext = createAlignmentExtensionUIContext(application);
+  const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext });
+  if (chat) application.attachFooterChat(chat.footerChat);
   let stopping = false;
 
   // Any live-conversation event (a streaming delta, a tool call, an error)
@@ -68,7 +76,12 @@ async function main(): Promise<void> {
   terminal.start(
     (data) => {
       if (matchesKey(data, Key.ctrl("c"))) void stop();
-      else if (matchesKey(data, Key.escape) && application.focusedRegion() !== "footer") void stop();
+      // "external" excluded for the same reason "footer" already is: Escape
+      // is real, meaningful input to whatever owns focus there (a footer
+      // draft, or a mounted extension Component's own modal-editing Escape,
+      // e.g. pi-lector's Neovim-style insert-to-normal-mode transition) --
+      // never Alignment's own "quit" shortcut while either holds focus.
+      else if (matchesKey(data, Key.escape) && application.focusedRegion() !== "footer" && application.focusedRegion() !== "external") void stop();
       else application.handleInput(data);
     },
     () => application.resize(terminal.columns, terminal.rows),

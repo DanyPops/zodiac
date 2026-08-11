@@ -1,4 +1,4 @@
-import type { Terminal } from "@earendil-works/pi-tui";
+import type { Component, Terminal } from "@earendil-works/pi-tui";
 import type { WorldViewModel } from "@alignment/surface-protocol";
 import type { GridUpdate, Outcome } from "../frame/index.js";
 import type { FooterChatController } from "../pi/footer-chat-controller.js";
@@ -17,18 +17,40 @@ export class SemanticShellApplication {
   private width = 0;
   private height = 0;
 
+  /** Absent means no live Pi integration was constructed yet (no model configured, construction failed, still awaiting startFooterChat's own async setup, ...) -- the Footer renders its existing "unavailable" state and Enter/typing in the footer are no-ops. Not readonly: startFooterChat's own bindExtensions() call (which needs a real AlignmentExtensionUIContext, which needs a real SemanticShellApplication to route custom()'s mounted Components through) necessarily resolves *before* this application even exists in cli.ts's own construction order -- see attachFooterChat's own doc comment. */
+  private footerChat?: FooterChatController;
+
   constructor(
     private readonly world: WorldProjection,
     terminal: Pick<Terminal, "write">,
-    /** Absent means no live Pi integration was constructed (no model configured, construction failed, ...) -- the Footer renders its existing "unavailable" state and Enter/typing in the footer are no-ops. */
-    private readonly footerChat?: FooterChatController,
+    footerChat?: FooterChatController,
   ) {
     this.output = new GridTerminal(terminal);
+    this.footerChat = footerChat;
   }
+
+  /**
+   * Attaches a FooterChatController constructed *after* this application
+   * already exists -- the real cli.ts sequencing: AlignmentExtensionUIContext
+   * needs a live SemanticShellApplication before startFooterChat() calls
+   * session.bindExtensions({ uiContext }), but startFooterChat() is also what
+   * produces the FooterChatController itself. Breaking that cycle means
+   * constructing the application with no footerChat, then attaching the real
+   * one once startFooterChat() resolves -- never called more than once in
+   * practice, but not guarded against it either (the constructor-injection
+   * path used by every existing test remains the primary, simpler case).
+   */
+  attachFooterChat(footerChat: FooterChatController): void { this.footerChat = footerChat; }
 
   boot(width: number, height: number): Outcome<GridUpdate> { this.width = width; this.height = height; return this.render(); }
   resize(width: number, height: number): Outcome<GridUpdate> { this.width = width; this.height = height; return this.render(); }
   focusedRegion(): ShellFocus { return this.shell.focusedRegion(); }
+  /** Current terminal row count -- what AlignmentExtensionUIContext's fakeTui.terminal.rows reads live on every custom() call, matching a real TUI.terminal.rows read fresh each time rather than cached at mount. */
+  terminalRows(): number { return this.height; }
+  /** Gives an extension-mounted Component (ExtensionUIContext.custom()) full ownership of the viewport and every keystroke -- see SemanticShell.enterExternal's own doc comment. Callers must call refresh() afterward to actually paint it; this only changes state. */
+  showExternalComponent(component: Component): void { this.shell.enterExternal(component); }
+  /** Hands focus and the viewport back to Alignment's own chrome -- see SemanticShell.exitExternal's own doc comment. Callers must call refresh() afterward. */
+  hideExternalComponent(): void { this.shell.exitExternal(); }
 
   /** Re-renders at the current size without changing focus or layout -- what a footerChat subscriber calls when a streaming event changes what the Footer should show, independent of any real keyboard input. */
   refresh(): Outcome<GridUpdate> { return this.render(); }
@@ -41,6 +63,17 @@ export class SemanticShellApplication {
    * terminal-protocol knowledge of its own.
    */
   handleInput(data: string): Outcome<GridUpdate> {
+    // An extension-mounted Component (ExtensionUIContext.custom()) owns
+    // every keystroke while it's up -- exactly like a real pi TUI session
+    // showing a ctx.ui.custom() overlay, where pi's own chrome receives no
+    // input at all. Bypasses resolveShellCommand/dispatch entirely: there is
+    // no semantic ShellCommand translation for raw bytes meant for someone
+    // else's Component, only a pass-through.
+    const external = this.shell.externalComponentHandle();
+    if (external) {
+      external.handleInput?.(data);
+      return this.render();
+    }
     const command = resolveShellCommand(data, { focusedRegion: this.shell.focusedRegion(), hasFooterChat: this.footerChat !== undefined });
     if (command) this.dispatch(command);
     return this.render();

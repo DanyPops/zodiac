@@ -109,6 +109,11 @@ function highlightBoxFor(focus: ShellFocus, t: BorderTopology): HighlightBox {
     case "body": return { x0: t.verticalLeftSplit, y0: t.horizontalTop, x1: t.verticalRightSplit, y1: t.horizontalFooterSeparator };
     case "right-pillar": return { x0: t.verticalRightSplit, y0: t.horizontalTop, x1: t.verticalOuterRight, y1: t.horizontalFooterSeparator };
     case "footer": return { x0: t.verticalOuterLeft, y0: t.horizontalFooterSeparator, x1: t.verticalOuterRight, y1: t.horizontalBottom };
+    // Unreachable in practice: SemanticShell.project() short-circuits entirely
+    // while an external Component owns the viewport, never reaching
+    // paintFrameBorders/highlightBoxFor at all. A zero-area box here purely
+    // satisfies ShellFocus's own exhaustiveness, not a real highlight target.
+    case "external": return { x0: t.verticalOuterLeft, y0: t.horizontalTop, x1: t.verticalOuterLeft, y1: t.horizontalTop };
   }
 }
 

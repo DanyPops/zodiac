@@ -532,4 +532,60 @@ describe("semantic empty Alignment shell", () => {
       expect(text).not.toContain("brand new");
     });
   });
+
+  describe("external focus", () => {
+    function componentRendering(lines: string[]) {
+      return { render: () => lines, invalidate: () => {} };
+    }
+
+    it("focusedRegion() reports \"external\" once a Component is mounted, overriding whatever the underlying Tab-cycle position was", () => {
+      const shell = new SemanticShell();
+      shell.focusNext(); // left-pillar
+      expect(shell.focusedRegion()).toBe("left-pillar");
+      shell.enterExternal(componentRendering(["hi"]));
+      expect(shell.focusedRegion()).toBe("external");
+      expect(shell.hasExternalComponent()).toBe(true);
+    });
+
+    it("focusNext()/focusPrevious() never cycle away from external focus while a Component is mounted", () => {
+      const shell = new SemanticShell();
+      shell.enterExternal(componentRendering(["hi"]));
+      shell.focusNext();
+      expect(shell.focusedRegion()).toBe("external");
+      shell.focusPrevious();
+      expect(shell.focusedRegion()).toBe("external");
+    });
+
+    it("exitExternal() restores exactly the focus that was held before enterExternal() -- focusIndex was never touched", () => {
+      const shell = new SemanticShell();
+      shell.focusNext();
+      shell.focusNext(); // body
+      expect(shell.focusedRegion()).toBe("body");
+      shell.enterExternal(componentRendering(["hi"]));
+      shell.exitExternal();
+      expect(shell.focusedRegion()).toBe("body");
+      expect(shell.hasExternalComponent()).toBe(false);
+    });
+
+    it("project() renders the mounted Component as a real 100%/100% overlay -- no borders, no other region, the whole viewport", () => {
+      const shell = new SemanticShell();
+      shell.enterExternal(componentRendering(["first row", "second row"]));
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24);
+      if (!frame.ok) throw new Error(frame.error.message);
+      const text = frame.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("first row");
+      expect(text).toContain("second row");
+      // No border glyphs at all -- project() short-circuits before paintFrameBorders ever runs.
+      expect(text).not.toContain("\u2500");
+      expect(text).not.toContain("\u2502");
+    });
+
+    it("externalComponentHandle() exposes the exact mounted Component instance for input routing", () => {
+      const shell = new SemanticShell();
+      const component = componentRendering(["hi"]);
+      expect(shell.externalComponentHandle()).toBeNull();
+      shell.enterExternal(component);
+      expect(shell.externalComponentHandle()).toBe(component);
+    });
+  });
 });
