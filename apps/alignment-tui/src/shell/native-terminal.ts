@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import type { Component } from "@earendil-works/pi-tui";
+import { Key, matchesKey } from "@earendil-works/pi-tui";
 import * as pty from "node-pty";
 
 // Same technique as live-pty-terminal.ts/xterm-headless-shim.ts: @xterm/headless and
@@ -41,7 +42,13 @@ export interface NativeTerminalHost {
  * unambiguously -- the same reliability bar keymap.ts's own doc comments already hold every
  * other binding in this app to.
  */
-const EXIT_SEQUENCE = "\x1d";
+// matchesKey/Key.ctrl, not a literal string comparison -- the same reliability bar keymap.ts's
+// own doc comments already hold every other binding in this app to. A naive `data === "\x1d"`
+// check (this line's own prior form) only recognizes the legacy raw C0 control byte -- a real
+// terminal negotiating Kitty keyboard protocol with Alignment can send \x1b[93;5u for the exact
+// same chord instead, confirmed directly as the real cause of a real, user-reported "Ctrl+] does
+// nothing" bug.
+const EXIT_KEY = Key.ctrl("]");
 
 const HINT_LINE = "\x1b[2m-- Ctrl+] to close this terminal --\x1b[0m";
 
@@ -111,7 +118,7 @@ export class TerminalPaneComponent implements Component {
 
 	handleInput(data: string): void {
 		if (this.closed) return;
-		if (data === EXIT_SEQUENCE) {
+		if (matchesKey(data, EXIT_KEY)) {
 			this.close();
 			return;
 		}
