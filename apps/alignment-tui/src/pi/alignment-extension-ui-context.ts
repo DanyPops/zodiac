@@ -58,7 +58,8 @@ function sgrFg(code: number, text: string): string {
  * touches a tiny, now-verified slice of these classes' full declared
  * surface).
  */
-function createAlignmentEditorTheme(): { fg(color: string, text: string): string; bg(color: string, text: string): string } {
+/** Exported for reuse by any other native (non-Pi-extension) host that needs the same small, real theme substitute -- e.g. native-editor.ts's own direct NeovimEditorComponent construction. */
+export function createAlignmentEditorTheme(): { fg(color: string, text: string): string; bg(color: string, text: string): string } {
 	return {
 		fg(color, text) {
 			const code = THEME_COLOR_CODE[color];
@@ -84,7 +85,8 @@ function selectListTheme(): SelectListTheme {
 }
 
 /** Prepends a bold title row above an inner Component's own rendered lines and forwards input -- SelectList/Input have no title concept of their own, and this is the one piece select()/confirm()/input() all three need in common. */
-class TitledComponent implements Component {
+/** Exported for the same reuse reason as createAlignmentEditorTheme above. */
+export class TitledComponent implements Component {
 	constructor(
 		private readonly title: string,
 		private readonly inner: Component,

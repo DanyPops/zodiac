@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   // why this order (application, then uiContext, then startFooterChat, then
   // attach) is the one that actually breaks that cycle.
   const terminal = new ProcessTerminal();
-  const application = new SemanticShellApplication(world, terminal);
+  const application = new SemanticShellApplication(world, terminal, undefined, host);
   const uiContext = createAlignmentExtensionUIContext(application);
   const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext });
   if (chat) application.attachFooterChat(chat.footerChat);

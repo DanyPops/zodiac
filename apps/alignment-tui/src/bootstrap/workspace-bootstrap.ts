@@ -52,7 +52,8 @@ function record(value: unknown): Record<string, unknown> | undefined {
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 }
 
-function workspaceIdFromReference(workspace: ContributionResourceReference): string | undefined {
+/** Exported for reuse by any other caller that opens a Lector workspace resource directly (e.g. native-editor.ts's own workspace resolution) -- the same lector://workspace/<id> URI shape, not a second parsing convention. */
+export function workspaceIdFromReference(workspace: ContributionResourceReference): string | undefined {
 	try {
 		const uri = new URL(workspace.uri);
 		if (uri.protocol !== "lector:" || uri.hostname !== "workspace") return undefined;

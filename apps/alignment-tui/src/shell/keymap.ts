@@ -12,6 +12,7 @@ export type ShellCommand =
   | { readonly type: "focus-previous" }
   | { readonly type: "enter-fullscreen" }
   | { readonly type: "exit-fullscreen" }
+  | { readonly type: "open-lector-editor" }
   | { readonly type: "expand-footer" }
   | { readonly type: "collapse-footer" }
   | { readonly type: "scroll-footer-up" }
@@ -74,6 +75,12 @@ export function resolveShellCommand(data: string, context: KeymapContext): Shell
   if (matchesKey(data, Key.shift("tab"))) return { type: "focus-previous" };
   if (matchesKey(data, Key.ctrl("right"))) return { type: "enter-fullscreen" };
   if (matchesKey(data, Key.ctrl("left"))) return { type: "exit-fullscreen" };
+  // A plain Ctrl+<letter> is a real C0 control byte (Ctrl+E is 0x05) -- universally delivered by
+  // every terminal, unlike Ctrl+Shift or bare-arrow-modifier chords (see this file's own doc
+  // comment above on Ctrl+Right/Left's reliability check). Global, not footer-scoped, the same
+  // way fullscreen's own Ctrl+Right/Left are -- opening the editor is meaningful regardless of
+  // which region currently has focus.
+  if (matchesKey(data, Key.ctrl("e"))) return { type: "open-lector-editor" };
   if (!context.hasFooterChat || context.focusedRegion !== "footer") return undefined;
   // Neovim/tmux-style incremental resize: repeatable, not a modal
   // resize-prefix step, and scoped to the footer being the focused region

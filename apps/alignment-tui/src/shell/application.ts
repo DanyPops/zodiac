@@ -1,6 +1,8 @@
 import type { Component, Terminal } from "@earendil-works/pi-tui";
 import type { WorldViewModel } from "@alignment/surface-protocol";
 import type { GridUpdate, Outcome } from "../frame/index.js";
+import type { LectorHost } from "../lector/lector-host.js";
+import { promptAndOpenLectorEditorNatively } from "../lector/native-editor.js";
 import type { FooterChatController } from "../pi/footer-chat-controller.js";
 import { GridTerminal } from "../terminal/grid-terminal.js";
 import { resolveShellCommand, type ShellCommand } from "./keymap.js";
@@ -24,6 +26,8 @@ export class SemanticShellApplication {
     private readonly world: WorldProjection,
     terminal: Pick<Terminal, "write">,
     footerChat?: FooterChatController,
+    /** Absent exactly when cli.ts started with no path argument at all (see its own `classified.kind === "none"` branch) -- "open-lector-editor" is then a silent no-op rather than throwing, matching how footer-submit is already a no-op with no footerChat. */
+    private readonly lectorHost?: LectorHost,
   ) {
     this.output = new GridTerminal(terminal);
     this.footerChat = footerChat;
@@ -92,7 +96,20 @@ export class SemanticShellApplication {
       case "footer-submit": this.footerChat?.submit(); return;
       case "footer-backspace": this.footerChat?.backspace(); return;
       case "footer-type": this.footerChat?.typeChar(command.char); return;
+      case "open-lector-editor": this.openLectorEditor(); return;
     }
+  }
+
+  /** Fire-and-forget, matching every other dispatch branch's own void-returning contract -- a real failure (e.g. an unreachable Lector daemon) surfaces as a thrown error inside the prompted editor's own status line (NeovimEditorComponent's own performActionSafely convention), not here. */
+  private openLectorEditor(): void {
+    if (!this.lectorHost) return;
+    void promptAndOpenLectorEditorNatively(this, this.lectorHost).catch(() => {
+      // Opening failed before any Component ever mounted (e.g. the initial workspace/file open
+      // itself rejected) -- nothing is showing external focus in that case, so just refresh back
+      // to Alignment's own chrome instead of leaving a dead promise with no user-visible outcome.
+      this.hideExternalComponent();
+      this.refresh();
+    });
   }
 
   private render(): Outcome<GridUpdate> {
