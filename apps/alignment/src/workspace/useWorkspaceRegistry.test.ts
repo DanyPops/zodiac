@@ -177,4 +177,35 @@ describe("useWorkspaceRegistry", () => {
 		act(() => result.current.nextWindow()); // -> window 1: Chat follows now that it's unpinned
 		expect(result.current.activeWindow.dockedSurfaces.some((surface) => surface.templateId === "chat")).toBe(true);
 	});
+
+	describe("renameWorkspace", () => {
+		it("renames the active Workspace's own title", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.renameWorkspace("bug", "Bug Triage"));
+			expect(result.current.workspace.title).toBe("Bug Triage");
+		});
+
+		it("renames a background (non-active) Workspace without switching to it", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.renameWorkspace("metrics", "Growth Metrics"));
+
+			// Still on "bug" -- renaming "metrics" didn't switch the active Workspace.
+			expect(result.current.activeWorkspaceId).toBe("bug");
+
+			act(() => result.current.selectWorkspace("metrics"));
+			expect(result.current.workspace.title).toBe("Growth Metrics");
+		});
+
+		it("rejects a blank title, leaving the Workspace unchanged", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.renameWorkspace("bug", "   "));
+			expect(result.current.workspace.title).toBe("Bug");
+		});
+
+		it("is a no-op for an unknown id", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.renameWorkspace("does-not-exist", "New title"));
+			expect(result.current.workspace.title).toBe("Bug");
+		});
+	});
 });

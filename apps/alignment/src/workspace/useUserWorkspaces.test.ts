@@ -104,4 +104,60 @@ describe("useUserWorkspaces", () => {
 		expect(first).not.toBe(second);
 		expect(result.current.entries.map((entry) => entry.id)).toEqual([first, second]);
 	});
+
+	describe("renameWorkspace", () => {
+		it("renames a persisted entry by id and persists the new title", () => {
+			const storage = memoryStorage();
+			const preferences = createPreferences(storage);
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			let id = "";
+			act(() => {
+				id = result.current.createWorkspace("Deploys", "rocket");
+			});
+			act(() => result.current.renameWorkspace(id, "Production Deploys"));
+
+			expect(result.current.entries[0]).toMatchObject({ id, title: "Production Deploys" });
+			expect(createPreferences(storage).userWorkspaces()).toEqual([{ id, title: "Production Deploys", glyphId: "rocket" }]);
+		});
+
+		it("trims whitespace", () => {
+			const preferences = createPreferences(memoryStorage());
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			let id = "";
+			act(() => {
+				id = result.current.createWorkspace("Deploys", "rocket");
+			});
+			act(() => result.current.renameWorkspace(id, "  Production  "));
+
+			expect(result.current.entries[0]?.title).toBe("Production");
+		});
+
+		it("rejects a blank title, leaving the entry unchanged", () => {
+			const preferences = createPreferences(memoryStorage());
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			let id = "";
+			act(() => {
+				id = result.current.createWorkspace("Deploys", "rocket");
+			});
+			act(() => result.current.renameWorkspace(id, "   "));
+
+			expect(result.current.entries[0]?.title).toBe("Deploys");
+		});
+
+		it("is a no-op for an unknown id", () => {
+			const preferences = createPreferences(memoryStorage());
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			act(() => {
+				result.current.createWorkspace("Deploys", "rocket");
+			});
+			const before = result.current.entries;
+			act(() => result.current.renameWorkspace("does-not-exist", "New title"));
+
+			expect(result.current.entries).toEqual(before);
+		});
+	});
 });

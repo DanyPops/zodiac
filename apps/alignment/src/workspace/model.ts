@@ -95,6 +95,13 @@ export function renameWindow(workspace: Workspace, windowId: string, title: stri
 	return { ...workspace, windows: workspace.windows.map((window) => (window.id === windowId ? { ...window, title: trimmed } : window)) };
 }
 
+/** Renames a Workspace itself; a blank (whitespace-only) title is rejected rather than leaving a Workspace with an empty name -- same guard as renameWindow. */
+export function renameWorkspace(workspace: Workspace, title: string): Workspace {
+	const trimmed = title.trim();
+	if (!trimmed) return workspace;
+	return { ...workspace, title: trimmed };
+}
+
 export function activeWindow(workspace: Workspace): WorkspaceWindow {
 	const window = workspace.windows[workspace.activeWindowIndex];
 	if (!window) throw new Error(`Workspace ${workspace.id} has an out-of-bounds activeWindowIndex ${workspace.activeWindowIndex}`);

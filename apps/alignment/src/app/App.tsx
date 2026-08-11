@@ -87,6 +87,18 @@ export function App(): React.JSX.Element {
 	const activeConversationLoading = piChat.hasStarted ? piChat.busy : conversationWorkspace.conversationLoading;
 	const activeConversationError = piChat.hasStarted ? piChat.error : conversationWorkspace.conversationError;
 	const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+	// Both layers must rename together: userWorkspaces' persisted
+	// SavedWorkspace.title (what the catalog/sidebar actually renders) and the
+	// live per-Workspace Workspace.title useWorkspaceRegistry owns (read by
+	// e.g. relocateChatToActiveWindow's chat-title fallback) -- letting them
+	// drift would show one title in the sidebar and another wherever the live
+	// Workspace's own title is read. Not routed through the command registry:
+	// unlike selectWorkspace/etc., this always carries a dynamic, freshly-typed
+	// string value, not a fixed keybinding-triggered arg.
+	function renameWorkspace(id: string, title: string): void {
+		userWorkspaces.renameWorkspace(id, title);
+		workspace.renameWorkspace(id, title);
+	}
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
@@ -223,6 +235,7 @@ export function App(): React.JSX.Element {
 					onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
 					toolCallWorkspaceId={toolCallWorkspaceId}
 					onCreateWorkspace={() => setCreatingWorkspace(true)}
+					onWorkspaceRename={renameWorkspace}
 				/>
 
 				{/* Notifications/WatchPill sit in the gap between each side Pillar and the center column -- not spread across the column's own full width, which would strand them far from both. */}

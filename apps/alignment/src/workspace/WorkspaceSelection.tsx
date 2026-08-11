@@ -1,5 +1,5 @@
 import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Settings } from "lucide-react";
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
@@ -21,6 +21,8 @@ interface WorkspaceSelectionProps {
 	/** Real tool-call telemetry says the agent is currently acting against this Workspace, and Chat is global (undocked) -- see "Global chat: cross-workspace visibility cue". Undefined most of the time. */
 	readonly toolCallWorkspaceId?: string;
 	readonly onCreateWorkspace: () => void;
+	/** Renames a catalog entry by id -- reachable by double-clicking its label in the expanded pillar (see ExpandedCatalogItem). Not exposed in the collapsed pillar, which shows no text label to double-click. */
+	readonly onWorkspaceRename: (id: string, title: string) => void;
 }
 
 /**
@@ -32,7 +34,7 @@ interface WorkspaceSelectionProps {
  * in this list. Surface docking itself lives in the Window Carousel/center/
  * Surface Templates pillar instead.
  */
-export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace }: WorkspaceSelectionProps): React.JSX.Element {
+export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace, onWorkspaceRename }: WorkspaceSelectionProps): React.JSX.Element {
 	const appearanceShortcut = useCommandShortcut("appearance.open");
 	return (
 		<>
@@ -63,6 +65,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 									toolCallTarget={entry.id === toolCallWorkspaceId}
 									selectedButtonRef={selectedButtonRef}
 									onWorkspaceFocus={onWorkspaceFocus}
+									onRename={(title) => onWorkspaceRename(entry.id, title)}
 								/>
 							))}
 						</ul>
@@ -156,8 +159,22 @@ interface CatalogItemProps {
 	readonly onWorkspaceFocus: () => void;
 }
 
-/** One Workspace's row in the expanded pillar -- its own component so the expanded/collapsed variants (below) each state their own layout once, instead of an inline ternary className repeated at every map callsite. */
-function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRef, onWorkspaceFocus }: CatalogItemProps): React.JSX.Element {
+/** One Workspace's row in the expanded pillar -- its own component so the expanded/collapsed variants (below) each state their own layout once, instead of an inline ternary className repeated at every map callsite. Double-clicking the label enters an inline rename -- Enter commits, Escape or a blank blur cancels back to the entry's current title (never sends a blank rename -- see useUserWorkspaces/useWorkspaceRegistry's own blank-title guard). */
+function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRef, onWorkspaceFocus, onRename }: CatalogItemProps & { readonly onRename: (title: string) => void }): React.JSX.Element {
+	const [renaming, setRenaming] = useState(false);
+	const [draft, setDraft] = useState(entry.title);
+
+	function commit(): void {
+		const trimmed = draft.trim();
+		setRenaming(false);
+		if (trimmed && trimmed !== entry.title) onRename(trimmed);
+	}
+
+	function cancel(): void {
+		setDraft(entry.title);
+		setRenaming(false);
+	}
+
 	return (
 		<li>
 			<CommandButton
@@ -166,6 +183,11 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 				commandArgs={[entry.id]}
 				data-workspace-catalog-id={entry.id}
 				onFocus={onWorkspaceFocus}
+				onDoubleClick={(event) => {
+					event.preventDefault();
+					setDraft(entry.title);
+					setRenaming(true);
+				}}
 				label={entry.title}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
@@ -177,7 +199,24 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 				<GlyphBadge active={selected} size="sm">
 					<entry.icon aria-hidden="true" size={13} />
 				</GlyphBadge>
-				<span className="truncate text-xs font-medium">{entry.title}</span>
+				{renaming ? (
+					<input
+						autoFocus
+						aria-label={`Rename ${entry.title}`}
+						value={draft}
+						onClick={(event) => event.stopPropagation()}
+						onChange={(event) => setDraft(event.target.value)}
+						onBlur={commit}
+						onKeyDown={(event) => {
+							event.stopPropagation();
+							if (event.key === "Enter") commit();
+							else if (event.key === "Escape") cancel();
+						}}
+						className="w-full truncate rounded border border-accent bg-white px-1 py-0.5 text-xs font-medium text-gray-950 outline-none dark:bg-gray-800 dark:text-white"
+					/>
+				) : (
+					<span className="truncate text-xs font-medium">{entry.title}</span>
+				)}
 			</CommandButton>
 		</li>
 	);

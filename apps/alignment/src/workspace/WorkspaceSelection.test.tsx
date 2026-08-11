@@ -36,6 +36,7 @@ function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string, onCrea
 				onWorkspaceFocus={vi.fn()}
 				toolCallWorkspaceId={toolCallWorkspaceId}
 				onCreateWorkspace={onCreateWorkspace}
+				onWorkspaceRename={vi.fn()}
 			/>
 		</CommandProvider>,
 	);
@@ -55,7 +56,7 @@ function renderExpanded() {
 	});
 	render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} />
+			<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={vi.fn()} />
 		</CommandProvider>,
 	);
 }
@@ -94,11 +95,77 @@ describe("expanded Workspace selection", () => {
 		const onCreateWorkspace = vi.fn();
 		render(
 			<CommandProvider registry={registry} activeContexts={["global"]}>
-				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={onCreateWorkspace} />
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={onCreateWorkspace} onWorkspaceRename={vi.fn()} />
 			</CommandProvider>,
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Create a new Workspace" }));
 		expect(onCreateWorkspace).toHaveBeenCalledOnce();
+	});
+
+	it("double-clicking a catalog entry's label enters an inline rename, committed on Enter", () => {
+		const registry = createCommandRegistry({
+			commands: [{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() }],
+			bindings: [],
+		});
+		const onWorkspaceRename = vi.fn();
+		const first = WORKSPACE_CATALOG[0]!;
+		render(
+			<CommandProvider registry={registry} activeContexts={["global"]}>
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} />
+			</CommandProvider>,
+		);
+
+		fireEvent.doubleClick(screen.getByRole("button", { name: first.title }));
+		const input = screen.getByRole("textbox", { name: `Rename ${first.title}` });
+		fireEvent.change(input, { target: { value: "Renamed Workspace" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(onWorkspaceRename).toHaveBeenCalledWith(first.id, "Renamed Workspace");
+		expect(screen.queryByRole("textbox", { name: `Rename ${first.title}` })).not.toBeInTheDocument();
+	});
+
+	it("Escape cancels an inline rename without calling onWorkspaceRename", () => {
+		const registry = createCommandRegistry({
+			commands: [{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() }],
+			bindings: [],
+		});
+		const onWorkspaceRename = vi.fn();
+		const first = WORKSPACE_CATALOG[0]!;
+		render(
+			<CommandProvider registry={registry} activeContexts={["global"]}>
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} />
+			</CommandProvider>,
+		);
+
+		fireEvent.doubleClick(screen.getByRole("button", { name: first.title }));
+		const input = screen.getByRole("textbox", { name: `Rename ${first.title}` });
+		fireEvent.change(input, { target: { value: "Discarded" } });
+		fireEvent.keyDown(input, { key: "Escape" });
+
+		expect(onWorkspaceRename).not.toHaveBeenCalled();
+		expect(screen.getByRole("button", { name: first.title })).toBeInTheDocument();
+	});
+
+	it("blurring with a blank draft cancels rather than sending a blank rename", () => {
+		const registry = createCommandRegistry({
+			commands: [{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() }],
+			bindings: [],
+		});
+		const onWorkspaceRename = vi.fn();
+		const first = WORKSPACE_CATALOG[0]!;
+		render(
+			<CommandProvider registry={registry} activeContexts={["global"]}>
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} />
+			</CommandProvider>,
+		);
+
+		fireEvent.doubleClick(screen.getByRole("button", { name: first.title }));
+		const input = screen.getByRole("textbox", { name: `Rename ${first.title}` });
+		fireEvent.change(input, { target: { value: "   " } });
+		fireEvent.blur(input);
+
+		expect(onWorkspaceRename).not.toHaveBeenCalled();
+		expect(screen.getByRole("button", { name: first.title })).toBeInTheDocument();
 	});
 });
 

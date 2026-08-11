@@ -11,6 +11,7 @@ import {
 	pinChat,
 	previousWindow,
 	renameWindow,
+	renameWorkspace as renameWorkspaceModel,
 	scrollWindow,
 	selectWindow,
 	showChat,
@@ -30,6 +31,8 @@ export interface WorkspaceRegistryHandle {
 	catalog: readonly WorkspaceCatalogEntry[];
 	activeWorkspaceId: string;
 	selectWorkspace: (id: string) => void;
+	/** Renames any Workspace by id, not just the active one -- so a sidebar entry can be renamed without first switching to it. A blank (whitespace-only) title is rejected, and an unknown id is a no-op -- same guards as model.ts's renameWorkspace. */
+	renameWorkspace: (id: string, title: string) => void;
 	workspace: Workspace;
 	/** Every Workspace's real, current state keyed by id -- not just the active one. For cross-workspace correlation (e.g. the global-chat visibility cue); most consumers want `workspace` instead. */
 	workspaces: Readonly<Record<string, Workspace>>;
@@ -145,6 +148,13 @@ export function useWorkspaceRegistry(
 		selectWindow: (index) => update((current) => selectWindow(current, index)),
 		addWindow: () => update(addWindow),
 		renameWindow: (windowId, title) => update((current) => renameWindow(current, windowId, title)),
+		renameWorkspace: (id, title) => {
+			setWorkspaces((current) => {
+				const target = current[id];
+				if (!target) return current;
+				return { ...current, [id]: renameWorkspaceModel(target, title) };
+			});
+		},
 		dockSurface: dock,
 		undockSurface: (surfaceInstanceId) => {
 			update((current) => undockSurface(current, surfaceInstanceId));

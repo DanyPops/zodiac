@@ -14,6 +14,7 @@ import {
 	pinChat,
 	previousWindow,
 	renameWindow,
+	renameWorkspace,
 	scrollWindow,
 	selectWindow,
 	showChat,
@@ -77,6 +78,23 @@ describe("Workspace window and Surface docking", () => {
 		it("is a no-op for an unknown Window id", () => {
 			const workspace = fixtureWorkspace();
 			expect(renameWindow(workspace, "does-not-exist", "New title")).toEqual(workspace);
+		});
+	});
+
+	describe("renameWorkspace", () => {
+		it("renames the Workspace itself", () => {
+			const workspace = fixtureWorkspace();
+			expect(renameWorkspace(workspace, "Deploys").title).toBe("Deploys");
+		});
+
+		it("trims whitespace", () => {
+			const workspace = fixtureWorkspace();
+			expect(renameWorkspace(workspace, "  Deploys  ").title).toBe("Deploys");
+		});
+
+		it("rejects a blank title, leaving the Workspace unchanged", () => {
+			const workspace = fixtureWorkspace();
+			expect(renameWorkspace(workspace, "   ")).toBe(workspace);
 		});
 	});
 
