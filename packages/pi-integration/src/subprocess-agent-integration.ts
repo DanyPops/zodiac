@@ -1,4 +1,7 @@
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/core";
 import { type ChildProcessByStdio, spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import type { Readable, Writable } from "node:stream";
 import { encodeRpcCommand, extractMessageText, parseRpcLine, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
@@ -13,6 +16,16 @@ export interface SubprocessAgentIntegrationOptions {
 	/** Defaults to `pi --mode rpc --no-session`. Overridden by tests (a fixture stand-in process) and by callers needing extra CLI flags. */
 	readonly command?: readonly string[];
 	readonly cwd?: string;
+	/**
+	 * Alignment's own namespaced Pi config/extension/session/auth directory --
+	 * propagated to the spawned `pi` process via PI_CODING_AGENT_DIR, kept in
+	 * parity with apps/alignment/src/pi/process-rpc-session.ts (this adapter's
+	 * own doc comment notes it was ported from that file). Defaults to
+	 * resolveAlignmentAgentDir(); injectable for hermetic tests.
+	 */
+	readonly agentDir?: string;
+	/** Where a one-time auth.json seed is copied from. Defaults to the user's real ~/.pi/agent. */
+	readonly sourceAgentDir?: string;
 }
 
 /**
@@ -37,9 +50,12 @@ export interface SubprocessAgentIntegrationOptions {
  */
 export function createSubprocessAgentIntegration(options: SubprocessAgentIntegrationOptions = {}): AgentIntegrationPort {
 	const [command = DEFAULT_COMMAND[0], ...args] = options.command ?? DEFAULT_COMMAND;
+	const agentDir = options.agentDir ?? resolveAlignmentAgentDir();
+	seedAlignmentAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
 	const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(command, args, {
 		cwd: options.cwd,
 		stdio: ["pipe", "pipe", "pipe"],
+		env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
 	});
 
 	const eventListeners = new Set<(event: AlignmentAgentEvent) => void>();

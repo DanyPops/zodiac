@@ -1,3 +1,4 @@
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/core";
 import { createInProcessAgentIntegration } from "@alignment/pi-integration";
 import {
 	createAgentSession,
@@ -7,10 +8,26 @@ import {
 	type AgentSession,
 	type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createFooterChatController, type FooterChatController } from "./footer-chat-controller.js";
 
 export interface StartFooterChatOptions {
 	readonly cwd: string;
+	/**
+	 * Alignment's own namespaced Pi config/extension/session/auth directory --
+	 * deliberately separate from the user's personal ~/.pi/agent (see
+	 * resolveAlignmentAgentDir's own doc comment for why). Defaults to
+	 * resolveAlignmentAgentDir(); injectable so tests never touch a real
+	 * directory on the machine running them.
+	 */
+	readonly agentDir?: string;
+	/**
+	 * Where seedAlignmentAuthOnce copies an initial auth.json from. Defaults to
+	 * the user's real ~/.pi/agent; injectable purely so tests never touch a
+	 * real developer machine's actual personal credentials directory.
+	 */
+	readonly sourceAgentDir?: string;
 	/** Injection points for hermetic tests -- every field defaults to exactly the production behavior when omitted. */
 	readonly modelRuntime?: ModelRuntime;
 	readonly resourceLoader?: ResourceLoader;
@@ -21,21 +38,43 @@ export interface StartFooterChatOptions {
 /**
  * Constructs a real, live Pi conversation via @earendil-works/pi-coding-agent's
  * public SDK (createAgentSession) -- the "proper" in-process path, not a
- * subprocess. Uses the user's real model/auth configuration (ModelRuntime.create()
- * reads ~/.pi/agent/auth.json) and real settings/extensions (SettingsManager.create(),
- * DefaultResourceLoader via createAgentSession's own defaults) for full parity
- * with a real `pi` session -- but an in-memory SessionManager, so opening
- * Alignment's TUI never writes a new session file to ~/.pi/agent/sessions/ as a
- * side effect. Failure (no model configured, no network, ...) is not fatal to
+ * subprocess. Uses Alignment's own namespaced agent directory (see
+ * resolveAlignmentAgentDir), not the user's personal ~/.pi/agent -- so
+ * Alignment's embedded session never sees whatever extensions the user has
+ * personally `pkg_install`'d for their own CLI use (the concrete, real bug
+ * that motivated this: an old transitive dependency of one such extension
+ * emitted a Node deprecation warning inside Alignment's own process). The
+ * very first time Alignment's own agent dir has no auth.json yet, one
+ * credentials-only copy from the user's real ~/.pi/agent/auth.json seeds it
+ * (seedAlignmentAuthOnce), so this doesn't silently lose access to
+ * already-configured model credentials -- settings.json/extensions/sessions
+ * are deliberately never copied. An in-memory SessionManager on top of that,
+ * so opening Alignment's TUI never writes a new session file as a side
+ * effect. Failure (no model configured, no network, ...) is not fatal to
  * the rest of Alignment booting -- the Footer just stays "unavailable", exactly
  * like today's LectorHost activation failure path.
  */
 export async function startFooterChat(options: StartFooterChatOptions): Promise<{ footerChat: FooterChatController; session: AgentSession } | undefined> {
 	try {
-		const modelRuntime = options.modelRuntime ?? (await ModelRuntime.create({ signal: AbortSignal.timeout(5_000) }));
-		const settingsManager = options.settingsManager ?? SettingsManager.create(options.cwd);
+		const agentDir = options.agentDir ?? resolveAlignmentAgentDir();
+		// Only actually touches the filesystem in production: seedAlignmentAuthOnce
+		// no-ops the instant <agentDir>/auth.json already exists, which every
+		// hermetic test's own injected modelRuntime/settingsManager/resourceLoader
+		// (bypassing this entirely) never reaches anyway.
+		if (!options.modelRuntime) {
+			seedAlignmentAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
+		}
+		const modelRuntime =
+			options.modelRuntime ??
+			(await ModelRuntime.create({
+				authPath: join(agentDir, "auth.json"),
+				modelsPath: join(agentDir, "models.json"),
+				signal: AbortSignal.timeout(5_000),
+			}));
+		const settingsManager = options.settingsManager ?? SettingsManager.create(options.cwd, agentDir);
 		const { session } = await createAgentSession({
 			cwd: options.cwd,
+			agentDir,
 			modelRuntime,
 			resourceLoader: options.resourceLoader,
 			sessionManager: options.sessionManager ?? SessionManager.inMemory(options.cwd),

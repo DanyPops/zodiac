@@ -1,6 +1,9 @@
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { fauxProvider } from "@earendil-works/pi-ai/compat";
 import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type InlineExtension } from "@earendil-works/pi-coding-agent";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startFooterChat } from "./start-footer-chat.js";
 
@@ -142,5 +145,60 @@ describe("startFooterChat", () => {
 
 		expect(chat.session.model?.provider).toBe("preferred");
 		expect(chat.session.model?.id).toBe("preferred-model");
+	});
+
+	describe("agent dir namespacing", () => {
+		let root: string | undefined;
+
+		beforeEach(() => {
+			vi.stubEnv("PI_OFFLINE", "1"); // no network operations while exercising the real default ModelRuntime.create() path
+		});
+
+		afterEach(() => {
+			if (root) rmSync(root, { recursive: true, force: true });
+			root = undefined;
+		});
+
+		it("seeds Alignment's own agentDir auth.json from sourceAgentDir on first run, via the real (non-injected) ModelRuntime construction path", async () => {
+			root = mkdtempSync(join(tmpdir(), "alignment-footer-chat-"));
+			const sourceAgentDir = join(root, "personal-pi-agent");
+			const agentDir = join(root, "alignment-pi-agent");
+			mkdirSync(sourceAgentDir, { recursive: true });
+			writeFileSync(join(sourceAgentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "personal-real-key" } }));
+
+			await startFooterChat({
+				cwd: process.cwd(),
+				agentDir,
+				sourceAgentDir,
+				resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir, noExtensions: true }),
+				sessionManager: SessionManager.inMemory(),
+				settingsManager: SettingsManager.inMemory(),
+			});
+
+			expect(existsSync(join(agentDir, "auth.json"))).toBe(true);
+			expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "personal-real-key" } }));
+		});
+
+		it("never touches the filesystem for seeding when a modelRuntime is already injected (every other test in this file)", async () => {
+			root = mkdtempSync(join(tmpdir(), "alignment-footer-chat-"));
+			const sourceAgentDir = join(root, "personal-pi-agent");
+			const agentDir = join(root, "alignment-pi-agent");
+			mkdirSync(sourceAgentDir, { recursive: true });
+			writeFileSync(join(sourceAgentDir, "auth.json"), "{}");
+
+			const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });
+
+			await startFooterChat({
+				cwd: process.cwd(),
+				agentDir,
+				sourceAgentDir,
+				modelRuntime,
+				resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir, noExtensions: true }),
+				sessionManager: SessionManager.inMemory(),
+				settingsManager: SettingsManager.inMemory(),
+			});
+
+			expect(existsSync(join(agentDir, "auth.json"))).toBe(false);
+		});
 	});
 });

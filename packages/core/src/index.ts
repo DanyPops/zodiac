@@ -10,3 +10,6 @@ export { createWorldStore, createWorldStoreFromWorld, hydrateWorldStore } from "
 export type { WorldSnapshotPort } from "./world/snapshot-port.js";
 
 export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
+
+export type { SeedAlignmentAuthOptions } from "./pi-agent-dir.js";
+export { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "./pi-agent-dir.js";

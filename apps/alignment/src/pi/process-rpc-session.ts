@@ -1,7 +1,10 @@
 import { type ChildProcessByStdio, spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import type { Readable, Writable } from "node:stream";
 import { encodeRpcCommand, parseRpcLine, type PiRpcCommand, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "./agent-dir.js";
 
 const DEFAULT_COMMAND = ["pi", "--mode", "rpc", "--no-session"] as const;
 
@@ -12,6 +15,16 @@ export interface PiRpcSessionOptions {
 	/** Defaults to `pi --mode rpc --no-session`. Overridden by tests (a fixture stand-in process) and by callers needing a working directory or extra CLI flags. */
 	readonly command?: readonly string[];
 	readonly cwd?: string;
+	/**
+	 * Alignment's own namespaced Pi config/extension/session/auth directory --
+	 * propagated to the spawned `pi` process via PI_CODING_AGENT_DIR so it
+	 * never shares the user's personal ~/.pi/agent (extensions, settings,
+	 * sessions). Defaults to resolveAlignmentAgentDir(); injectable so tests
+	 * never touch a real directory on the machine running them.
+	 */
+	readonly agentDir?: string;
+	/** Where a one-time auth.json seed is copied from. Defaults to the user's real ~/.pi/agent; injectable for the same reason as agentDir. */
+	readonly sourceAgentDir?: string;
 }
 
 export interface PiRpcSession {
@@ -34,9 +47,18 @@ export interface PiRpcSession {
  */
 export function spawnPiRpcSession(options: PiRpcSessionOptions = {}): PiRpcSession {
 	const [command = DEFAULT_COMMAND[0], ...args] = options.command ?? DEFAULT_COMMAND;
+	const agentDir = options.agentDir ?? resolveAlignmentAgentDir();
+	seedAlignmentAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
 	const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(command, args, {
 		cwd: options.cwd,
 		stdio: ["pipe", "pipe", "pipe"],
+		// Namespaces the spawned `pi` process's own config/extension/session/auth
+		// directory away from the user's personal ~/.pi/agent -- pi's own config.ts
+		// reads process.env.PI_CODING_AGENT_DIR per call (confirmed live, not
+		// cached at import), so this is the one lever the subprocess path has for
+		// the same isolation the in-process path gets via createAgentSession's own
+		// `agentDir` option.
+		env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
 	});
 
 	const eventListeners = new Set<(event: PiRpcEvent) => void>();

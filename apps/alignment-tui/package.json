@@ -16,6 +16,7 @@
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:@earendil-works/* --banner:js=\"import{createRequire as __createRequire}from 'module';const require=__createRequire(import.meta.url);\" --outfile=dist/cli.js"
   },
   "dependencies": {
+    "@alignment/core": "*",
     "@alignment/pi-integration": "*",
     "@alignment/surface-protocol": "*",
     "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.1.tgz",
@@ -23,7 +24,6 @@
     "@earendil-works/pi-tui": "^0.84.0"
   },
   "devDependencies": {
-    "@alignment/core": "*",
     "@danypops/lector": "file:vendor/danypops-lector-0.18.1.tgz",
     "@danypops/pi-tui-harness": "^0.0.2",
     "@danypops/vehicle-server": "^0.3.2",
