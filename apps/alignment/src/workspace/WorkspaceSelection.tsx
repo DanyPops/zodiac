@@ -14,7 +14,8 @@ import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 interface WorkspaceSelectionProps {
 	readonly collapsed: boolean;
 	readonly catalog: readonly WorkspaceCatalogEntry[];
-	readonly activeWorkspaceId: string;
+	/** Undefined when there is no active Workspace yet (a genuinely empty catalog) -- every catalog entry then simply renders unselected. */
+	readonly activeWorkspaceId: string | undefined;
 	readonly selectionRef: RefObject<HTMLElement | null>;
 	readonly selectedButtonRef: RefObject<HTMLButtonElement | null>;
 	readonly onWorkspaceFocus: () => void;

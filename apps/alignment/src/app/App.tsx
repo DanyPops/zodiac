@@ -19,6 +19,7 @@ import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useVisualDna } from "../visual-dna-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
+import { Composer } from "../conversation/ConversationSurface.js";
 import { CHAT_TEMPLATE_ID, findWorkspaceIdForToolName, isChatDocked } from "../workspace/model.js";
 import { useWispCursorTarget } from "../workspace/useWispCursorTarget.js";
 import { WispCursor } from "../workspace/WispCursor.js";
@@ -40,8 +41,9 @@ import type { DockRulerFrameMark } from "../workspace/dock-ruler.js";
 import { WatchPill } from "../workspace/WatchPill.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
-import { createDemoWorkspace, WORKSPACE_CATALOG } from "../workspace/workspace-catalog.js";
+import { createDemoWorkspace, DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
+import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
 
 const conversationClient = createHttpConversationClient();
 const piClient = createHttpPiClient();
@@ -75,17 +77,28 @@ export function App(): React.JSX.Element {
 	// is a plain function call here, not another hook.
 	const piChatSessions = usePiChatSessions(piClient);
 	const userWorkspaces = useUserWorkspaces(preferences);
-	const catalog = useMemo(() => [...WORKSPACE_CATALOG, ...userWorkspaces.entries], [userWorkspaces.entries]);
+	// Alignment starts with zero Workspaces -- WORKSPACE_CATALOG's fixed demo
+	// entries (Bug/Metrics/Chat/PRs) are no longer merged in by default; only
+	// real, persisted, user-created Workspaces populate the catalog. The first
+	// one is created automatically the moment the user sends a first prompt
+	// with none active -- see sendMessage() below.
+	const catalog = useMemo(() => userWorkspaces.entries, [userWorkspaces.entries]);
 	const workspace = useWorkspaceRegistry(catalog, createDemoWorkspace, extensionHost);
+	// The one production LLM-naming adapter: a short-lived Pi session used
+	// purely to answer the naming prompt (see workspace-title.ts). Stable
+	// across renders -- piClient itself is a module-level singleton.
+	const titleFromPrompt = useMemo(() => createLlmWorkspaceTitleGenerator(createPiWorkspaceTitleComplete(piClient)), []);
 	// Chat is Pi-first: once the user sends a live message, the live Pi
 	// conversation for the *active* Workspace replaces the browsed
 	// (Alef-sourced, historical) one as what's displayed -- see
 	// usePiChatSessions's own doc comment for why these stay two independent
-	// data sources rather than one merged one.
-	const piChat = piChatSessions.chatFor(workspace.workspace.id);
-	const activeConversationItems = piChat.hasStarted ? piChat.items : conversationWorkspace.conversationItems;
-	const activeConversationLoading = piChat.hasStarted ? piChat.busy : conversationWorkspace.conversationLoading;
-	const activeConversationError = piChat.hasStarted ? piChat.error : conversationWorkspace.conversationError;
+	// data sources rather than one merged one. Undefined exactly when there is
+	// no active Workspace yet (the empty-state landing renders instead of
+	// anything that would read this).
+	const piChat = workspace.workspace ? piChatSessions.chatFor(workspace.workspace.id) : undefined;
+	const activeConversationItems = piChat?.hasStarted ? piChat.items : conversationWorkspace.conversationItems;
+	const activeConversationLoading = piChat?.hasStarted ? piChat.busy : conversationWorkspace.conversationLoading;
+	const activeConversationError = piChat?.hasStarted ? piChat.error : conversationWorkspace.conversationError;
 	const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 	// Both layers must rename together: userWorkspaces' persisted
 	// SavedWorkspace.title (what the catalog/sidebar actually renders) and the
@@ -113,13 +126,13 @@ export function App(): React.JSX.Element {
 	const [dockRulerMark, setDockRulerMark] = useState<DockRulerFrameMark | undefined>(undefined);
 	const [dockCanvasBox, setDockCanvasBox] = useState<DockRulerFrameBox | undefined>(undefined);
 
-	const chatVisibility = useChatVisibility({ visible: workspace.workspace.chatVisible, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
+	const chatVisibility = useChatVisibility({ visible: workspace.workspace?.chatVisible ?? false, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
 	const dragTracker = useMemo(() => createWindowDragTracker(), []);
 	const chatDrag = useDraggablePosition({ x: 0, y: 0 }, dragTracker);
 	const latestToolName = latestToolCallName(activeConversationItems);
-	const wispWindowIndex = resolveWispWindowIndex(workspace.workspace, latestToolName);
+	const wispWindowIndex = workspace.workspace ? resolveWispWindowIndex(workspace.workspace, latestToolName) : undefined;
 	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
-	const chatIsGlobal = !isChatDocked(workspace.workspace);
+	const chatIsGlobal = workspace.workspace ? !isChatDocked(workspace.workspace) : true;
 	const toolCallWorkspaceId = chatIsGlobal && latestToolName ? findWorkspaceIdForToolName(workspace.workspaces, latestToolName) : undefined;
 
 	const selectedButtonRef = useRef<HTMLButtonElement>(null);
@@ -145,19 +158,21 @@ export function App(): React.JSX.Element {
 		requestAnimationFrame(() => selectedButtonRef.current?.focus());
 	}
 
-	/** `newGroupSizeRatio` -- the fraction of the reference group's current size (along whichever axis `position` implies) the newly-docked Surface should occupy, chosen via the Dock Ruler. Undefined for the plain click-to-dock/tab-insert paths, which have no drag geometry to derive a fraction from. */
+	/** `newGroupSizeRatio` -- the fraction of the reference group's current size (along whichever axis `position` implies) the newly-docked Surface should occupy, chosen via the Dock Ruler. Undefined for the plain click-to-dock/tab-insert paths, which have no drag geometry to derive a fraction from. Only reachable once a Workspace exists -- the empty-state landing renders no Surface Templates pillar to trigger this from. */
 	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string, newGroupSizeRatio?: number): void {
 		const instance = workspace.dockSurface(templateId, title);
+		if (!instance) return;
 		setPendingDock({ instanceId: instance.id, position, referenceGroupId, newGroupSizeRatio });
 	}
 
 	function dockChatSurface(): void {
 		const instance = workspace.dockChat("Chat");
+		if (!instance) return;
 		setPendingDock({ instanceId: instance.id, position: undefined });
 	}
 
 	function handlePanelClosed(instanceId: string): void {
-		const closed = workspace.activeWindow.dockedSurfaces.find((surface) => surface.id === instanceId);
+		const closed = workspace.activeWindow?.dockedSurfaces.find((surface) => surface.id === instanceId);
 		if (closed?.templateId === CHAT_TEMPLATE_ID) {
 			workspace.undockChatToFloating();
 			return;
@@ -195,8 +210,29 @@ export function App(): React.JSX.Element {
 			sendMessage() {
 				const text = draft.trim();
 				if (!text) return;
-				piChat.sendMessage(text);
+				if (piChat) {
+					piChat.sendMessage(text);
+					setDraft("");
+					return;
+				}
+				// No active Workspace yet: auto-create one right now, immediately
+				// named from a synchronous heuristic (never delays sending), select
+				// it, and send in the very same handler -- usePiChatSessions.chatFor
+				// mutates a plain ref-held Map directly, not React state, so it
+				// doesn't need to wait for a re-render to be usable (verified
+				// against usePiChatSessions.test.ts's own back-to-back chatFor(...)
+				// .sendMessage(...) calls in the same tick). The LLM-generated title
+				// (workspace-title.ts) replaces the heuristic one in the background
+				// once it resolves.
+				const heuristicTitle = provisionalTitleFromText(text) ?? "New Workspace";
+				const id = userWorkspaces.createWorkspace(heuristicTitle, DEFAULT_WORKSPACE_GLYPH_ID);
+				if (!id) return;
+				workspace.selectWorkspace(id);
+				piChatSessions.chatFor(id).sendMessage(text);
 				setDraft("");
+				void titleFromPrompt(text).then((llmTitle) => {
+					if (llmTitle) renameWorkspace(id, llmTitle);
+				});
 			},
 			openPalette: () => contexts.openDialog("palette"),
 			openShortcuts: () => contexts.openDialog("shortcuts"),
@@ -225,7 +261,7 @@ export function App(): React.JSX.Element {
 	return (
 		<CommandProvider registry={registry} activeContexts={contexts.effectiveContexts}>
 			{/* data-template-dragging: the authoritative "is a Surface Template drag active" signal, consumed by styles.css to force-hide dockview's own root-level drop-target overlay once a drag ends -- see the CSS rule's own doc comment for why dockview's own cleanup can't be trusted to do this itself. */}
-			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace.id} data-template-dragging={templateDragging}>
+			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
 				<WorkspaceSelection
 					collapsed={selection.collapsed}
 					catalog={workspace.catalog}
@@ -244,71 +280,88 @@ export function App(): React.JSX.Element {
 				</div>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
-					<WindowCarousel
-						windowCount={workspace.workspace.windows.length}
-						activeIndex={workspace.workspace.activeWindowIndex}
-						onSelect={workspace.selectWindow}
-						onScroll={workspace.scrollWindow}
-						activeWindowTitle={workspace.activeWindow.title}
-						onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow.id, title)}
-					/>
-					<section
-						ref={canvasRef}
-						tabIndex={-1}
-						onFocus={(event) => {
-							if (event.currentTarget === event.target) contexts.enterCanvas();
-						}}
-						aria-label="Window view"
-						className="min-h-0 flex-1 overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-100 outline-none dark:bg-gray-900"
-					>
-						<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
-							<WindowDockview
-								windowId={workspace.activeWindow.id}
-								dockedSurfaces={workspace.activeWindow.dockedSurfaces}
-								pendingDock={pendingDock}
-								onPendingDockConsumed={() => setPendingDock(undefined)}
-								onPanelClosed={handlePanelClosed}
-								onExternalTemplateDrop={(templateId, position, referenceGroupId, newGroupSizeRatio) => {
-									const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
-									if (template) dockTemplate(templateId, template.title, position, referenceGroupId, newGroupSizeRatio);
+					{workspace.workspace && workspace.activeWindow ? (
+						<>
+							<WindowCarousel
+								windowCount={workspace.workspace.windows.length}
+								activeIndex={workspace.workspace.activeWindowIndex}
+								onSelect={workspace.selectWindow}
+								onScroll={workspace.scrollWindow}
+								activeWindowTitle={workspace.activeWindow.title}
+								onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow!.id, title)}
+							/>
+							<section
+								ref={canvasRef}
+								tabIndex={-1}
+								onFocus={(event) => {
+									if (event.currentTarget === event.target) contexts.enterCanvas();
 								}}
-								isDark={theme.isDark}
-								extensionTemplates={extensionSurfaceTemplates}
-								onSaveAsTemplate={(templateId, title) => surfaceTemplates.saveAsTemplate(title, templateId)}
+								aria-label="Window view"
+								className="min-h-0 flex-1 overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-100 outline-none dark:bg-gray-900"
+							>
+								<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
+									<WindowDockview
+										windowId={workspace.activeWindow.id}
+										dockedSurfaces={workspace.activeWindow.dockedSurfaces}
+										pendingDock={pendingDock}
+										onPendingDockConsumed={() => setPendingDock(undefined)}
+										onPanelClosed={handlePanelClosed}
+										onExternalTemplateDrop={(templateId, position, referenceGroupId, newGroupSizeRatio) => {
+											const template = findSurfaceTemplate(templateId, extensionSurfaceTemplates);
+											if (template) dockTemplate(templateId, template.title, position, referenceGroupId, newGroupSizeRatio);
+										}}
+										isDark={theme.isDark}
+										extensionTemplates={extensionSurfaceTemplates}
+										onSaveAsTemplate={(templateId, title) => surfaceTemplates.saveAsTemplate(title, templateId)}
+										conversationItems={activeConversationItems}
+										conversationLoading={activeConversationLoading}
+										conversationError={activeConversationError}
+										draft={draft}
+										onDraftChange={setDraft}
+										onComposerFocus={contexts.enterTextInput}
+										onUndockChat={workspace.undockChatToFloating}
+										chatPinned={workspace.chatPinned}
+										onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
+										onDockRulerHintChange={setDockRulerMark}
+										dragActive={templateDragging}
+									/>
+								</Suspense>
+							</section>
+
+							<WispCursor visible={chatIsGlobal} target={wispTarget} />
+
+							<ChatOverlay
+								visible={workspace.workspace.chatVisible}
+								onPointerEnter={chatVisibility.onPointerEnter}
+								onPointerLeave={chatVisibility.onPointerLeave}
+								onFocusCapture={chatVisibility.onFocusCapture}
+								onBlurCapture={chatVisibility.onBlurCapture}
 								conversationItems={activeConversationItems}
 								conversationLoading={activeConversationLoading}
 								conversationError={activeConversationError}
 								draft={draft}
 								onDraftChange={setDraft}
 								onComposerFocus={contexts.enterTextInput}
-								onUndockChat={workspace.undockChatToFloating}
-								chatPinned={workspace.chatPinned}
-								onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
-								onDockRulerHintChange={setDockRulerMark}
-								dragActive={templateDragging}
+								onDock={dockChatSurface}
+								position={chatDrag.position}
+								dragging={chatDrag.dragging}
+								onDragHandlePointerDown={chatDrag.onDragHandlePointerDown}
 							/>
-						</Suspense>
-					</section>
-
-					<WispCursor visible={chatIsGlobal} target={wispTarget} />
-
-					<ChatOverlay
-						visible={workspace.workspace.chatVisible}
-						onPointerEnter={chatVisibility.onPointerEnter}
-						onPointerLeave={chatVisibility.onPointerLeave}
-						onFocusCapture={chatVisibility.onFocusCapture}
-						onBlurCapture={chatVisibility.onBlurCapture}
-						conversationItems={activeConversationItems}
-						conversationLoading={activeConversationLoading}
-						conversationError={activeConversationError}
-						draft={draft}
-						onDraftChange={setDraft}
-						onComposerFocus={contexts.enterTextInput}
-						onDock={dockChatSurface}
-						position={chatDrag.position}
-						dragging={chatDrag.dragging}
-						onDragHandlePointerDown={chatDrag.onDragHandlePointerDown}
-					/>
+						</>
+					) : (
+						// No Workspace yet -- Alignment's real starting state. A minimal
+						// landing: the composer only (reused verbatim from
+						// ConversationSurface.tsx, the exact same component/command wiring
+						// as every other composer in the app -- "conversation.send" already
+						// maps to sendMessage()'s own auto-create branch above), no Window
+						// Carousel, no Chat panel.
+						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-[var(--app-corner-radius,16px)] bg-gray-100 dark:bg-gray-900">
+							<p className="text-sm text-gray-500 dark:text-gray-400">Send a message to start a new Workspace.</p>
+							<div className="w-full max-w-xl px-4">
+								<Composer draft={draft} onDraftChange={setDraft} onComposerFocus={contexts.enterTextInput} />
+							</div>
+						</div>
+					)}
 				</div>
 
 				<div className="shrink-0 self-start">
