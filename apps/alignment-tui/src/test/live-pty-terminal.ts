@@ -69,8 +69,18 @@ export interface LiveTerminalOptions {
 export interface LiveTerminal {
   /** Sends raw bytes to the child's stdin, exactly as a real keystroke would arrive. */
   write(data: string): void;
-  /** Resizes both the real PTY and the reconstructed terminal together, so `snapshot()` never drifts from what the child process itself believes its viewport is. */
-  resize(cols: number, rows: number): void;
+  /**
+   * Resizes both the real PTY and the reconstructed terminal together, so `snapshot()` never
+   * drifts from what the child process itself believes its viewport is. Async: waits for every
+   * write already queued (at the OLD dimensions) to finish being processed by the reconstruction
+   * terminal before actually changing its dimensions -- resizing a real `@xterm/headless` Terminal
+   * while writes targeting its old dimensions are still in flight is a real hazard class (cursor
+   * positions computed against stale bounds), not merely a style preference. Found as a real,
+   * reproducible stall (not a hypothetical) migrating cli.pty.test.ts onto this harness: resizing
+   * immediately after a large redraw's worth of still-queued writes silently wedged the write
+   * chain forever, with every later write's own completion callback never firing.
+   */
+  resize(cols: number, rows: number): Promise<void>;
   /** The full reconstructed screen, one row per line, trailing whitespace trimmed per row -- what a person looking at a real terminal running this process would see right now. */
   snapshot(): string;
   /**
@@ -85,6 +95,15 @@ export interface LiveTerminal {
   waitForText(expected: string, timeoutMs?: number): Promise<void>;
   /** Resolves once the child process has exited, with its exit code. */
   waitForExit(timeoutMs?: number): Promise<number | null>;
+  /**
+   * The raw, unprocessed byte stream received from the child so far -- an escape hatch for the
+   * rare genuinely protocol-level assertion (e.g. "was the cursor-show sequence `\x1b[?25h`
+   * actually emitted", or terminal-mode restoration) that a reconstructed screen has no way to
+   * represent, since it's a statement about the wire protocol, not about what's displayed.
+   * Prefer snapshot()/waitForText() for anything about what a person looking at the screen would
+   * actually see.
+   */
+  rawOutput(): string;
   /** Kills the child (if still running) and disposes the reconstructed terminal -- always safe to call more than once. */
   dispose(): Promise<void>;
 }
@@ -109,8 +128,10 @@ export function spawnLiveTerminal(command: string, args: readonly string[], opti
   let writeChain: Promise<void> = Promise.resolve();
   /** Bumped on every chunk -- see SETTLE_IDLE_MS's own doc comment for the second, independent race this closes (more chunks still arriving after a predicate first holds). */
   let lastDataAt = Date.now();
+  let rawOutput = "";
   child.onData((data) => {
     lastDataAt = Date.now();
+    rawOutput += data;
     writeChain = writeChain.then(() => new Promise<void>((resolveWrite) => terminal.write(data, resolveWrite)));
   });
 
@@ -153,13 +174,15 @@ export function spawnLiveTerminal(command: string, args: readonly string[], opti
 
   return {
     write: (data) => child.write(data),
-    resize: (cols, rows) => {
+    resize: async (cols, rows) => {
+      await writeChain;
       terminal.resize(cols, rows);
       child.resize(cols, rows);
     },
     snapshot,
     waitForText,
     waitForExit: (timeoutMs = 5_000) => (exitCode !== undefined ? Promise.resolve(exitCode) : Promise.race([exited, poll(() => exitCode !== undefined, timeoutMs, () => "child process to exit").then(() => exitCode ?? null)])),
+    rawOutput: () => rawOutput,
     dispose: async () => {
       try {
         child.kill();
