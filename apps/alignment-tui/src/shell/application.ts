@@ -7,6 +7,7 @@ import { openLectorExplorerNatively } from "../lector/native-explorer.js";
 import type { FooterChatController } from "../pi/footer-chat-controller.js";
 import { GridTerminal } from "../terminal/grid-terminal.js";
 import { resolveShellCommand, type ShellCommand } from "./keymap.js";
+import { openTerminalPaneNatively } from "./native-terminal.js";
 import { SemanticShell, type ShellFocus } from "./semantic-shell.js";
 
 export interface WorldProjection { worldViewModel(): WorldViewModel }
@@ -101,6 +102,7 @@ export class SemanticShellApplication {
       case "footer-type": this.footerChat?.typeChar(command.char); return;
       case "open-lector-editor": this.openLectorEditor(); return;
       case "open-lector-explorer": this.openLectorExplorer(); return;
+      case "open-terminal": this.openTerminal(); return;
     }
   }
 
@@ -123,6 +125,18 @@ export class SemanticShellApplication {
       this.hideExternalComponent();
       this.refresh();
     });
+  }
+
+  /**
+   * No Lector involvement at all (unlike its two siblings above) -- a real shell has no daemon,
+   * no workspace resource, nothing that can fail before a Component even mounts, so this has no
+   * failure-recovery branch to speak of: openTerminalPaneNatively itself never throws, it only
+   * spawns a real child process and mounts a Component synchronously. Absent rootPath means the
+   * same "no path argument at boot" condition as the explorer -- there is nowhere to open a shell.
+   */
+  private openTerminal(): void {
+    if (!this.rootPath) return;
+    openTerminalPaneNatively(this, this.rootPath);
   }
 
   private render(): Outcome<GridUpdate> {

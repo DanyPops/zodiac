@@ -32,6 +32,11 @@ describe("resolveShellCommand -- the facade between raw keymap wiring and the ac
     expect(resolveShellCommand("\x05", { focusedRegion: "header", hasFooterChat: false })).toEqual({ type: "open-lector-editor" });
   });
 
+  it("maps Ctrl+T to open-terminal regardless of focus, the same global reach as Ctrl+E/Ctrl+O", () => {
+    expect(resolveShellCommand("\x14", bodyFocused)).toEqual({ type: "open-terminal" });
+    expect(resolveShellCommand("\x14", { focusedRegion: "header", hasFooterChat: false })).toEqual({ type: "open-terminal" });
+  });
+
   it("maps footer-scoped commands only when the footer is focused and a live footer chat exists", () => {
     expect(resolveShellCommand("\x1b[1;5A", withFooter)).toEqual({ type: "expand-footer" });
     expect(resolveShellCommand("\x1b[1;5B", withFooter)).toEqual({ type: "collapse-footer" });

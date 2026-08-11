@@ -14,6 +14,7 @@ export type ShellCommand =
   | { readonly type: "exit-fullscreen" }
   | { readonly type: "open-lector-editor" }
   | { readonly type: "open-lector-explorer" }
+  | { readonly type: "open-terminal" }
   | { readonly type: "expand-footer" }
   | { readonly type: "collapse-footer" }
   | { readonly type: "scroll-footer-up" }
@@ -87,6 +88,14 @@ export function resolveShellCommand(data: string, context: KeymapContext): Shell
   // meaning, matching how oil.nvim itself keeps "open a file" and "browse a directory" as two
   // separate real entry points rather than one that infers which the user wants.
   if (matchesKey(data, Key.ctrl("o"))) return { type: "open-lector-explorer" };
+  // Same C0-control-byte reliability bar as Ctrl+E/Ctrl+O above (Ctrl+T is 0x14, universally
+  // delivered) -- opening a real shell pane is meaningful regardless of which region currently
+  // has focus, the same way the other two native-host entry points already are. The pane's own
+  // exit chord (Ctrl+]) lives entirely inside TerminalPaneComponent.handleInput, not here -- once
+  // the pane is open it owns every keystroke via SemanticShellApplication's externalComponent
+  // pass-through, exactly like the editor/explorer already do, so this file never sees Ctrl+]
+  // at all while a terminal is mounted.
+  if (matchesKey(data, Key.ctrl("t"))) return { type: "open-terminal" };
   if (!context.hasFooterChat || context.focusedRegion !== "footer") return undefined;
   // Neovim/tmux-style incremental resize: repeatable, not a modal
   // resize-prefix step, and scoped to the footer being the focused region
