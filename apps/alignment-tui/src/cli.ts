@@ -31,7 +31,13 @@ async function main(): Promise<void> {
 
   const world = createWorldStore(worldId("alignment"));
   let host: LectorHost | undefined;
-  let rootPath: string | undefined;
+  // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
+  // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch
+  // already falls back to process.cwd(), matching how a real `pi` CLI session or any ordinary
+  // shell resolves its own working directory with no argument at all). openLectorExplorer's own
+  // guard still additionally requires `lectorHost`, so browsing correctly stays gated on a real
+  // workspace having opened -- only openTerminal only ever needed *this*, not that.
+  const rootPath = resolveAgentCwd(classified);
   if (classified.kind !== "none") {
     host = createLectorHost();
     await host.activate();
@@ -41,7 +47,6 @@ async function main(): Promise<void> {
       return fail(bootstrapped.message);
     }
     applyBootstrapToWorld(world, bootstrapped.value);
-    rootPath = resolveAgentCwd(classified);
   }
 
   // The application must exist *before* startFooterChat() runs:

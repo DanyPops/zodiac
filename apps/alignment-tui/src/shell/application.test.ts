@@ -166,4 +166,34 @@ describe("SemanticShellApplication lifecycle", () => {
     app.handleInput("\t");
     expect(app.focusedRegion()).toBe("body");
   });
+
+  /**
+   * These two tests exist specifically because a real, shipped bug slipped through every other
+   * test in this codebase: pressing Ctrl+T through a real, running Alignment process with no
+   * workspace opened at boot did nothing at all -- openTerminal()'s own `if (!this.rootPath)
+   * return;` guard, never exercised by keymap.test.ts (only proves the byte translates to the
+   * right ShellCommand) or native-terminal.test.ts (only drives an already-mounted component's
+   * own handleInput directly). Neither test ever pressed the real key through this class's own
+   * real dispatch with rootPath actually unset -- the exact integration gap that let it ship.
+   * cli.ts itself no longer produces that state (rootPath is now always resolved, falling back to
+   * process.cwd() the same way a real shell would), but this class's own constructor still
+   * accepts an absent rootPath, so both the fixed happy path and the still-real defensive no-op
+   * are worth pinning here, at the one layer that actually owns the guard.
+   */
+  it("Ctrl+T through the real application opens a real terminal pane when rootPath is present -- focus moves to \"external\", and Ctrl+] inside it returns focus to Alignment's own chrome", () => {
+    const app = new SemanticShellApplication(createWorldStore(worldId("empty")), { write: () => {} }, undefined, undefined, process.cwd());
+    app.boot(80, 24);
+    expect(app.focusedRegion()).not.toBe("external");
+    app.handleInput("\x14"); // Ctrl+T
+    expect(app.focusedRegion()).toBe("external");
+    app.handleInput("\x1d"); // Ctrl+] -- closes the real child process this actually spawned
+    expect(app.focusedRegion()).not.toBe("external");
+  });
+
+  it("Ctrl+T through the real application is a documented no-op when rootPath is absent -- the exact precondition the real shipped bug depended on", () => {
+    const app = new SemanticShellApplication(createWorldStore(worldId("empty")), { write: () => {} });
+    app.boot(80, 24);
+    app.handleInput("\x14"); // Ctrl+T
+    expect(app.focusedRegion()).not.toBe("external");
+  });
 });
