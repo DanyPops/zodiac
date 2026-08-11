@@ -8,3 +8,5 @@ export type { WorldStore } from "./world/store.js";
 export { createWorldStore, createWorldStoreFromWorld, hydrateWorldStore } from "./world/store.js";
 
 export type { WorldSnapshotPort } from "./world/snapshot-port.js";
+
+export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
