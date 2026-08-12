@@ -175,7 +175,7 @@ describe("semantic empty Zodiac shell", () => {
     // (packages/coding-agent/src/modes/interactive/components/*.ts) render role via a
     // full-row highlighted background for user messages, no background for assistant
     // messages, and a background-color state machine (pending/success/error) plus a
-    // bolded title for tool calls -- never an inline "You:"/"Pi:" text prefix. Alignment's
+    // bolded title for tool calls -- never an inline "You:"/"Pi:" text prefix. Zodiac's
     // GridTerminal only encodes the 8 basic ANSI colors (see grid-terminal.ts), so exact
     // hex parity with Pi's own theme is impossible, but the same role/status-driven
     // color-coding *convention* is reproduced here with that smaller palette.

@@ -18,6 +18,6 @@ export default defineConfig({
 		url: `http://127.0.0.1:${PORT}`,
 		reuseExistingServer: false,
 		timeout: 30_000,
-		env: { ALIGNMENT_FIXTURE_MODE: "1", ALIGNMENT_DEV_PORT: String(PORT) },
+		env: { ZODIAC_FIXTURE_MODE: "1", ZODIAC_DEV_PORT: String(PORT) },
 	},
 });

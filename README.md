@@ -8,10 +8,10 @@ Zodiac presents Alef conversations and pooled SDLC data as composable Workspaces
 zodiac/
 ├── apps/
 │   ├── web/              Web client (React) -- @zodiac/web
-│   └── terminal/         Terminal client -- @zodiac/terminal (its own installed CLI command
-│                         stays `alignment-tui` for now, unchanged -- a published binary name,
-│                         a separate decision from this internal package/directory rename;
-│                         see the open question tracked for the Alignment -> Zodiac rename)
+│   └── terminal/         Terminal client -- @zodiac/terminal, its own installed CLI command
+│                         `zodiac-tui` (renamed from `alignment-tui` alongside the rest of
+│                         the Alignment -> Zodiac rename -- a real, published-binary-name
+│                         breaking change, not just internal repo layout)
 ├── packages/
 │   ├── server/           Framework-neutral domain core (Workspace/World) -- @zodiac/server,
 │   │                      destined to be owned by a real daemon (`zodiacd`); today each

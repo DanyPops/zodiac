@@ -32,7 +32,7 @@ async function realHost(): Promise<LectorHost> {
 
 describe("bootstrapWorkspace", () => {
 	it("opens a real directory workspace and lists its bounded top-level entries", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-bootstrap-dir-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-bootstrap-dir-"));
 		writeFileSync(join(root, "a.ts"), "export const a = 1;\n");
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "src/b.ts"), "export const b = 2;\n");
@@ -50,7 +50,7 @@ describe("bootstrapWorkspace", () => {
 	});
 
 	it("opens a bare file directly, identifying its nearest real git repository as the workspace root", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-bootstrap-file-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-bootstrap-file-"));
 		execFileSync("git", ["init", "-q"], { cwd: root });
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "src/a.ts"), "export function greet() {\n\treturn 'hi';\n}\n");
@@ -67,7 +67,7 @@ describe("bootstrapWorkspace", () => {
 	});
 
 	it("falls back to a bare file's own directory when it is outside any git repository", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-bootstrap-nogit-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-bootstrap-nogit-"));
 		writeFileSync(join(root, "a.ts"), "export const a = 1;\n");
 
 		const classified = classifyPath(join(root, "a.ts"));
@@ -78,7 +78,7 @@ describe("bootstrapWorkspace", () => {
 	});
 
 	it("returns a typed failure instead of throwing when the Lector daemon is unreachable", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-bootstrap-unreachable-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-bootstrap-unreachable-"));
 		const classified = classifyPath(root);
 		if (classified.kind !== "directory") throw new Error("unreachable");
 		const unreachableHost = createLectorHost({
@@ -95,7 +95,7 @@ describe("bootstrapWorkspace", () => {
 	});
 
 	it("enforces the directory entry/byte bound as a typed failure, not an unbounded listing", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-bootstrap-bounds-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-bootstrap-bounds-"));
 		for (let index = 0; index < 5; index++) writeFileSync(join(root, `file-${index}.ts`), "export const x = 1;\n");
 
 		const classified = classifyPath(root);

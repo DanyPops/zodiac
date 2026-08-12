@@ -59,7 +59,7 @@ function sleep(ms: number): Promise<void> {
 
 describe("openLectorExplorerNatively", () => {
 	it("mounts a real ExplorerComponent listing a real directory's own entries -- no AgentSession, no Pi extension involvement at all", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-explorer-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-"));
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "readme.md"), "hello\n");
 		writeFileSync(join(root, "src", "index.ts"), "export {};\n");
@@ -79,7 +79,7 @@ describe("openLectorExplorerNatively", () => {
 	});
 
 	it("Enter on a file hands off to the real editor through pi-lector's own runExplorerFlow, and :q from the editor returns to the explorer at that file's own directory", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-explorer-handoff-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-handoff-"));
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "readme.md"), "hello world\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
@@ -112,7 +112,7 @@ describe("openLectorExplorerNatively", () => {
 	});
 
 	it("creates a real file on disk through the mounted explorer's own oil.nvim-style buffer edit (lector.file.create end to end)", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-explorer-create-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-create-"));
 		writeFileSync(join(root, "existing.txt"), "x\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
@@ -135,7 +135,7 @@ describe("openLectorExplorerNatively", () => {
 	});
 
 	it("renames a real file on disk through the mounted explorer (lector.path.rename end to end)", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-explorer-rename-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-rename-"));
 		writeFileSync(join(root, "old.txt"), "content\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
@@ -159,7 +159,7 @@ describe("openLectorExplorerNatively", () => {
 	});
 
 	it("deletes a real file on disk through the mounted explorer's dd + :w + y (lector.file.delete end to end)", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-explorer-delete-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-delete-"));
 		writeFileSync(join(root, "gone.txt"), "x\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
@@ -180,7 +180,7 @@ describe("openLectorExplorerNatively", () => {
 	});
 
 	it("creates a real directory on disk through the mounted explorer (lector.directory.create end to end)", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-explorer-mkdir-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-mkdir-"));
 		writeFileSync(join(root, "existing.txt"), "x\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 

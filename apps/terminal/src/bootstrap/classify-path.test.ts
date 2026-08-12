@@ -25,32 +25,32 @@ describe("classifyPath", () => {
 	});
 
 	it("resolves a relative argument against the given cwd, not process.cwd()", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-classify-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-classify-"));
 		mkdirSync(join(root, "project"));
 		expect(classifyPath("project", root)).toEqual({ kind: "directory", path: join(root, "project") });
 	});
 
 	it("classifies a real directory", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-classify-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-classify-"));
 		expect(classifyPath(root)).toEqual({ kind: "directory", path: root });
 	});
 
 	it("classifies a real file", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-classify-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-classify-"));
 		const file = join(root, "a.ts");
 		writeFileSync(file, "export const a = 1;\n");
 		expect(classifyPath(file)).toEqual({ kind: "file", path: file });
 	});
 
 	it("classifies a path that does not exist as 'missing', not an error", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-classify-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-classify-"));
 		const missing = join(root, "does-not-exist");
 		expect(classifyPath(missing)).toEqual({ kind: "missing", path: missing });
 	});
 
 	it("classifies a path denied by a parent directory's permissions as 'denied'", () => {
 		if (process.getuid?.() === 0) return; // root bypasses filesystem permission checks entirely
-		root = mkdtempSync(join(tmpdir(), "alignment-classify-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-classify-"));
 		const blocked = join(root, "blocked");
 		mkdirSync(blocked);
 		const target = join(blocked, "a.ts");

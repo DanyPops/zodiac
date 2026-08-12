@@ -33,7 +33,7 @@ function waitFor(predicate: () => boolean, timeoutMs: number, description: strin
 
 /** A real, isolated Lector daemon (a real Bun subprocess) for tests -- own XDG roots, own real HTTP server, no shared state with any other running daemon on this machine. */
 export async function startIsolatedLectorDaemon(): Promise<{ client: LectorClient; stop(): Promise<void> }> {
-	const root = mkdtempSync(join(tmpdir(), "alignment-tui-lector-daemon-"));
+	const root = mkdtempSync(join(tmpdir(), "zodiac-tui-lector-daemon-"));
 	const env = { ...process.env, XDG_DATA_HOME: root, XDG_STATE_HOME: root, XDG_RUNTIME_DIR: root, XDG_CONFIG_HOME: root };
 	const paths = resolveLectorPaths({ env });
 

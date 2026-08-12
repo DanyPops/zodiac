@@ -4,7 +4,7 @@
  * introspected (`bindingFor`/`commands`/`bindings`) -- one path for a
  * graphical control, a keymap, a command palette, a script/RPC call, and an
  * agent action, per the IWE architecture's "Command" concept. Generic over
- * `TContext` so a specific host (Alignment's own workspace-selection/canvas/
+ * `TContext` so a specific host (Zodiac's own workspace-selection/canvas/
  * surface/... vocabulary) supplies its own context union without this
  * module knowing what a "context" even means for that host.
  */

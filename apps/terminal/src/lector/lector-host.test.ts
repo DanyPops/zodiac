@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe("createLectorHost", () => {
 	it("activates the real Lector contribution, executes its commands, and reads its resources", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-tui-lector-host-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-tui-lector-host-"));
 		writeFileSync(join(root, "a.ts"), "export const a = 1;\n");
 		const daemon = await startIsolatedLectorDaemon();
 		stop = daemon.stop;

@@ -20,7 +20,7 @@ afterEach(async () => {
 
 describe("real CLI boot with a real per-workspace pi-setup.json/profiles.json, against this machine's real globally-installed extensions", () => {
 	it("boots without crashing -- the hermetic unit test (start-footer-chat.test.ts) proves the narrowing mechanism itself with a synthetic extension and noExtensions:true; this proves the fix's real integration point (DefaultResourceLoader's real extension discovery, a real installed @danypops/pi-packed, a real bindExtensions() call) doesn't break under conditions the hermetic test deliberately bypasses", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-tui-profile-pty-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-tui-profile-pty-"));
 		mkdirSync(join(root, ".pi"));
 		writeFileSync(join(root, "pi-setup.json"), JSON.stringify({ schemaVersion: 1, defaultProfile: "smoke" }));
 		writeFileSync(join(root, ".pi", "profiles.json"), JSON.stringify({ smoke: { tools: ["read"] } }));

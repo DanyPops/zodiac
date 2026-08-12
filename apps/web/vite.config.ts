@@ -12,7 +12,7 @@ import { createPiSessionRegistry } from "./src/pi/session-registry.js";
 const MAX_EVENTS_PER_CONVERSATION = 5_000;
 const SESSIONS_ROOT = join(homedir(), ".local/share/alef/sessions");
 const FIXTURE_PATH = resolve(__dirname, "test/fixtures/session-sample.jsonl");
-const FIXTURE_MODE = process.env.ALIGNMENT_FIXTURE_MODE === "1";
+const FIXTURE_MODE = process.env.ZODIAC_FIXTURE_MODE === "1";
 
 interface ResolvedConversation {
 	id: string;

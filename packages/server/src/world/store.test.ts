@@ -4,7 +4,7 @@ import { createCommandDispatcher, type CommandDefinition } from "../command/disp
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 
 /**
- * Walking-skeleton slice for Alignment IWE phase 1 -- proves the target
+ * Walking-skeleton slice for Zodiac IWE phase 1 -- proves the target
  * architecture end to end with no React, DOM, or renderer anywhere in the
  * call path: a headless World creates and updates a Surface, one typed
  * command reaches it through the real dispatcher, the result is a plain

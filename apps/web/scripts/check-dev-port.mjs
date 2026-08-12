@@ -1,6 +1,6 @@
 import { connect } from "node:net";
 
-const configuredPort = Number.parseInt(process.env.ALIGNMENT_DEV_PORT ?? "5173", 10);
+const configuredPort = Number.parseInt(process.env.ZODIAC_DEV_PORT ?? "5173", 10);
 const port = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65_535 ? configuredPort : 5173;
 const hosts = ["127.0.0.1", "::1"];
 

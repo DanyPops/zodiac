@@ -72,7 +72,7 @@ function hoverContents(value: unknown): string | undefined {
 }
 
 /**
- * Builds a ModalEditorHost backed entirely by Alignment's own existing lector-host.ts
+ * Builds a ModalEditorHost backed entirely by Zodiac's own existing lector-host.ts
  * contribution commands (lector.file.open/save, lector.symbol.hover) -- confirmed by direct
  * source read that both already exist in @danypops/alignment-lector, no new contribution code
  * needed. save() reaches into the tracked resource's own GuardedLiveBuffer (returned as the

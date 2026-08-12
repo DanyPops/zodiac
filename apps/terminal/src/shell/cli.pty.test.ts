@@ -33,7 +33,7 @@ describe("packaged TUI process boundary", () => {
 
       // Tab/resize/cursor-visibility/raw-mode-restoration below are genuinely wire-protocol-level
       // assertions (did the right raw control sequences get emitted, did the shell wrapper's own
-      // stty capture match), not statements about visible Alignment UI content -- this file's own
+      // stty capture match), not statements about visible Zodiac UI content -- this file's own
       // prior version already checked these against raw `output` directly, never through
       // stripTerminalSequences, because a reconstructed screen has no way to represent "was a
       // clear-and-redraw sequence emitted" or "was the cursor-show sequence emitted" -- only "what

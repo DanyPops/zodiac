@@ -24,7 +24,7 @@ describe("Ctrl+Right/Ctrl+Left fullscreen, against a real running process", () =
     // the workspace title shown on screen, and a name containing that word
     // would falsely satisfy waitForText("(fullscreen)") below before the
     // real transition ever happened.
-    root = mkdtempSync(join(tmpdir(), "alignment-tui-fs-pty-"));
+    root = mkdtempSync(join(tmpdir(), "zodiac-tui-fs-pty-"));
     const rootTitle = basename(root);
     terminal = spawnLiveTerminal(process.execPath, [cli, root], { cols: 80, rows: 24 });
 

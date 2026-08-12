@@ -192,7 +192,7 @@ export class SemanticShell {
     const effectiveFooterHeight = Math.min(this.requestedFooterHeight, Math.max(MIN_FOOTER_HEIGHT, height - 2));
     const layout = layoutWorldRegions(world, width, height, effectiveFooterHeight);
     if (!layout.ok) return { ok: false, error: { code: "invalid-dimensions", message: layout.issues.join("; "), context: { width, height } } };
-    const created = createGridFrame(gridId("alignment-shell"), width, height);
+    const created = createGridFrame(gridId("zodiac-shell"), width, height);
     if (!created.ok) return created;
     const frame = created.value;
     if (this.externalComponent !== null) {
@@ -268,7 +268,7 @@ export class SemanticShell {
       const right = paintText(frame, area.value, width - 1, row, "\u2502", BORDER_ACTIVE, 1);
       if (!right.ok) return right;
     }
-    const label = target === "body" ? "Alignment \u2014 Body (fullscreen)" : "Alignment \u2014 Chat (fullscreen)";
+    const label = target === "body" ? "Zodiac \u2014 Body (fullscreen)" : "Zodiac \u2014 Chat (fullscreen)";
     return labelSegment(frame, area.value, 1, width - 1, 0, label, BORDER_ACTIVE);
   }
 

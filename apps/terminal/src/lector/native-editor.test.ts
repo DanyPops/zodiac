@@ -55,7 +55,7 @@ function typeKeys(component: Component, keys: readonly string[]): void {
 
 describe("openLectorEditorNatively", () => {
 	it("mounts a real ModalEditorComponent showing the real file's own content -- no AgentSession, no Pi extension involvement at all", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-editor-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-"));
 		writeFileSync(join(root, "greet.ts"), "export function greet() {\n\treturn 'hi';\n}\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
@@ -72,8 +72,8 @@ describe("openLectorEditorNatively", () => {
 		expect(mounted()).toBeUndefined();
 	});
 
-	it("real vim edit + :wq actually saves the new content to disk through Alignment's own lector-host.ts, not pi-lector's own operations.ts", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-editor-save-"));
+	it("real vim edit + :wq actually saves the new content to disk through Zodiac's own lector-host.ts, not pi-lector's own operations.ts", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-save-"));
 		const filePath = join(root, "note.txt");
 		writeFileSync(filePath, "hello\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
@@ -90,8 +90,8 @@ describe("openLectorEditorNatively", () => {
 		expect(readFileSync(filePath, "utf8")).toBe("hello world\n");
 	});
 
-	it("surfaces hover through Alignment's own lector.symbol.hover contribution command", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-editor-hover-"));
+	it("surfaces hover through Zodiac's own lector.symbol.hover contribution command", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-hover-"));
 		writeFileSync(join(root, "a.ts"), "export function greet(): string {\n\treturn 'hi';\n}\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
@@ -117,7 +117,7 @@ describe("openLectorEditorNatively", () => {
 
 describe("promptAndOpenLectorEditorNatively", () => {
 	it("mounts a real Input first, then opens the typed path once submitted", async () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-native-editor-prompt-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-prompt-"));
 		writeFileSync(join(root, "x.ts"), "export const x = 1;\n");
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
@@ -141,7 +141,7 @@ describe("promptAndOpenLectorEditorNatively", () => {
 
 	it("does nothing when the prompt is cancelled with Escape", async () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
-		root = mkdtempSync(join(tmpdir(), "alignment-native-editor-cancel-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-cancel-"));
 		const flow = promptAndOpenLectorEditorNatively(nativeHost, await realHost());
 		await new Promise((r) => setTimeout(r, 20));
 		mounted()?.handleInput?.("\x1b");
