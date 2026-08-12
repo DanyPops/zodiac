@@ -8,7 +8,7 @@ interface DialogCloseButtonProps {
 }
 
 /**
- * Every Alignment dialog's own close (X) button -- one definition instead
+ * Every Zodiac dialog's own close (X) button -- one definition instead
  * of the same `Dialog.Close asChild` + `CommandButton commandId="dialog.close"`
  * + class string repeated verbatim across Settings, the command palette,
  * Surface Templates, and its gallery.

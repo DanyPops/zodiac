@@ -21,7 +21,7 @@ const SPACED_THEME_GUTTER_PX = 10;
 
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
-	await expect(page.getByRole("heading", { name: "Alignment", exact: true })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Zodiac", exact: true })).toBeVisible();
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 });
 

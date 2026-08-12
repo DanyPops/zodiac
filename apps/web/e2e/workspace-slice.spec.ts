@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
-	await expect(page.getByRole("heading", { name: "Alignment", exact: true })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Zodiac", exact: true })).toBeVisible();
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 });
 
@@ -521,7 +521,7 @@ test("all shell actions share command bindings and expose them on hover and focu
 });
 
 test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and shortcut help", async ({ page }) => {
-	await page.evaluate(() => localStorage.setItem("alignment.theme", "light"));
+	await page.evaluate(() => localStorage.setItem("zodiac.theme", "light"));
 	await page.reload();
 
 	await page.keyboard.press("Control+1");
@@ -543,7 +543,7 @@ test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and sh
 
 	await expect(page.getByRole("button", { name: "Cycle color theme" })).toHaveAttribute("aria-keyshortcuts", "Control+Alt+L");
 	await page.keyboard.press("Control+Alt+L");
-	expect(await page.evaluate(() => localStorage.getItem("alignment.theme"))).toBe("dark");
+	expect(await page.evaluate(() => localStorage.getItem("zodiac.theme"))).toBe("dark");
 	await expect(page.locator("html")).toHaveClass(/dark/);
 
 	await page.keyboard.press("Control+k");
@@ -620,7 +620,7 @@ test("browser APIs expose opaque conversation identity, not filesystem paths", a
 	}
 });
 
-test("legacy product storage migrates without losing preferences", async ({ page }) => {
+test("legacy product storage (agent-deck era) migrates all the way to today's namespace without losing preferences", async ({ page }) => {
 	await page.evaluate(() => {
 		localStorage.clear();
 		localStorage.setItem("agent-deck-theme", "dark");
@@ -633,9 +633,40 @@ test("legacy product storage migrates without losing preferences", async ({ page
 	await expect(page.getByRole("navigation", { name: "Workspace selection" })).toBeHidden();
 	await expect(page.getByRole("navigation", { name: "Workspace quick selection" })).toBeVisible();
 	const migrated = await page.evaluate(() => ({
-		theme: localStorage.getItem("alignment.theme"),
-		selection: localStorage.getItem("alignment.workspace-selection-collapsed"),
-		legacyLayout: localStorage.getItem("alignment.workspace-layout.legacy-v1"),
+		theme: localStorage.getItem("zodiac.theme"),
+		selection: localStorage.getItem("zodiac.workspace-selection-collapsed"),
+		legacyLayout: localStorage.getItem("zodiac.workspace-layout.legacy-v1"),
 	}));
 	expect(migrated).toEqual({ theme: "dark", selection: "true", legacyLayout: '{"schemaVersion":1,"panels":[]}' });
+});
+
+test("Alignment-era product storage migrates to today's namespace without losing preferences", async ({ page }) => {
+	await page.evaluate(() => {
+		localStorage.clear();
+		localStorage.setItem("alignment.theme", "dark");
+		localStorage.setItem("alignment.workspace-selection-collapsed", "true");
+		localStorage.setItem("alignment.workspace-layout.legacy-v1", '{"schemaVersion":1,"panels":[]}');
+	});
+	await page.reload();
+
+	await expect(page.locator("html")).toHaveClass(/dark/);
+	await expect(page.getByRole("navigation", { name: "Workspace selection" })).toBeHidden();
+	await expect(page.getByRole("navigation", { name: "Workspace quick selection" })).toBeVisible();
+	const migrated = await page.evaluate(() => ({
+		theme: localStorage.getItem("zodiac.theme"),
+		selection: localStorage.getItem("zodiac.workspace-selection-collapsed"),
+		legacyLayout: localStorage.getItem("zodiac.workspace-layout.legacy-v1"),
+		// The Alignment-era keys are consumed by the migration, not left behind.
+		alignmentTheme: localStorage.getItem("alignment.theme"),
+		alignmentSelection: localStorage.getItem("alignment.workspace-selection-collapsed"),
+		alignmentLegacyLayout: localStorage.getItem("alignment.workspace-layout.legacy-v1"),
+	}));
+	expect(migrated).toEqual({
+		theme: "dark",
+		selection: "true",
+		legacyLayout: '{"schemaVersion":1,"panels":[]}',
+		alignmentTheme: null,
+		alignmentSelection: null,
+		alignmentLegacyLayout: null,
+	});
 });

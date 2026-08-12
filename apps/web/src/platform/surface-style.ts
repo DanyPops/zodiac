@@ -1,5 +1,5 @@
 /**
- * "Gradient to Contrast": Alignment's shared surface ladder, named after
+ * "Gradient to Contrast": Zodiac's shared surface ladder, named after
  * the Window Carousel (the pattern's original, reference implementation).
  * Three fixed steps, each theme tuned on its own terms rather than a
  * naive lightness-inversion of the other's:

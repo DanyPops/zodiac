@@ -4,7 +4,7 @@ import { App } from "./app/App.js";
 import "./styles.css";
 
 const container = document.querySelector<HTMLElement>("#app");
-if (!container) throw new Error("Alignment root element is missing");
+if (!container) throw new Error("Zodiac root element is missing");
 
 const root = createRoot(container);
 root.render(

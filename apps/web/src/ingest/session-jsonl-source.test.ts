@@ -92,7 +92,7 @@ describe("createSessionJsonlSource — tailing a live file", () => {
 	let filePath: string;
 
 	beforeEach(() => {
-		dir = mkdtempSync(join(tmpdir(), "alignment-tail-"));
+		dir = mkdtempSync(join(tmpdir(), "zodiac-tail-"));
 		filePath = join(dir, "live-session.jsonl");
 		writeFileSync(
 			filePath,

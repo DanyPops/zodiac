@@ -5,4 +5,4 @@
  * everything it pulls in, including dockview-react -- defeating the point of
  * lazy-loading the docking engine in App.tsx.
  */
-export const TEMPLATE_DRAG_MIME_TYPE = "application/x-alignment-surface-template";
+export const TEMPLATE_DRAG_MIME_TYPE = "application/x-zodiac-surface-template";

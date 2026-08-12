@@ -8,7 +8,7 @@
 // shrink-wrapped to today's number -- the point is to catch real growth, not
 // to force a re-justification on every dependency bump.
 //
-// "entry" (Vite's index.html-declared `alignment` input) vs. "total"
+// "entry" (Vite's index.html-declared `zodiac` input) vs. "total"
 // (everything, including chunks split out via dynamic import()) are budgeted
 // separately -- see bundle-budget.mjs for why.
 
@@ -20,7 +20,7 @@ import { evaluateBudgets } from "./bundle-budget.mjs";
 
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const distAssets = join(appRoot, "dist", "assets");
-const ENTRY_PREFIX = "alignment-";
+const ENTRY_PREFIX = "zodiac-";
 
 let assets;
 try {

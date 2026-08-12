@@ -3,7 +3,7 @@ import type { PiClient } from "../pi/client.js";
 
 /**
  * LLM-bound default naming for an auto-created Workspace, mirroring the
- * design (not the code -- Alignment's LLM plumbing is a different shape
+ * design (not the code -- Zodiac's LLM plumbing is a different shape
  * entirely) of ~/Workspace/alef's own
  * packages/core/session/src/context/title.ts (createLlmTitleGenerator) and
  * metadata.ts (clampTitleWords/TITLE_WORD_MIN/TITLE_WORD_MAX): a tight

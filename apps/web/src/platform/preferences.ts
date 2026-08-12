@@ -1,15 +1,27 @@
 import type { CommandContext, KeybindingDefinition } from "../commands/registry.js";
 import { clampVisualDna, DEFAULT_VISUAL_DNA, isVisualDna, type VisualDna } from "./visual-dna.js";
 
-const WORKSPACE_SELECTION_KEY = "alignment.workspace-selection-collapsed";
-const KEYBINDINGS_KEY = "alignment.keybindings";
-const SAVED_SURFACE_TEMPLATES_KEY = "alignment.saved-surface-templates";
-const USER_WORKSPACES_KEY = "alignment.user-workspaces";
-const VISUAL_DNA_KEY = "alignment.visual-dna";
+const WORKSPACE_SELECTION_KEY = "zodiac.workspace-selection-collapsed";
+const KEYBINDINGS_KEY = "zodiac.keybindings";
+const SAVED_SURFACE_TEMPLATES_KEY = "zodiac.saved-surface-templates";
+const USER_WORKSPACES_KEY = "zodiac.user-workspaces";
+const VISUAL_DNA_KEY = "zodiac.visual-dna";
 const MAX_USER_WORKSPACES = 50;
+// Two product names ago (agent-deck) and one product name ago (Alignment) --
+// each a real, no-longer-current localStorage namespace an existing user's
+// browser may still hold. Only workspace-selection-collapsed and the
+// Dashboard layout existed back in the agent-deck era; the other four keys
+// were introduced during the Alignment era, so they have only one legacy
+// source each, not two.
+const LEGACY_ALIGNMENT_SELECTION_KEY = "alignment.workspace-selection-collapsed";
 const LEGACY_SIDEBAR_KEY = "agent-deck-sidebar-collapsed";
+const LEGACY_ALIGNMENT_KEYBINDINGS_KEY = "alignment.keybindings";
+const LEGACY_ALIGNMENT_SAVED_SURFACE_TEMPLATES_KEY = "alignment.saved-surface-templates";
+const LEGACY_ALIGNMENT_USER_WORKSPACES_KEY = "alignment.user-workspaces";
+const LEGACY_ALIGNMENT_VISUAL_DNA_KEY = "alignment.visual-dna";
 const LEGACY_LAYOUT_KEY = "agent-deck-dashboard-layout";
-const PRESERVED_LAYOUT_KEY = "alignment.workspace-layout.legacy-v1";
+const LEGACY_ALIGNMENT_LAYOUT_KEY = "alignment.workspace-layout.legacy-v1";
+const PRESERVED_LAYOUT_KEY = "zodiac.workspace-layout.legacy-v1";
 const MAX_SAVED_SURFACE_TEMPLATES = 50;
 
 /** A user-authored Surface Template: reuses a built-in template's docked content under a name the user chose. */
@@ -45,17 +57,27 @@ export interface Preferences {
 }
 
 export function createPreferences(storage: Storage): Preferences {
+	// One-shot migrations for the four keys with no reader-side legacy check
+	// of their own (they were introduced entirely within the Alignment era,
+	// so they have exactly one legacy source, not agent-deck's own two).
+	migrateOnce(storage, LEGACY_ALIGNMENT_KEYBINDINGS_KEY, KEYBINDINGS_KEY);
+	migrateOnce(storage, LEGACY_ALIGNMENT_SAVED_SURFACE_TEMPLATES_KEY, SAVED_SURFACE_TEMPLATES_KEY);
+	migrateOnce(storage, LEGACY_ALIGNMENT_USER_WORKSPACES_KEY, USER_WORKSPACES_KEY);
+	migrateOnce(storage, LEGACY_ALIGNMENT_VISUAL_DNA_KEY, VISUAL_DNA_KEY);
+	migrateOnce(storage, LEGACY_ALIGNMENT_LAYOUT_KEY, PRESERVED_LAYOUT_KEY);
 	migrateLegacyLayout(storage);
 
 	function readCollapsed(): boolean {
 		try {
 			const current = storage.getItem(WORKSPACE_SELECTION_KEY);
 			if (current === "true" || current === "false") return current === "true";
-			const legacy = storage.getItem(LEGACY_SIDEBAR_KEY);
-			if (legacy === "true" || legacy === "false") {
-				storage.setItem(WORKSPACE_SELECTION_KEY, legacy);
-				storage.removeItem(LEGACY_SIDEBAR_KEY);
-				return legacy === "true";
+			for (const legacyKey of [LEGACY_ALIGNMENT_SELECTION_KEY, LEGACY_SIDEBAR_KEY]) {
+				const legacy = storage.getItem(legacyKey);
+				if (legacy === "true" || legacy === "false") {
+					storage.setItem(WORKSPACE_SELECTION_KEY, legacy);
+					storage.removeItem(legacyKey);
+					return legacy === "true";
+				}
 			}
 		} catch {
 			return false;
@@ -160,6 +182,19 @@ function isKeybindingDefinition(value: unknown): value is KeybindingDefinition {
 		(COMMAND_CONTEXTS as readonly string[]).includes(binding.context) &&
 		(binding.source === undefined || binding.source === "user")
 	);
+}
+
+/** Copies `legacyKey`'s raw string value to `currentKey` once, if `currentKey` is still unset and `legacyKey` has something -- then removes `legacyKey`. Safe to call unconditionally on every startup: a no-op past the first successful copy, and a no-op (not a throw) when there's nothing to migrate. */
+function migrateOnce(storage: Storage, legacyKey: string, currentKey: string): void {
+	try {
+		if (storage.getItem(currentKey) !== null) return;
+		const legacy = storage.getItem(legacyKey);
+		if (legacy === null) return;
+		storage.setItem(currentKey, legacy);
+		storage.removeItem(legacyKey);
+	} catch {
+		// Preserve startup when storage is unavailable; no key is removed unless the copy succeeds.
+	}
 }
 
 function migrateLegacyLayout(storage: Storage): void {

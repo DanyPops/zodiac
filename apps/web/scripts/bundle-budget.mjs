@@ -2,7 +2,7 @@
 // can be unit tested against fabricated sizes instead of only a real build.
 //
 // Two tiers per asset type, not one: "entry" is the initial page load's own
-// weight (the `alignment-*` chunk Vite builds from index.html's declared
+// weight (the `zodiac-*` chunk Vite builds from index.html's declared
 // entry) -- this is what every session pays before anything is interactive,
 // so it stays close to its measured baseline. "total" bounds everything
 // shipped, including chunks split out via dynamic import() (e.g.

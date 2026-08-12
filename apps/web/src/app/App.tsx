@@ -79,7 +79,7 @@ export function App(): React.JSX.Element {
 	// is a plain function call here, not another hook.
 	const piChatSessions = usePiChatSessions(piClient);
 	const userWorkspaces = useUserWorkspaces(preferences);
-	// Alignment starts with zero Workspaces -- WORKSPACE_CATALOG's fixed demo
+	// Zodiac starts with zero Workspaces -- WORKSPACE_CATALOG's fixed demo
 	// entries (Bug/Metrics/Chat/PRs) are no longer merged in by default; only
 	// real, persisted, user-created Workspaces populate the catalog. The first
 	// one is created automatically the moment the user sends a first prompt
@@ -389,7 +389,7 @@ export function App(): React.JSX.Element {
 							/>
 						</>
 					) : (
-						// No Workspace yet -- Alignment's real starting state. A minimal
+						// No Workspace yet -- Zodiac's real starting state. A minimal
 						// landing: the composer only (reused verbatim from
 						// ConversationSurface.tsx, the exact same component/command wiring
 						// as every other composer in the app -- "conversation.send" already

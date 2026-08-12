@@ -9,27 +9,27 @@ test.beforeEach(async ({ page }) => {
 	await waitForShell(page);
 });
 
-test("Alignment Workspace matches the light visual baseline", async ({ page }) => {
-	await page.evaluate(() => localStorage.setItem("alignment.theme", "light"));
+test("Zodiac Workspace matches the light visual baseline", async ({ page }) => {
+	await page.evaluate(() => localStorage.setItem("zodiac.theme", "light"));
 	await page.reload();
 	await waitForShell(page);
-	await expect(page).toHaveScreenshot("alignment-workspace-light.png", { maxDiffPixels: 20 });
+	await expect(page).toHaveScreenshot("zodiac-workspace-light.png", { maxDiffPixels: 20 });
 });
 
 test("collapsed Workspace quick selection shows Workspace glyphs and keymap hints", async ({ page }) => {
-	await page.evaluate(() => localStorage.setItem("alignment.theme", "light"));
+	await page.evaluate(() => localStorage.setItem("zodiac.theme", "light"));
 	await page.reload();
 	await waitForShell(page);
 	await page.keyboard.press("Control+b");
 	const quickSelection = page.getByRole("navigation", { name: "Workspace quick selection" });
 	await quickSelection.getByRole("button", { name: "Bug", exact: true }).hover();
 	await expect(page.getByRole("tooltip")).toContainText("Bug");
-	await expect(page).toHaveScreenshot("alignment-workspace-quick-selection.png", { maxDiffPixels: 20 });
+	await expect(page).toHaveScreenshot("zodiac-workspace-quick-selection.png", { maxDiffPixels: 20 });
 });
 
-test("Alignment Workspace matches the dark visual baseline", async ({ page }) => {
-	await page.evaluate(() => localStorage.setItem("alignment.theme", "dark"));
+test("Zodiac Workspace matches the dark visual baseline", async ({ page }) => {
+	await page.evaluate(() => localStorage.setItem("zodiac.theme", "dark"));
 	await page.reload();
 	await waitForShell(page);
-	await expect(page).toHaveScreenshot("alignment-workspace-dark.png", { maxDiffPixels: 20 });
+	await expect(page).toHaveScreenshot("zodiac-workspace-dark.png", { maxDiffPixels: 20 });
 });

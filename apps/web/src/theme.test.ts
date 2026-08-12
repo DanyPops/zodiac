@@ -74,25 +74,36 @@ describe("createThemeController", () => {
 		expect(controller.getMode()).toBe("system");
 	});
 
-	it("loads the Alignment preference before any legacy value", () => {
+	it("loads the Zodiac preference before any legacy value", () => {
 		const mocks = createMocks(false);
-		mocks.storage.setItem("alignment.theme", "light");
+		mocks.storage.setItem("zodiac.theme", "light");
+		mocks.storage.setItem("alignment.theme", "dark");
 		mocks.storage.setItem("agent-deck-theme", "dark");
 		const controller = createThemeController(mocks);
 		expect(controller.getMode()).toBe("light");
 	});
 
-	it("migrates a valid legacy preference into the Alignment namespace", () => {
+	it("migrates a valid Alignment-era preference into the Zodiac namespace, ahead of the older agent-deck one", () => {
+		const mocks = createMocks(false);
+		mocks.storage.setItem("alignment.theme", "dark");
+		mocks.storage.setItem("agent-deck-theme", "light");
+		const controller = createThemeController(mocks);
+		expect(controller.getMode()).toBe("dark");
+		expect(mocks.storage.getItem("zodiac.theme")).toBe("dark");
+		expect(mocks.storage.getItem("alignment.theme")).toBeNull(); // consumed by the migration, not left behind
+	});
+
+	it("migrates a valid legacy agent-deck preference into the Zodiac namespace when there is no Alignment-era value either", () => {
 		const mocks = createMocks(false);
 		mocks.storage.setItem("agent-deck-theme", "dark");
 		const controller = createThemeController(mocks);
 		expect(controller.getMode()).toBe("dark");
-		expect(mocks.storage.getItem("alignment.theme")).toBe("dark");
+		expect(mocks.storage.getItem("zodiac.theme")).toBe("dark");
 	});
 
 	it("ignores an invalid persisted value and falls back to system", () => {
 		const mocks = createMocks(false);
-		mocks.storage.setItem("alignment.theme", "solarized");
+		mocks.storage.setItem("zodiac.theme", "solarized");
 		const controller = createThemeController(mocks);
 		expect(controller.getMode()).toBe("system");
 	});
@@ -113,7 +124,7 @@ describe("createThemeController", () => {
 		controller.setMode("dark");
 
 		expect(mocks.classListToggles.at(-1)).toEqual(["dark", true]);
-		expect(mocks.storage.getItem("alignment.theme")).toBe("dark");
+		expect(mocks.storage.getItem("zodiac.theme")).toBe("dark");
 		expect(controller.isDark()).toBe(true);
 	});
 

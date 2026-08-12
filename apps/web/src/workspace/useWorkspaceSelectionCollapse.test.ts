@@ -21,7 +21,7 @@ function memoryStorage(): Storage {
 describe("useWorkspaceSelectionCollapse", () => {
 	it("reads its initial value from persisted preferences", () => {
 		const storage = memoryStorage();
-		storage.setItem("alignment.workspace-selection-collapsed", "true");
+		storage.setItem("zodiac.workspace-selection-collapsed", "true");
 		const { result } = renderHook(() => useWorkspaceSelectionCollapse(createPreferences(storage)));
 		expect(result.current.collapsed).toBe(true);
 	});
@@ -38,18 +38,18 @@ describe("useWorkspaceSelectionCollapse", () => {
 
 		expect(returned).toBe(true);
 		expect(result.current.collapsed).toBe(true);
-		expect(storage.getItem("alignment.workspace-selection-collapsed")).toBe("true");
+		expect(storage.getItem("zodiac.workspace-selection-collapsed")).toBe("true");
 	});
 
 	it("expand always sets collapsed to false and persists it", () => {
 		const storage = memoryStorage();
-		storage.setItem("alignment.workspace-selection-collapsed", "true");
+		storage.setItem("zodiac.workspace-selection-collapsed", "true");
 		const preferences = createPreferences(storage);
 		const { result } = renderHook(() => useWorkspaceSelectionCollapse(preferences));
 
 		act(() => result.current.expand());
 
 		expect(result.current.collapsed).toBe(false);
-		expect(storage.getItem("alignment.workspace-selection-collapsed")).toBe("false");
+		expect(storage.getItem("zodiac.workspace-selection-collapsed")).toBe("false");
 	});
 });

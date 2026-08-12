@@ -7,7 +7,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import sonarjs from "eslint-plugin-sonarjs";
 import tseslint from "typescript-eslint";
 
-// Alignment's own architecture rules, enforced as real ESLint rules against
+// Zodiac's own architecture rules, enforced as real ESLint rules against
 // the parsed AST instead of the retired scripts/architecture-boundaries.mjs
 // text scan. That regex-based version had two real defects an AST rule
 // can't have: it matched the bare word "window" inside JSX prose (a false

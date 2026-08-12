@@ -1,7 +1,10 @@
 export type ThemeMode = "light" | "dark" | "system";
 
-const STORAGE_KEY = "alignment.theme";
-const LEGACY_STORAGE_KEY = "agent-deck-theme";
+const STORAGE_KEY = "zodiac.theme";
+// Checked in order: the prior product name (Alignment) first, then the one
+// before that (agent-deck) -- each a real, no-longer-current localStorage
+// namespace an existing user's browser may still hold.
+const LEGACY_STORAGE_KEYS = ["alignment.theme", "agent-deck-theme"];
 const VALID_MODES: readonly ThemeMode[] = ["light", "dark", "system"]; 
 
 // Text color changes immediately when the theme flips. Animating it creates a
@@ -37,11 +40,13 @@ function loadStoredMode(storage: Pick<Storage, "getItem" | "setItem" | "removeIt
 		const stored = storage.getItem(STORAGE_KEY);
 		if (stored !== null && (VALID_MODES as readonly string[]).includes(stored)) return stored as ThemeMode;
 
-		const legacy = storage.getItem(LEGACY_STORAGE_KEY);
-		if (legacy !== null && (VALID_MODES as readonly string[]).includes(legacy)) {
-			storage.setItem(STORAGE_KEY, legacy);
-			storage.removeItem(LEGACY_STORAGE_KEY);
-			return legacy as ThemeMode;
+		for (const legacyKey of LEGACY_STORAGE_KEYS) {
+			const legacy = storage.getItem(legacyKey);
+			if (legacy !== null && (VALID_MODES as readonly string[]).includes(legacy)) {
+				storage.setItem(STORAGE_KEY, legacy);
+				storage.removeItem(legacyKey);
+				return legacy as ThemeMode;
+			}
 		}
 	} catch {
 		// Storage may be unavailable in privacy-restricted hosts.

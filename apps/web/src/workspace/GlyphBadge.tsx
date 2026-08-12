@@ -2,7 +2,7 @@ import { cn } from "../platform/cn.js";
 import { glyphBadgeClassName, type GlyphBadgeStateOptions } from "./glyph-badge-style.js";
 
 /**
- * "Glyph Badge": Alignment's one recurring icon-in-a-box element, styled
+ * "Glyph Badge": Zodiac's one recurring icon-in-a-box element, styled
  * per Gradient to Contrast (see platform/surface-style.ts) -- idle content
  * sits flush and muted against its surface; the active one gets its own
  * bordered, filled chip with darker content, exactly the Window Carousel's

@@ -48,7 +48,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					<div className="flex h-12 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 dark:border-gray-700">
 						{/* The header's own logo lockup (icon mark + wordmark) -- a static brand mark, not a Glyph Badge (no active/idle state) or Icon Button (no action), so its accent fill is a deliberate one-off, not a stray. Its size still shares the same scale as everything else. */}
 						<div className={cn("grid place-items-center rounded-[var(--app-corner-radius,16px)] bg-accent text-xs font-bold text-white", GLYPH_SIZE_CLASSES.md)}>A</div>
-						<h1 className="text-sm font-semibold tracking-tight text-gray-950 dark:text-white">Alignment</h1>
+						<h1 className="text-sm font-semibold tracking-tight text-gray-950 dark:text-white">Zodiac</h1>
 						<CommandButton commandId="workspace.toggleSelection" label="Hide workspace selection" className={cn("ml-auto", iconButtonClassName({ size: "xl" }))}>
 							<ChevronsLeft aria-hidden="true" size={16} />
 						</CommandButton>

@@ -77,7 +77,7 @@ function piApiPlugin(): Plugin {
 	const routes = createPiHttpRoutes(registry);
 
 	return {
-		name: "alignment-pi-api",
+		name: "zodiac-pi-api",
 		configureServer(server) {
 			server.middlewares.use("/api/pi/sessions", (req, res) => {
 				if (req.method !== "POST") {
@@ -101,7 +101,7 @@ function piApiPlugin(): Plugin {
 	};
 }
 
-function alignmentApiPlugin(): Plugin {
+function zodiacApiPlugin(): Plugin {
 	let resolvedConversations = new Map<string, ResolvedConversation>();
 
 	async function refreshConversations(): Promise<ResolvedConversation[]> {
@@ -121,7 +121,7 @@ function alignmentApiPlugin(): Plugin {
 	}
 
 	return {
-		name: "alignment-local-api",
+		name: "zodiac-local-api",
 		configureServer(server) {
 			server.middlewares.use("/api/conversations", (_req, res) => {
 				refreshConversations()
@@ -130,7 +130,7 @@ function alignmentApiPlugin(): Plugin {
 			});
 
 			server.middlewares.use("/api/events", (req, res) => {
-				const url = new URL(req.url ?? "", "http://alignment.local");
+				const url = new URL(req.url ?? "", "http://zodiac.local");
 				const conversationId = url.searchParams.get("conversationId");
 				if (!conversationId) {
 					writeJson(res, 400, { code: "conversation-id-required", message: "A conversation id is required." });
@@ -158,10 +158,12 @@ function alignmentApiPlugin(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [react(), tailwindcss(), alignmentApiPlugin(), piApiPlugin()],
+	plugins: [react(), tailwindcss(), zodiacApiPlugin(), piApiPlugin()],
 	build: {
 		rollupOptions: {
-			input: { alignment: resolve(__dirname, "index.html") },
+			// This key names the entry chunk Vite/Rollup emits (dist/assets/zodiac-*.js)
+			// -- check-bundle-budget.mjs's own ENTRY_PREFIX must match it exactly.
+			input: { zodiac: resolve(__dirname, "index.html") },
 		},
 	},
 	test: {

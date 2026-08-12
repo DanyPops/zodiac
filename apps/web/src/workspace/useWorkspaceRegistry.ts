@@ -29,7 +29,7 @@ import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 export interface WorkspaceRegistryHandle {
 	/** Every known Workspace, in catalog order -- for rendering the left pillar. */
 	catalog: readonly WorkspaceCatalogEntry[];
-	/** Undefined when the catalog is empty -- Alignment now genuinely starts with zero Workspaces (see the empty-by-default + auto-create-on-first-prompt behavior); every other action below already tolerates this by no-op'ing rather than throwing. */
+	/** Undefined when the catalog is empty -- Zodiac now genuinely starts with zero Workspaces (see the empty-by-default + auto-create-on-first-prompt behavior); every other action below already tolerates this by no-op'ing rather than throwing. */
 	activeWorkspaceId: string | undefined;
 	selectWorkspace: (id: string) => void;
 	/** Renames any Workspace by id, not just the active one -- so a sidebar entry can be renamed without first switching to it. A blank (whitespace-only) title is rejected, and an unknown id is a no-op -- same guards as model.ts's renameWorkspace. */

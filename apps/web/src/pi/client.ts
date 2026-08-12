@@ -3,7 +3,7 @@ import { parseRpcLine, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
 /**
  * Driven port: the Chat surface's own view of "a live Pi agent to talk to,"
  * independent of HTTP/SSE. `createHttpPiClient` is its only adapter today,
- * proxied through Alignment's own dev server (see vite.config.ts's
+ * proxied through Zodiac's own dev server (see vite.config.ts's
  * piApiPlugin) rather than talking to a `pi` process directly -- the browser
  * never spawns or manages processes itself.
  */

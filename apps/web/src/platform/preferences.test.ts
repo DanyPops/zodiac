@@ -15,15 +15,26 @@ function memoryStorage(): Storage {
 	};
 }
 
-describe("Alignment preferences", () => {
-	it("migrates the legacy sidebar preference once", () => {
+describe("Zodiac preferences", () => {
+	it("migrates the legacy sidebar preference (agent-deck era) all the way to today's namespace", () => {
 		const storage = memoryStorage();
 		storage.setItem("agent-deck-sidebar-collapsed", "true");
 		const preferences = createPreferences(storage);
 
 		expect(preferences.workspaceSelectionCollapsed()).toBe(true);
-		expect(storage.getItem("alignment.workspace-selection-collapsed")).toBe("true");
+		expect(storage.getItem("zodiac.workspace-selection-collapsed")).toBe("true");
 		expect(storage.getItem("agent-deck-sidebar-collapsed")).toBeNull();
+	});
+
+	it("migrates an Alignment-era sidebar preference ahead of the older agent-deck one", () => {
+		const storage = memoryStorage();
+		storage.setItem("alignment.workspace-selection-collapsed", "true");
+		storage.setItem("agent-deck-sidebar-collapsed", "false");
+		const preferences = createPreferences(storage);
+
+		expect(preferences.workspaceSelectionCollapsed()).toBe(true);
+		expect(storage.getItem("zodiac.workspace-selection-collapsed")).toBe("true");
+		expect(storage.getItem("alignment.workspace-selection-collapsed")).toBeNull();
 	});
 
 	it("preserves a legacy Dashboard layout under an explicit migration key", () => {
@@ -31,8 +42,18 @@ describe("Alignment preferences", () => {
 		const layout = JSON.stringify({ schemaVersion: 1, panels: [{ id: "ci" }] });
 		storage.setItem("agent-deck-dashboard-layout", layout);
 		createPreferences(storage);
-		expect(storage.getItem("alignment.workspace-layout.legacy-v1")).toBe(layout);
+		expect(storage.getItem("zodiac.workspace-layout.legacy-v1")).toBe(layout);
 		expect(storage.getItem("agent-deck-dashboard-layout")).toBeNull();
+	});
+
+	it("migrates an Alignment-era preserved layout ahead of the older agent-deck one", () => {
+		const storage = memoryStorage();
+		const zodiacLayout = JSON.stringify({ schemaVersion: 1, panels: [{ id: "alignment-era" }] });
+		storage.setItem("alignment.workspace-layout.legacy-v1", zodiacLayout);
+		storage.setItem("agent-deck-dashboard-layout", JSON.stringify({ schemaVersion: 1, panels: [{ id: "agent-deck-era" }] }));
+		createPreferences(storage);
+		expect(storage.getItem("zodiac.workspace-layout.legacy-v1")).toBe(zodiacLayout);
+		expect(storage.getItem("alignment.workspace-layout.legacy-v1")).toBeNull();
 	});
 
 	it("round-trips bounded user keybinding overrides and rejects malformed storage", () => {
@@ -43,8 +64,16 @@ describe("Alignment preferences", () => {
 			{ commandId: "palette.open", keys: "Mod+P", context: "global", source: "user" },
 		]);
 
-		storage.setItem("alignment.keybindings", JSON.stringify([{ commandId: 7, keys: null }]));
+		storage.setItem("zodiac.keybindings", JSON.stringify([{ commandId: 7, keys: null }]));
 		expect(createPreferences(storage).keybindingOverrides()).toEqual([]);
+	});
+
+	it("migrates Alignment-era keybinding overrides once", () => {
+		const storage = memoryStorage();
+		storage.setItem("alignment.keybindings", JSON.stringify([{ commandId: "palette.open", keys: "Mod+P", context: "global", source: "user" }]));
+		const preferences = createPreferences(storage);
+		expect(preferences.keybindingOverrides()).toEqual([{ commandId: "palette.open", keys: "Mod+P", context: "global", source: "user" }]);
+		expect(storage.getItem("alignment.keybindings")).toBeNull();
 	});
 
 	it("round-trips bounded saved Surface Templates and rejects malformed storage", () => {
@@ -53,8 +82,16 @@ describe("Alignment preferences", () => {
 		preferences.setSavedSurfaceTemplates([{ id: "saved-1", title: "My Terminal", templateId: "terminal" }]);
 		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([{ id: "saved-1", title: "My Terminal", templateId: "terminal" }]);
 
-		storage.setItem("alignment.saved-surface-templates", JSON.stringify([{ id: "", title: "x", templateId: "y" }, { id: 7 }]));
+		storage.setItem("zodiac.saved-surface-templates", JSON.stringify([{ id: "", title: "x", templateId: "y" }, { id: 7 }]));
 		expect(createPreferences(storage).savedSurfaceTemplates()).toEqual([]);
+	});
+
+	it("migrates Alignment-era saved Surface Templates once", () => {
+		const storage = memoryStorage();
+		storage.setItem("alignment.saved-surface-templates", JSON.stringify([{ id: "saved-1", title: "My Terminal", templateId: "terminal" }]));
+		const preferences = createPreferences(storage);
+		expect(preferences.savedSurfaceTemplates()).toEqual([{ id: "saved-1", title: "My Terminal", templateId: "terminal" }]);
+		expect(storage.getItem("alignment.saved-surface-templates")).toBeNull();
 	});
 
 	it("round-trips bounded user-created Workspaces and rejects malformed storage", () => {
@@ -63,8 +100,16 @@ describe("Alignment preferences", () => {
 		preferences.setUserWorkspaces([{ id: "ws-1", title: "Deploys", glyphId: "rocket" }]);
 		expect(createPreferences(storage).userWorkspaces()).toEqual([{ id: "ws-1", title: "Deploys", glyphId: "rocket" }]);
 
-		storage.setItem("alignment.user-workspaces", JSON.stringify([{ id: "", title: "x", glyphId: "y" }, { id: 7 }]));
+		storage.setItem("zodiac.user-workspaces", JSON.stringify([{ id: "", title: "x", glyphId: "y" }, { id: 7 }]));
 		expect(createPreferences(storage).userWorkspaces()).toEqual([]);
+	});
+
+	it("migrates Alignment-era user-created Workspaces once", () => {
+		const storage = memoryStorage();
+		storage.setItem("alignment.user-workspaces", JSON.stringify([{ id: "ws-1", title: "Deploys", glyphId: "rocket" }]));
+		const preferences = createPreferences(storage);
+		expect(preferences.userWorkspaces()).toEqual([{ id: "ws-1", title: "Deploys", glyphId: "rocket" }]);
+		expect(storage.getItem("alignment.user-workspaces")).toBeNull();
 	});
 
 	it("round-trips a bounded, clamped Visual DNA and falls back on malformed storage", () => {
@@ -75,14 +120,22 @@ describe("Alignment preferences", () => {
 		preferences.setVisualDna({ vibe: 150, cornerSharpness: -20 });
 		expect(createPreferences(storage).visualDna()).toEqual({ vibe: 100, cornerSharpness: 0 });
 
-		storage.setItem("alignment.visual-dna", JSON.stringify({ vibe: "oops" }));
+		storage.setItem("zodiac.visual-dna", JSON.stringify({ vibe: "oops" }));
 		expect(createPreferences(storage).visualDna()).toEqual({ vibe: 100, cornerSharpness: 50 });
 	});
 
-	it("persists only the Alignment namespace", () => {
+	it("migrates an Alignment-era Visual DNA once", () => {
+		const storage = memoryStorage();
+		storage.setItem("alignment.visual-dna", JSON.stringify({ vibe: 20, cornerSharpness: 10 }));
+		const preferences = createPreferences(storage);
+		expect(preferences.visualDna()).toEqual({ vibe: 20, cornerSharpness: 10 });
+		expect(storage.getItem("alignment.visual-dna")).toBeNull();
+	});
+
+	it("persists only the Zodiac namespace", () => {
 		const storage = memoryStorage();
 		const preferences = createPreferences(storage);
 		preferences.setWorkspaceSelectionCollapsed(true);
-		expect(storage.getItem("alignment.workspace-selection-collapsed")).toBe("true");
+		expect(storage.getItem("zodiac.workspace-selection-collapsed")).toBe("true");
 	});
 });

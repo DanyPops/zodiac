@@ -1,6 +1,6 @@
-# Alignment application
+# Zodiac application
 
-The React 19 client for Alignment. A **Workspace** is its own independent Canvas -- never the same thing as a Conversation (see below): a numbered, wrap-around **Window Carousel** (top) holds that Workspace's docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a floating overlay hidden by default -- summoned by the bottom screen edge or a keymap, not a docked tab.
+The React 19 client for Zodiac. A **Workspace** is its own independent Canvas -- never the same thing as a Conversation (see below): a numbered, wrap-around **Window Carousel** (top) holds that Workspace's docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a floating overlay hidden by default -- summoned by the bottom screen edge or a keymap, not a docked tab.
 
 ## Workspace vs. Conversation
 
@@ -112,7 +112,7 @@ Persisted through the Preferences port (`platform/visual-dna.ts` for formulas, `
 
 The active Window sits horizontally centered (a coverflow effect). Each Window is positioned by `circularWindowDelta(index, activeIndex, windowCount)` in `workspace/window-carousel-fade.ts` -- the shortest *wrapped* distance from the active Window, so the Window before index 0 is the last one (delta -1), not maximally far away. `computeWindowOffsetPx(delta)` turns that into a pixel offset; `computeWindowFadeOpacity(delta)` fades it out, linearly, to fully invisible (`opacity: 0`) at `WINDOW_FADE_DISTANCE` (3) Windows away.
 
-Each mock Workspace starts pre-seeded with 7 empty Windows, centered on the middle one, so this is visible at rest (`createDemoWorkspace` in `workspace/workspace-catalog.tsx`) -- `useWorkspaceRegistry` itself still defaults to a real single-Window `createWorkspace`.
+A real Workspace starts with exactly one Window (`useWorkspaceRegistry`'s own default `createWorkspace` factory, via App.tsx's `createUserWorkspace`) -- the centered/fading coverflow effect only becomes visible once a Workspace has more than one, via `window.new`/the New Window button.
 
 Clicks, keyboard commands, and the mouse wheel are all the same wrap-around ring (`scrollWindow` in `workspace/model.ts` delegates to `nextWindow`/`previousWindow`). Nothing is created or pruned by navigating; explicit Window creation is via `window.new`/the New Window button only.
 

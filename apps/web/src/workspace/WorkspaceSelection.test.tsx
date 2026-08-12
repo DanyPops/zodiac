@@ -184,7 +184,7 @@ describe("collapsed Workspace quick selection", () => {
 		expect(within(toggle).getByText("A").className).not.toMatch(/bg-accent/);
 	});
 
-	it("overlays the Alignment logo and expand glyph in one control at the same height as the expanded header", () => {
+	it("overlays the Zodiac logo and expand glyph in one control at the same height as the expanded header", () => {
 		renderCollapsed();
 		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });
 		expect(toggle).toHaveClass("h-12");

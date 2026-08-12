@@ -21,7 +21,7 @@ const results = await Promise.all(hosts.map(async (host) => ({ host, listening: 
 const occupied = results.filter(({ listening }) => listening);
 
 if (occupied.length > 0) {
-	console.error(`Alignment dev port ${port} is already in use on ${occupied.map(({ host }) => host).join(", ")}.`);
+	console.error(`Zodiac dev port ${port} is already in use on ${occupied.map(({ host }) => host).join(", ")}.`);
 	console.error(`Inspect every listener with: ss -ltnp '( sport = :${port} )'`);
 	process.exit(1);
 }

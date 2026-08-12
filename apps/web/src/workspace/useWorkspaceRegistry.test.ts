@@ -215,7 +215,7 @@ describe("useWorkspaceRegistry", () => {
 		});
 	});
 
-	describe("an empty catalog -- Alignment's real 'no Workspace yet' starting state", () => {
+	describe("an empty catalog -- Zodiac's real 'no Workspace yet' starting state", () => {
 		it("never throws, and reports no active Workspace", () => {
 			const { result } = renderHook(() => useWorkspaceRegistry([]));
 			expect(result.current.activeWorkspaceId).toBeUndefined();
