@@ -1,8 +1,8 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { DockviewDefaultTab, DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type Position } from "dockview-react";
+import { DockviewDefaultTab, DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewDidDropEvent, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type Position } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import { Feather, PanelLeftOpen, Pin } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
@@ -10,6 +10,8 @@ import { SURFACE_BG } from "../platform/surface-style.js";
 import { DockRuler } from "./DockRuler.js";
 import { computeDockRulerHint, dockRulerFrameMark, type DockRulerFrameMark, type DockRulerHint } from "./dock-ruler.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
+import { computeDropZones, dropZoneCloseness, dropZoneOpacity, proximityInfluenceRadius, type DropZone } from "./proximity-zones.js";
+import { ProximityDropZones } from "./ProximityDropZones.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
 import { isSurfaceFocused } from "./surface-focus.js";
@@ -23,6 +25,30 @@ const CLOSE_FADE_MS = 220;
 
 // Shared idle-velocity gate for onWillShowOverlay below, every kind.
 const DRAG_HINT_IDLE_VELOCITY_PX_PER_MS = 0.5;
+
+// A fresh `() => {}` as a prop default is recreated every render -- fatal
+// when it feeds a useEffect dependency array (the dragActive cleanup effect
+// below): each render creates a new default, changing the dep, re-running
+// the effect, whose setState calls (new [] / new Map() each time) trigger
+// another render, forever. One stable module-level reference instead.
+function noop(): void {}
+
+// dockview-react's own DockviewReact rebuilds its internal watermark part
+// (a real DOM replacement, not just a re-render) whenever watermarkComponent
+// changes identity -- see its own useEffect keyed on that exact prop. An
+// inline arrow function here is a fresh identity every WindowDockview
+// render, so anything that makes this component re-render during a live
+// drag (the ambient proximity layer below, or the Dock Ruler before it)
+// would replace the watermark's DOM node mid-gesture -- a real, confirmed
+// regression: it silently corrupts a genuine native browser drag targeting
+// that exact node (a real mouse drag onto the empty watermark stopped
+// docking anything), invisible to dispatchEvent-based tests since those
+// re-resolve their target fresh at dispatch time instead of tracking one
+// DOM node's identity across a whole gesture. A stable module-level
+// reference, not recreated per render, avoids it entirely.
+function DockWatermark(): React.JSX.Element {
+	return <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>;
+}
 
 /** The same hint computation the Dock Ruler renders, run fresh against a real drag event and its target group's own DOM box -- shared between the live overlay (onWillShowOverlay) and the actual drop (onDidDrop) so what the ruler showed and what the drop does can never disagree. */
 function dockRulerHintFromEvent(nativeEvent: DragEvent | PointerEvent | Event, groupElement: HTMLElement): DockRulerHint | undefined {
@@ -218,9 +244,9 @@ export function WindowDockview({
 	onPendingDockConsumed,
 	onPanelClosed,
 	onExternalTemplateDrop,
-	onDockRulerHintChange = () => {},
+	onDockRulerHintChange = noop,
 	dragActive = false,
-	onActivePanelChange = () => {},
+	onActivePanelChange = noop,
 	isDark,
 	conversationItems,
 	conversationLoading,
@@ -238,12 +264,23 @@ export function WindowDockview({
 	const mountedIdsRef = useRef<Set<string>>(new Set());
 	const wrapperRef = useRef<HTMLDivElement>(null);
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
+	// Own idle-velocity sample, independent of lastMoveRef above -- the ambient
+	// proximity layer (below) is driven by a plain native dragover listener,
+	// not dockview's onWillShowOverlay, so sharing one ref would double-sample
+	// the same native event and corrupt both gates' velocity readings.
+	const zoneLastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
 	const [saveAsTemplateRequest, setSaveAsTemplateRequest] = useState<{ templateId: string; defaultTitle: string } | undefined>(undefined);
 	// The live Dock Ruler overlay's own position/hint while dragging over an
 	// existing group's content -- undefined outside a drag, or once the
 	// pointer leaves the target, drops, or lands in the small center
 	// dead-zone (tab-insert, no fraction to show).
 	const [dockRulerBox, setDockRulerBox] = useState<{ left: number; top: number; width: number; height: number; hint: DockRulerHint } | undefined>(undefined);
+	// Every possible drop position for the current drag (see computeDropZones)
+	// and each one's own current breathing-peak opacity -- the ambient,
+	// always-on-during-a-drag layer, distinct from dockRulerBox above which
+	// only appears once the pointer is inside one specific group's content.
+	const [dropZones, setDropZones] = useState<readonly DropZone[]>([]);
+	const [dropZoneOpacities, setDropZoneOpacities] = useState<ReadonlyMap<string, number>>(new Map());
 	// Ids currently mid-fade, just before their real dockview removal --
 	// requestClose below owns the whole lifecycle (mark closing, wait
 	// CLOSE_FADE_MS, then the real api.close()).
@@ -268,7 +305,39 @@ export function WindowDockview({
 		if (dragActive) return;
 		setDockRulerBox(undefined);
 		onDockRulerHintChange(undefined);
+		setDropZones([]);
+		setDropZoneOpacities(new Map());
 	}, [dragActive, onDockRulerHintChange]);
+
+	// The ambient proximity layer: a plain native dragover listener on the
+	// whole wrapper, independent of dockview's own onWillShowOverlay (which
+	// only fires for regions dockview itself recognizes as drop targets, not
+	// necessarily the empty watermark or the gaps between groups). Idle-gated
+	// like the ruler above, for the same reason -- getBoundingClientRect() per
+	// group on every unthrottled dragover is exactly the fast-drag hang this
+	// codebase already fixed once.
+	useEffect(() => {
+		const wrapper = wrapperRef.current;
+		if (!wrapper || !dragActive) return;
+		function onDragOver(nativeEvent: DragEvent): void {
+			if (sampleDragVelocity(nativeEvent, zoneLastMoveRef) > DRAG_HINT_IDLE_VELOCITY_PX_PER_MS) return;
+			const api = apiRef.current;
+			if (!wrapper || !api) return;
+			const wrapperBox = wrapper.getBoundingClientRect();
+			const canvasRect = { left: 0, top: 0, width: wrapperBox.width, height: wrapperBox.height };
+			const groups = api.groups.map((group) => {
+				const box = group.element.getBoundingClientRect();
+				return { id: group.id, rect: { left: box.left - wrapperBox.left, top: box.top - wrapperBox.top, width: box.width, height: box.height } };
+			});
+			const zones = computeDropZones(groups, canvasRect);
+			const pointer = { x: nativeEvent.clientX - wrapperBox.left, y: nativeEvent.clientY - wrapperBox.top };
+			const radius = proximityInfluenceRadius(canvasRect);
+			setDropZones(zones);
+			setDropZoneOpacities(new Map(zones.map((zone) => [zone.id, dropZoneOpacity(dropZoneCloseness(pointer, zone, radius))])));
+		}
+		wrapper.addEventListener("dragover", onDragOver);
+		return () => wrapper.removeEventListener("dragover", onDragOver);
+	}, [dragActive]);
 
 	function requestClose(instanceId: string): void {
 		setClosingIds((current) => new Set(current).add(instanceId));
@@ -441,6 +510,34 @@ export function WindowDockview({
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- surfaceTemplateParams is a stable closure over closingIds/activePanelId, already listed
 	}, [dockedSurfaces, closingIds, activePanelId]);
 
+	// Memoized -- see DockWatermark's own comment above on why an unstable
+	// identity here is a real correctness bug, not just a wasted re-render.
+	const handleDidDrop = useCallback(
+		(event: DockviewDidDropEvent) => {
+			const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
+			const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
+			setDockRulerBox(undefined);
+			onDockRulerHintChange(undefined);
+			setDropZones([]);
+			setDropZoneOpacities(new Map());
+			if (!templateId) return;
+			// Recompute the same hint fresh, rather than trusting dockview's own
+			// reported `event.position` -- its quadrant thresholds are much
+			// narrower than the Dock Ruler's, so they can disagree near the
+			// pane's own center. Falls back to dockview's own position/no ratio
+			// when there's no group to measure (the empty-Window watermark) or
+			// the pointer was in the ruler's own small center dead-zone.
+			const hint = event.group ? dockRulerHintFromEvent(event.nativeEvent, event.group.element) : undefined;
+			if (!hint) {
+				onExternalTemplateDrop(templateId, event.position, event.group?.id, undefined);
+				return;
+			}
+			const newGroupSizeRatio = hint.edge === "left" || hint.edge === "top" ? hint.guide.ratio : 1 - hint.guide.ratio;
+			onExternalTemplateDrop(templateId, hint.edge, event.group?.id, newGroupSizeRatio);
+		},
+		[onDockRulerHintChange, onExternalTemplateDrop, setDockRulerBox, setDropZones, setDropZoneOpacities],
+	);
+
 	return (
 		// themeLightSpaced/themeDarkSpaced (not themeLight/themeDark +
 		// dockview-spaced as a separate class): the "Spaced" theme variants
@@ -456,6 +553,7 @@ export function WindowDockview({
 		<>
 			<div
 				ref={wrapperRef}
+				data-testid="window-dockview-wrapper"
 				className="relative h-full"
 				onDragLeave={(event) => {
 					// dragleave fires when moving between a wrapper's own children too --
@@ -464,6 +562,8 @@ export function WindowDockview({
 					if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
 						setDockRulerBox(undefined);
 						onDockRulerHintChange(undefined);
+						setDropZones([]);
+						setDropZoneOpacities(new Map());
 					}
 				}}
 			>
@@ -476,28 +576,10 @@ export function WindowDockview({
 					// No themeDarkSpaced exists -- themeAbyssSpaced is dockview's closest dark "Spaced" variant.
 					theme={isDark ? themeAbyssSpaced : themeLightSpaced}
 					onReady={onReady}
-					onDidDrop={(event) => {
-						const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
-						const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
-						setDockRulerBox(undefined);
-						onDockRulerHintChange(undefined);
-						if (!templateId) return;
-						// Recompute the same hint fresh, rather than trusting dockview's own
-						// reported `event.position` -- its quadrant thresholds are much
-						// narrower than the Dock Ruler's, so they can disagree near the
-						// pane's own center. Falls back to dockview's own position/no ratio
-						// when there's no group to measure (the empty-Window watermark) or
-						// the pointer was in the ruler's own small center dead-zone.
-						const hint = event.group ? dockRulerHintFromEvent(event.nativeEvent, event.group.element) : undefined;
-						if (!hint) {
-							onExternalTemplateDrop(templateId, event.position, event.group?.id, undefined);
-							return;
-						}
-						const newGroupSizeRatio = hint.edge === "left" || hint.edge === "top" ? hint.guide.ratio : 1 - hint.guide.ratio;
-						onExternalTemplateDrop(templateId, hint.edge, event.group?.id, newGroupSizeRatio);
-					}}
-					watermarkComponent={() => <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>}
+					onDidDrop={handleDidDrop}
+					watermarkComponent={DockWatermark}
 				/>
+				{dropZones.length > 0 && <ProximityDropZones zones={dropZones} zoneOpacities={dropZoneOpacities} />}
 				{dockRulerBox && (
 					// pointer-events-none: this wrapper fully covers the hovered group's own
 					// content while a real drag is in progress -- without it, a genuine

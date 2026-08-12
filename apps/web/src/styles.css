@@ -73,6 +73,8 @@
 	--animate-chat-follow-bounce: chat-follow-bounce 0.3s ease-out;
 	/* Plays once on mount -- every newly-docked Surface (Window Dockview panel) bubbles in from its own center rather than simply appearing. */
 	--animate-surface-spawn: surface-spawn 0.18s ease-out;
+	/* Slow and smooth on purpose -- proximity drop zones encode hot/cold via how bright the breath peaks (--zone-max-opacity), not how fast it breathes. */
+	--animate-zone-breathe: zone-breathe 3s ease-in-out infinite;
 }
 
 @keyframes wisp-breathe {
@@ -105,6 +107,16 @@
 	100% {
 		opacity: 1;
 		transform: scale(1);
+	}
+}
+
+@keyframes zone-breathe {
+	0%,
+	100% {
+		opacity: var(--zone-min-opacity, 0);
+	}
+	50% {
+		opacity: var(--zone-max-opacity, 1);
 	}
 }
 

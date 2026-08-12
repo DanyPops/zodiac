@@ -684,3 +684,81 @@ test("27. Matches the exact reported screenshot's own shape: 3 tabs stacked into
 	const gap = right!.x - (left!.x + left!.width);
 	expect(Math.abs(gap - SPACED_THEME_GUTTER_PX)).toBeLessThan(4);
 });
+
+interface ZoneReading {
+	readonly testId: string;
+	readonly peak: number;
+	readonly borderColor: string;
+}
+
+async function readZones(page: Page): Promise<ZoneReading[]> {
+	return page.evaluate(() =>
+		Array.from(document.querySelectorAll('[data-testid^="drop-zone-"]')).map((element) => ({
+			testId: element.getAttribute("data-testid")!,
+			peak: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--zone-max-opacity")),
+			borderColor: getComputedStyle(element).borderColor,
+		})),
+	);
+}
+
+/** Our own ambient proximity layer's plain native dragover listener is bound to this wrapper specifically (see WindowDockview.tsx) -- dispatching directly on it, rather than a descendant relying on bubbling, is what dockViaDrag's own descendant-targeted events do for dockview's own listeners. */
+function windowWrapper(page: Page): Locator {
+	return page.locator('[data-testid="window-dockview-wrapper"]');
+}
+
+test("28. Smart proximity drop zones: every possible position renders, faint by default, greyscale only, even before anything is docked", async ({ page }) => {
+	const wrapper = windowWrapper(page);
+	const box = (await dockCanvas(page).boundingBox())!;
+	const nearLeftX = box.x + box.width * 0.05;
+	const midY = box.y + box.height * 0.5;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	const glyph = activityGlyph(page);
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await wrapper.dispatchEvent("dragenter", { dataTransfer, clientX: nearLeftX, clientY: midY });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: nearLeftX, clientY: midY });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: nearLeftX, clientY: midY });
+
+	const zones = await readZones(page);
+	// Nothing is docked yet -- only the 4 whole-canvas root edges exist as candidates, but they must still all be there ("every possible position"), not just the one closest to the pointer.
+	expect(zones.map((zone) => zone.testId).sort()).toEqual(["drop-zone-root:bottom", "drop-zone-root:left", "drop-zone-root:right", "drop-zone-root:top"]);
+	for (const zone of zones) {
+		const [r, g, b] = zone.borderColor.match(/\d+/g)!.map(Number);
+		expect(r).toBe(g); // strictly greyscale -- no accent hue anywhere
+		expect(g).toBe(b);
+	}
+
+	const left = zones.find((zone) => zone.testId === "drop-zone-root:left")!;
+	const right = zones.find((zone) => zone.testId === "drop-zone-root:right")!;
+	expect(left.peak).toBeGreaterThan(right.peak); // the pointer sits near the left edge -- it should read far warmer than the opposite side
+	expect(right.peak).toBeCloseTo(0.06, 2); // the far side rests at the faint floor, not fully invisible
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
+
+test("29. Smart proximity drop zones: docking one pane adds its own 5 positions (4 edges + center), and whichever is closest breathes brighter", async ({ page }) => {
+	await dockViaClick(page);
+	const wrapper = windowWrapper(page);
+	const box = (await groupContent(page, 0).boundingBox())!;
+	const nearLeftX = box.x + box.width * 0.05;
+	const midY = box.y + box.height * 0.5;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	const glyph = activityGlyph(page);
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await wrapper.dispatchEvent("dragenter", { dataTransfer, clientX: nearLeftX, clientY: midY });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: nearLeftX, clientY: midY });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: nearLeftX, clientY: midY });
+
+	const zones = await readZones(page);
+	const rootZones = zones.filter((zone) => zone.testId.startsWith("drop-zone-root:"));
+	const groupZones = zones.filter((zone) => !zone.testId.startsWith("drop-zone-root:"));
+	expect(rootZones).toHaveLength(4);
+	expect(groupZones).toHaveLength(5); // left/right/top/bottom/center for the one real docked group
+
+	const groupLeft = groupZones.find((zone) => zone.testId.endsWith(":left"))!;
+	const groupRight = groupZones.find((zone) => zone.testId.endsWith(":right"))!;
+	expect(groupLeft.peak).toBeGreaterThan(groupRight.peak); // pointer near the pane's own left edge
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
