@@ -10,6 +10,8 @@ import { useConversationWorkspace } from "../conversation/useConversationWorkspa
 import { createHttpPiClient } from "../pi/client.js";
 import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createPreferences } from "../platform/preferences.js";
+import { cn } from "../platform/cn.js";
+import { PAGE_BG, WELL_BG } from "../platform/surface-style.js";
 import { createWindowDragTracker } from "../platform/drag-tracker.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
 import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
@@ -261,7 +263,7 @@ export function App(): React.JSX.Element {
 	return (
 		<CommandProvider registry={registry} activeContexts={contexts.effectiveContexts}>
 			{/* data-template-dragging: the authoritative "is a Surface Template drag active" signal, consumed by styles.css to force-hide dockview's own root-level drop-target overlay once a drag ends -- see the CSS rule's own doc comment for why dockview's own cleanup can't be trusted to do this itself. */}
-			<div className="relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden bg-gray-200 p-2 dark:bg-gray-950" data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
+			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
 				<WorkspaceSelection
 					collapsed={selection.collapsed}
 					catalog={workspace.catalog}
@@ -302,7 +304,7 @@ export function App(): React.JSX.Element {
 									if (event.currentTarget === event.target) contexts.enterCanvas();
 								}}
 								aria-label="Window view"
-								className="min-h-0 flex-1 overflow-hidden rounded-[var(--app-corner-radius,16px)] bg-gray-100 outline-none dark:bg-gray-900"
+								className={cn("min-h-0 flex-1 overflow-hidden rounded-[var(--app-corner-radius,16px)] outline-none", WELL_BG)}
 							>
 								<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 									<WindowDockview
@@ -360,7 +362,7 @@ export function App(): React.JSX.Element {
 						// as every other composer in the app -- "conversation.send" already
 						// maps to sendMessage()'s own auto-create branch above), no Window
 						// Carousel, no Chat panel.
-						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-[var(--app-corner-radius,16px)] bg-gray-100 dark:bg-gray-900">
+						<div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-[var(--app-corner-radius,16px)]", WELL_BG)}>
 							<p className="text-sm text-gray-500 dark:text-gray-400">Send a message to start a new Workspace.</p>
 							<div className="w-full max-w-xl px-4">
 								<Composer draft={draft} onDraftChange={setDraft} onComposerFocus={contexts.enterTextInput} bare />
