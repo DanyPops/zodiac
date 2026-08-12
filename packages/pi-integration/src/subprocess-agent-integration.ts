@@ -1,4 +1,4 @@
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/server";
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/server/pi-agent-dir";
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";

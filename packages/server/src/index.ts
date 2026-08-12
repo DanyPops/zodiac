@@ -11,5 +11,14 @@ export type { WorldSnapshotPort } from "./world/snapshot-port.js";
 
 export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 
-export type { SeedAlignmentAuthOptions } from "./pi-agent-dir.js";
-export { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "./pi-agent-dir.js";
+// pi-agent-dir.ts is deliberately NOT re-exported here: it imports node:fs/
+// node:os at module scope, and this barrel is also the one apps/web's
+// browser bundle imports from (createContributionRegistry, createCommandDispatcher,
+// highestIdSuffix, ...). Vite's dev server evaluates a whole ES module on
+// import regardless of which named export is actually used, so re-exporting
+// pi-agent-dir here previously crashed the entire browser app at import time
+// ("node:fs has been externalized for browser compatibility") before React
+// ever rendered -- the app got stuck on its static "Loading Alignment..."
+// placeholder with no visible error. Node-only consumers (packages/pi-integration,
+// apps/terminal) import it from the "@alignment/server/pi-agent-dir" subpath
+// instead -- see that package's exports map.
