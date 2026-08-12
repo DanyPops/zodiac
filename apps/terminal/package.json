@@ -1,5 +1,5 @@
 {
-  "name": "@alignment/terminal",
+  "name": "@zodiac/terminal",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -18,9 +18,10 @@
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:@earendil-works/* --external:typescript --external:jsonc-parser --external:node-pty --banner:js=\"import{createRequire as __createRequire}from 'module';const require=__createRequire(import.meta.url);\" --outfile=dist/cli.js"
   },
   "dependencies": {
-    "@alignment/server": "*",
-    "@alignment/pi-integration": "*",
-    "@alignment/protocol": "*",
+    "@zodiac/server": "*",
+    "@zodiac/agent": "*",
+    "@zodiac/pi": "*",
+    "@zodiac/protocol": "*",
     "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.2.tgz",
     "@danypops/pi-lector": "file:vendor/danypops-pi-lector-0.12.9.tgz",
     "@earendil-works/pi-coding-agent": "^0.84.1",

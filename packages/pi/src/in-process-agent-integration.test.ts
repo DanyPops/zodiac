@@ -4,7 +4,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall, type FauxProviderHandle } from "@earendil-works/pi-ai/compat";
 import { createAgentSession, defineTool, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { AlignmentAgentEvent } from "./agent-integration-port.js";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import { createInProcessAgentIntegration } from "./in-process-agent-integration.js";
 
 /**
@@ -51,7 +51,7 @@ describe("createInProcessAgentIntegration", () => {
 		const integration = createInProcessAgentIntegration(session);
 		disposers.push(integration.dispose);
 
-		const events: AlignmentAgentEvent[] = [];
+		const events: ZodiacAgentEvent[] = [];
 		integration.onEvent((event) => events.push(event));
 
 		faux.setResponses([fauxAssistantMessage("hello from faux")]);
@@ -78,7 +78,7 @@ describe("createInProcessAgentIntegration", () => {
 		// b939f2b5, "Fix README: use assistantMessageEvent.delta for streaming,
 		// not accumulated message") shows *why* that split exists: `delta` is
 		// correct for an append-only stdout writer (each write naturally grows
-		// the terminal's own scrollback), but Alignment's Footer is a stateful
+		// the terminal's own scrollback), but Zodiac's Footer is a stateful
 		// full-repaint renderer -- every frame redraws an item's *entire*
 		// current text from scratch, so it needs the accumulated value, not an
 		// increment. Forcing tiny (1-char) faux chunks to make the distinction
@@ -88,7 +88,7 @@ describe("createInProcessAgentIntegration", () => {
 		const integration = createInProcessAgentIntegration(session);
 		disposers.push(integration.dispose);
 
-		const events: AlignmentAgentEvent[] = [];
+		const events: ZodiacAgentEvent[] = [];
 		integration.onEvent((event) => events.push(event));
 
 		faux.setResponses([fauxAssistantMessage("hello there world")]);
@@ -115,7 +115,7 @@ describe("createInProcessAgentIntegration", () => {
 		const integration = createInProcessAgentIntegration(session);
 		disposers.push(integration.dispose);
 
-		const events: AlignmentAgentEvent[] = [];
+		const events: ZodiacAgentEvent[] = [];
 		integration.onEvent((event) => events.push(event));
 
 		faux.setResponses([fauxAssistantMessage([], { stopReason: "error", errorMessage: "You have no credits remaining." })]);
@@ -131,7 +131,7 @@ describe("createInProcessAgentIntegration", () => {
 		const integration = createInProcessAgentIntegration(session);
 		disposers.push(integration.dispose);
 
-		const events: AlignmentAgentEvent[] = [];
+		const events: ZodiacAgentEvent[] = [];
 		integration.onEvent((event) => events.push(event));
 
 		faux.setResponses([fauxAssistantMessage(fauxToolCall("echo", { text: "ping" })), fauxAssistantMessage("done")]);
@@ -152,7 +152,7 @@ describe("createInProcessAgentIntegration", () => {
 		const { session, faux } = await createHermeticSession();
 		const integration = createInProcessAgentIntegration(session);
 
-		const events: AlignmentAgentEvent[] = [];
+		const events: ZodiacAgentEvent[] = [];
 		integration.onEvent((event) => events.push(event));
 		faux.setResponses([fauxAssistantMessage("first")]);
 		await integration.prompt("hi");

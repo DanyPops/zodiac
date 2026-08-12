@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentIntegrationPort, AlignmentAgentEvent } from "@alignment/pi-integration";
+import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
 import { createFooterChatController } from "./footer-chat-controller.js";
 
-function fakeIntegration(): AgentIntegrationPort & { emit(event: AlignmentAgentEvent): void; exit(reason: string | undefined): void } {
-	const eventListeners = new Set<(event: AlignmentAgentEvent) => void>();
+function fakeIntegration(): AgentIntegrationPort & { emit(event: ZodiacAgentEvent): void; exit(reason: string | undefined): void } {
+	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
 	const exitListeners = new Set<(reason: string | undefined) => void>();
 	return {
 		prompt: vi.fn(async () => {}),

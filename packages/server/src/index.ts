@@ -20,5 +20,5 @@ export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 // ("node:fs has been externalized for browser compatibility") before React
 // ever rendered -- the app got stuck on its static "Loading Alignment..."
 // placeholder with no visible error. Node-only consumers (packages/pi-integration,
-// apps/terminal) import it from the "@alignment/server/pi-agent-dir" subpath
+// apps/terminal) import it from the "@zodiac/server/pi-agent-dir" subpath
 // instead -- see that package's exports map.

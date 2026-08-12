@@ -1,5 +1,5 @@
-import { createWorldStore } from "@alignment/server";
-import { worldId } from "@alignment/protocol";
+import { createWorldStore } from "@zodiac/server";
+import { worldId } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it, vi } from "vitest";
 import type { FooterChatController, LiveFooterChatStatus } from "../pi/footer-chat-controller.js";

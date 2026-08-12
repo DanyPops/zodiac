@@ -1,4 +1,4 @@
-import { highestIdSuffix } from "@alignment/server";
+import { highestIdSuffix } from "@zodiac/server";
 import { useRef, useState } from "react";
 import type { Preferences, SavedWorkspace } from "../platform/preferences.js";
 import { resolveWorkspaceGlyph, type WorkspaceCatalogEntry } from "./workspace-catalog.js";
@@ -17,7 +17,7 @@ const ID_PREFIX = "user-workspace";
  * Owns user-created Workspace catalog entries (name + glyph), persisted via the Preferences port -- distinct from WORKSPACE_CATALOG's fixed built-in demo entries.
  *
  * The id sequence is seeded from the highest suffix already present in
- * `preferences.userWorkspaces()` at hook-init time (via `@alignment/server`'s
+ * `preferences.userWorkspaces()` at hook-init time (via `@zodiac/server`'s
  * `highestIdSuffix`, the same technique `WorldStore` uses to resume past a
  * rehydrated snapshot's own ids) rather than a module-level counter that
  * starts at 0 on every page load -- a plain counter would reissue

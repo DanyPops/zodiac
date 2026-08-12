@@ -1,5 +1,5 @@
 /**
- * Alignment's own bounded vocabulary for a live Pi conversation -- what a
+ * Zodiac's own bounded vocabulary for a live Pi conversation -- what a
  * renderer (Web's Footer chat, the TUI's Footer region, a future test) needs
  * to project a conversation, deliberately smaller than Pi's own internal
  * AgentSessionEvent family (agent_start, message_start/update/end,
@@ -7,10 +7,10 @@
  * auto_retry_*, queue_update, entry_appended, session_info_changed,
  * thinking_level_changed, summarization_retry_*, bash_execution_update --
  * ~20 variants). Both InProcessAgentIntegration and SubprocessAgentIntegration
- * translate down to this same, smaller type so a caller never has to know
- * which adapter is live behind the port.
+ * (@zodiac/pi) translate down to this same, smaller type so a caller never
+ * has to know which adapter is live behind the port.
  */
-export type AlignmentAgentEvent =
+export type ZodiacAgentEvent =
 	| { readonly type: "agent-start" }
 	| { readonly type: "agent-settled" }
 	| { readonly type: "assistant-message-start" }
@@ -23,15 +23,19 @@ export type AlignmentAgentEvent =
 	| { readonly type: "error"; readonly message: string };
 
 /**
- * The driven half of a Pi Agent Integration: what Alignment needs to send a
+ * The driven half of a Pi Agent Integration: what Zodiac needs to send a
  * prompt to a live agent and observe its conversation, independent of
  * whether that agent lives in-process (InProcessAgentIntegration) or as a
- * subprocess speaking pi's RPC protocol (SubprocessAgentIntegration). Both
- * adapters implement this exact shape -- a caller depends on this interface,
- * never on either concrete adapter.
+ * subprocess speaking pi's RPC protocol (SubprocessAgentIntegration) -- both
+ * live in @zodiac/pi. Both adapters implement this exact shape -- a caller
+ * depends on this interface, never on either concrete adapter. This package
+ * (@zodiac/agent) is deliberately the one place that stays Pi-SDK-neutral:
+ * it has no dependency on @earendil-works/pi-coding-agent or
+ * @danypops/pi-rpc-protocol, only plain types -- a caller that only needs to
+ * hold/pass around a port reference never pulls in either Pi SDK.
  *
  * Deliberately excludes the driving half (Pi's own tools calling back into
- * Alignment through an authorized command port) -- that half depends on
+ * Zodiac through an authorized command port) -- that half depends on
  * Walking skeleton story 7's caller-parity work and is out of scope here.
  */
 export interface AgentIntegrationPort {
@@ -43,13 +47,13 @@ export interface AgentIntegrationPort {
 	followUp: (text: string) => Promise<void>;
 	/** Aborts the current run, if any. */
 	abort: () => Promise<void>;
-	onEvent: (listener: (event: AlignmentAgentEvent) => void) => () => void;
+	onEvent: (listener: (event: ZodiacAgentEvent) => void) => () => void;
 	/** Fires once if the underlying integration ends unexpectedly (a subprocess exiting; never fires for the in-process adapter, which has no separate process to exit). */
 	onExit: (listener: (reason: string | undefined) => void) => () => void;
 	dispose: () => void;
 }
 
 /** Exhaustiveness guard for callers translating a value this package doesn't already recognize -- never actually reachable at runtime for a well-typed caller. */
-export function assertNeverAlignmentAgentEvent(event: never): never {
-	throw new Error(`Unhandled AlignmentAgentEvent: ${JSON.stringify(event)}`);
+export function assertNeverZodiacAgentEvent(event: never): never {
+	throw new Error(`Unhandled ZodiacAgentEvent: ${JSON.stringify(event)}`);
 }

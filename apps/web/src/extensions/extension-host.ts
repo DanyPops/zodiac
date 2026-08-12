@@ -1,4 +1,4 @@
-import { createContributionRegistry } from "@alignment/server";
+import { createContributionRegistry } from "@zodiac/server";
 import type { CommandDefinition } from "../commands/registry.js";
 import type { SurfaceTemplateDefinition } from "../workspace/surface-templates.js";
 import type { AlignmentExtension, AlignmentExtensionAPI, WorkspaceLifecycleEvent } from "./types.js";
@@ -11,7 +11,7 @@ export interface ExtensionHost {
 }
 
 /**
- * This app's own specialization of `@alignment/server`'s framework-neutral
+ * This app's own specialization of `@zodiac/server`'s framework-neutral
  * ContributionRegistry, bound to this app's real Surface Template/command/
  * lifecycle-event shapes. `registerExtension` is this host's own name for
  * the generic engine's `register`, kept for existing callers.

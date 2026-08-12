@@ -6,7 +6,7 @@ import type {
 	ContributionReadBounds,
 	ContributionResourceProvider,
 	ContributionResourceReference,
-} from "@alignment/protocol";
+} from "@zodiac/protocol";
 
 /**
  * Alignment's own real ContributionHost for `@danypops/alignment-lector` -- the one production

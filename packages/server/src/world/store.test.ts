@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { integrationId, workspaceId, worldId } from "@alignment/protocol";
+import { integrationId, workspaceId, worldId } from "@zodiac/protocol";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 

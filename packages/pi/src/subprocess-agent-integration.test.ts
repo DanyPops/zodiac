@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import type { AlignmentAgentEvent } from "./agent-integration-port.js";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import { createSubprocessAgentIntegration } from "./subprocess-agent-integration.js";
 
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/fake-pi-rpc.mjs", import.meta.url));
@@ -23,9 +23,9 @@ function isolatedAgentDirs(): { agentDir: string; sourceAgentDir: string } {
 	return { agentDir: join(agentDirRoot, "alignment-pi-agent"), sourceAgentDir: join(agentDirRoot, "personal-pi-agent") };
 }
 
-function collectUntil(port: ReturnType<typeof createSubprocessAgentIntegration>, predicate: (event: AlignmentAgentEvent) => boolean, timeoutMs = 5000): Promise<AlignmentAgentEvent[]> {
+function collectUntil(port: ReturnType<typeof createSubprocessAgentIntegration>, predicate: (event: ZodiacAgentEvent) => boolean, timeoutMs = 5000): Promise<ZodiacAgentEvent[]> {
 	return new Promise((resolve, reject) => {
-		const events: AlignmentAgentEvent[] = [];
+		const events: ZodiacAgentEvent[] = [];
 		const timer = setTimeout(() => reject(new Error(`timed out waiting for event; collected ${events.length}`)), timeoutMs);
 		const unsubscribe = port.onEvent((event) => {
 			events.push(event);

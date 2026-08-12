@@ -1,5 +1,5 @@
-import { createWorldStore } from "@alignment/server";
-import { layoutWorldRegions, worldId } from "@alignment/protocol";
+import { createWorldStore } from "@zodiac/server";
+import { layoutWorldRegions, worldId } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it } from "vitest";
 import { diffFrames, type GridFrame } from "../frame/index.js";

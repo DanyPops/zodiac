@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { dirname } from "node:path";
-import { createWorldStore } from "@alignment/server";
-import { worldId } from "@alignment/protocol";
+import { createWorldStore } from "@zodiac/server";
+import { worldId } from "@zodiac/protocol";
 import { Key, matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
 import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";

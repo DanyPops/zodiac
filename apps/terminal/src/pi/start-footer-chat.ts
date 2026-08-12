@@ -1,5 +1,5 @@
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/server/pi-agent-dir";
-import { createInProcessAgentIntegration } from "@alignment/pi-integration";
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@zodiac/server/pi-agent-dir";
+import { createInProcessAgentIntegration } from "@zodiac/pi";
 import {
 	createAgentSession,
 	ModelRuntime,

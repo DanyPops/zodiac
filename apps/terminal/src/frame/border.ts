@@ -1,4 +1,4 @@
-import type { Region } from "@alignment/protocol";
+import type { Region } from "@zodiac/protocol";
 import type { ShellFocus } from "../shell/semantic-shell.js";
 import { createRect, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "./index.js";
 

@@ -17,7 +17,7 @@ import {
 	parseWithSchema,
 	surfaceId as makeSurfaceId,
 	windowId as makeWindowId,
-} from "@alignment/protocol";
+} from "@zodiac/protocol";
 import { createIdSequence, highestIdSuffix } from "./id-sequence.js";
 
 /**

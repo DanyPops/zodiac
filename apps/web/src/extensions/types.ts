@@ -10,7 +10,7 @@ export type WorkspaceLifecycleEvent =
 /**
  * Modeled directly on Pi's own ExtensionAPI shape: registerX for
  * build-time-fixed registries, on() for runtime lifecycle events -- this
- * app's own specialization of `@alignment/server`'s framework-neutral
+ * app's own specialization of `@zodiac/server`'s framework-neutral
  * ContributionApi, at this app's still-current "Surface Template"
  * vocabulary. Declared as its own interface (not a type alias of
  * ContributionApi) because the core registry now speaks "Integration"

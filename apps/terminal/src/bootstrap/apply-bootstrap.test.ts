@@ -1,5 +1,5 @@
-import { createWorldStore } from "@alignment/server";
-import { worldId } from "@alignment/protocol";
+import { createWorldStore } from "@zodiac/server";
+import { worldId } from "@zodiac/protocol";
 import { describe, expect, it } from "vitest";
 import { applyBootstrapToWorld } from "./apply-bootstrap.js";
 import type { BootstrappedWorkspace } from "./workspace-bootstrap.js";

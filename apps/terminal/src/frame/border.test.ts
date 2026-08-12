@@ -1,4 +1,4 @@
-import { layoutWorldRegions, type Region } from "@alignment/protocol";
+import { layoutWorldRegions, type Region } from "@zodiac/protocol";
 import { describe, expect, it } from "vitest";
 import { deriveBorderTopology, labelSegment, paintBorders } from "./border.js";
 import { createGridFrame, createRect, gridId, type GridFrame } from "./index.js";

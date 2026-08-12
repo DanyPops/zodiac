@@ -1,4 +1,4 @@
-import type { ContributionReadBounds, ContributionResourceReference } from "@alignment/protocol";
+import type { ContributionReadBounds, ContributionResourceReference } from "@zodiac/protocol";
 import { type DirectoryExplorerSession, ExplorerComponent, type ExplorerFlowHost, type ExplorerResult, runExplorerFlow } from "@danypops/pi-lector/editor";
 import { nearestGitRoot } from "../bootstrap/nearest-git-root.js";
 import { workspaceIdFromReference } from "../bootstrap/workspace-bootstrap.js";

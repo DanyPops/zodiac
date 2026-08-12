@@ -1,5 +1,5 @@
 {
-  "name": "@alignment/pi-integration",
+  "name": "@zodiac/pi",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@alignment/server": "*",
+    "@zodiac/agent": "*",
+    "@zodiac/server": "*",
     "@danypops/pi-rpc-protocol": "^0.0.1",
     "@earendil-works/pi-coding-agent": "^0.84.1"
   },

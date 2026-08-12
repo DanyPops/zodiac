@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "./agent-dir.js";
 
 /**
- * Mirrors @alignment/server's own pi-agent-dir.test.ts -- see agent-dir.ts's
+ * Mirrors @zodiac/server's own pi-agent-dir.test.ts -- see agent-dir.ts's
  * own doc comment for why this file (and the implementation it tests) is a
  * deliberate local duplicate rather than a shared import.
  */

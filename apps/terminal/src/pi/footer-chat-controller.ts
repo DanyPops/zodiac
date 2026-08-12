@@ -1,4 +1,4 @@
-import type { AgentIntegrationPort, AlignmentAgentEvent } from "@alignment/pi-integration";
+import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
 
 /** Bounds how many conversation items this controller retains -- an unbounded history in a long-lived TUI process is exactly the kind of resource the rest of this codebase already refuses to leave unbound (see the walking-skeleton event-bus task's own bounded-subscriber/history conventions). Oldest items are dropped first. */
 const MAX_ITEMS = 200;
@@ -89,7 +89,7 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 		items = next;
 	}
 
-	function handleEvent(event: AlignmentAgentEvent): void {
+	function handleEvent(event: ZodiacAgentEvent): void {
 		switch (event.type) {
 			case "agent-start":
 				busy = true;

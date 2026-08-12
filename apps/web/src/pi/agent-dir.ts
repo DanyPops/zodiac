@@ -3,13 +3,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Deliberately duplicated from @alignment/server's own pi-agent-dir.ts
+ * Deliberately duplicated from @zodiac/server's own pi-agent-dir.ts
  * (same two functions, same behavior, its own test suite there) rather than
  * imported: this file is reachable from vite.config.ts's own module graph
  * (via process-rpc-session.ts), and vite.config.ts is loaded by Vite's
  * config loader using plain Node ESM resolution -- confirmed live, this
  * breaks outright (`ERR_MODULE_NOT_FOUND ... command/dispatcher.js`) the
- * moment anything in that graph imports @alignment/server, a TS-source-only
+ * moment anything in that graph imports @zodiac/server, a TS-source-only
  * workspace package with no build step (its own internal relative imports
  * use `.js` specifiers that only resolve through a TypeScript-aware
  * bundler/transform, which every other real consumer gets via Vite's
@@ -30,7 +30,7 @@ export interface SeedAlignmentAuthOptions {
 	readonly sourceAgentDir: string;
 }
 
-/** See @alignment/server's seedAlignmentAuthOnce for the full doc comment -- identical behavior. */
+/** See @zodiac/server's seedAlignmentAuthOnce for the full doc comment -- identical behavior. */
 export function seedAlignmentAuthOnce(options: SeedAlignmentAuthOptions): void {
 	const destAuthPath = join(options.agentDir, "auth.json");
 	if (existsSync(destAuthPath)) return;

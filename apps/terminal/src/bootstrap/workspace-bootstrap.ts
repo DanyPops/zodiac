@@ -1,5 +1,5 @@
 import { basename, dirname, relative } from "node:path";
-import type { ContributionOutcome, ContributionResourceReference } from "@alignment/protocol";
+import type { ContributionOutcome, ContributionResourceReference } from "@zodiac/protocol";
 import type { LectorHost } from "../lector/lector-host.js";
 import type { ClassifiedPath } from "./classify-path.js";
 import { nearestGitRoot } from "./nearest-git-root.js";

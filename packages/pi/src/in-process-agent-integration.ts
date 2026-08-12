@@ -1,18 +1,18 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { contentText } from "@earendil-works/pi-ai";
-import type { AgentIntegrationPort, AlignmentAgentEvent } from "./agent-integration-port.js";
+import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
 
 /**
  * The "proper" adapter story 8 asks for: wraps a real, already-constructed
  * `AgentSession` (from `@earendil-works/pi-coding-agent`'s public SDK --
  * `createAgentSession()`) in the same process, translating its own
- * AgentSessionEvent family down to Alignment's bounded AlignmentAgentEvent.
+ * AgentSessionEvent family down to Zodiac's bounded ZodiacAgentEvent.
  * Construction (createAgentSession, ModelRuntime, ResourceLoader, ...) is
  * deliberately left to the caller -- this adapter's only job is wrapping an
  * already-live session, not owning its setup policy.
  */
 export function createInProcessAgentIntegration(session: AgentSession): AgentIntegrationPort {
-	const eventListeners = new Set<(event: AlignmentAgentEvent) => void>();
+	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
 	let unsubscribeSession: (() => void) | undefined;
 	/**
 	 * Accumulated text of the assistant message currently streaming, reset on
@@ -30,21 +30,21 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 	 */
 	let streamingText = "";
 
-	function emit(event: AlignmentAgentEvent): void {
+	function emit(event: ZodiacAgentEvent): void {
 		for (const listener of eventListeners) listener(event);
 	}
 
 	/**
-	 * Translates one AgentSessionEvent into zero or one AlignmentAgentEvent.
+	 * Translates one AgentSessionEvent into zero or one ZodiacAgentEvent.
 	 * Exhaustive over AgentSessionEvent's own variants (a new one added
 	 * upstream fails this file's typecheck via assertNeverAgentSessionEvent)
-	 * even though most map to nothing -- Alignment's bounded event type has
+	 * even though most map to nothing -- Zodiac's bounded event type has
 	 * no use for compaction/retry/queue/session-tree internals. Only the
 	 * "text_delta" sub-kind of message_update is handled; other
 	 * assistantMessageEvent sub-kinds (thinking, tool-call deltas, ...) are
 	 * intentionally out of scope for this slice -- see the task body.
 	 */
-	function translate(event: AgentSessionEvent): AlignmentAgentEvent | undefined {
+	function translate(event: AgentSessionEvent): ZodiacAgentEvent | undefined {
 		switch (event.type) {
 			case "agent_start":
 				return { type: "agent-start" };
@@ -68,7 +68,7 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 				// comment. `delta` alone (a real per-chunk increment,
 				// @earendil-works/pi-ai's own text_delta type) is the only value
 				// here that's actually safe to trust point-in-time, so this
-				// AlignmentAgentEvent's `text` is built by accumulating it
+				// ZodiacAgentEvent's `text` is built by accumulating it
 				// ourselves, never by reading a snapshot the SDK owns.
 				if (event.assistantMessageEvent.type !== "text_delta") return undefined;
 				streamingText += event.assistantMessageEvent.delta;
@@ -146,6 +146,6 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 	};
 }
 
-function assertNeverAgentSessionEvent(event: never): AlignmentAgentEvent | undefined {
+function assertNeverAgentSessionEvent(event: never): ZodiacAgentEvent | undefined {
 	throw new Error(`Unhandled AgentSessionEvent: ${JSON.stringify(event)}`);
 }

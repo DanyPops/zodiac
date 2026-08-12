@@ -1,11 +1,11 @@
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/server/pi-agent-dir";
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@zodiac/server/pi-agent-dir";
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import type { Readable, Writable } from "node:stream";
 import { encodeRpcCommand, extractMessageText, parseRpcLine, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
-import type { AgentIntegrationPort, AlignmentAgentEvent } from "./agent-integration-port.js";
+import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
 
 const DEFAULT_COMMAND = ["pi", "--mode", "rpc", "--no-session"] as const;
 
@@ -17,7 +17,7 @@ export interface SubprocessAgentIntegrationOptions {
 	readonly command?: readonly string[];
 	readonly cwd?: string;
 	/**
-	 * Alignment's own namespaced Pi config/extension/session/auth directory --
+	 * Zodiac's own namespaced Pi config/extension/session/auth directory --
 	 * propagated to the spawned `pi` process via PI_CODING_AGENT_DIR, kept in
 	 * parity with apps/web/src/pi/process-rpc-session.ts (this adapter's
 	 * own doc comment notes it was ported from that file). Defaults to
@@ -31,14 +31,14 @@ export interface SubprocessAgentIntegrationOptions {
 /**
  * The documented external-process fallback (story 8's own words): spawns a
  * real `pi --mode rpc` child process and speaks its JSONL wire protocol,
- * translating PiRpcEvent down to the exact same AlignmentAgentEvent type
+ * translating PiRpcEvent down to the exact same ZodiacAgentEvent type
  * InProcessAgentIntegration produces -- a caller behind AgentIntegrationPort
  * cannot tell which adapter it's holding.
  *
  * Ported from apps/web/src/pi/process-rpc-session.ts, which already
  * proved this spawn/framing approach works end to end (see that file's own
  * tests and the live multi-instance smoke test run against it). This
- * version additionally translates events to Alignment's bounded vocabulary
+ * version additionally translates events to Zodiac's bounded vocabulary
  * instead of leaving that to each caller.
  *
  * Known parity gap: pi's RPC wire protocol only has a "prompt" command --
@@ -58,16 +58,16 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 		env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
 	});
 
-	const eventListeners = new Set<(event: AlignmentAgentEvent) => void>();
+	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
 	const exitListeners = new Set<(reason: string | undefined) => void>();
 	let stderr = "";
 
-	function emit(event: AlignmentAgentEvent): void {
+	function emit(event: ZodiacAgentEvent): void {
 		for (const listener of eventListeners) listener(event);
 	}
 
-	/** Exhaustive over PiRpcEvent's own variants; most map to nothing -- see agent-integration-port.ts's own doc comment for why the bounded event type is deliberately smaller. */
-	function translate(event: PiRpcEvent): AlignmentAgentEvent | undefined {
+	/** Exhaustive over PiRpcEvent's own variants; most map to nothing -- see @zodiac/agent's own port.ts doc comment for why the bounded event type is deliberately smaller. */
+	function translate(event: PiRpcEvent): ZodiacAgentEvent | undefined {
 		switch (event.type) {
 			case "agent_start":
 				return { type: "agent-start" };
@@ -160,6 +160,6 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 	};
 }
 
-function assertNeverPiRpcEvent(event: never): AlignmentAgentEvent | undefined {
+function assertNeverPiRpcEvent(event: never): ZodiacAgentEvent | undefined {
 	throw new Error(`Unhandled PiRpcEvent: ${JSON.stringify(event)}`);
 }

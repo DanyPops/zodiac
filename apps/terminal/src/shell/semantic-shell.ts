@@ -1,4 +1,4 @@
-import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type WorldViewModel } from "@alignment/protocol";
+import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type WorldViewModel } from "@zodiac/protocol";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
 import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";

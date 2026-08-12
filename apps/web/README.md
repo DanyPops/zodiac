@@ -13,16 +13,16 @@ Known gap: there is no dedicated UI to choose which Conversation the global floa
 ## Development
 
 ```bash
-npm run dev --workspace=@alignment/web
-npm test --workspace=@alignment/web
-npm run typecheck --workspace=@alignment/web
-npm run lint --workspace=@alignment/web
-npm run build --workspace=@alignment/web
-npm run check:bundle-budget --workspace=@alignment/web
-npm run test:e2e --workspace=@alignment/web
+npm run dev --workspace=@zodiac/web
+npm test --workspace=@zodiac/web
+npm run typecheck --workspace=@zodiac/web
+npm run lint --workspace=@zodiac/web
+npm run build --workspace=@zodiac/web
+npm run check:bundle-budget --workspace=@zodiac/web
+npm run test:e2e --workspace=@zodiac/web
 
 # All of the above, in order:
-npm run verify --workspace=@alignment/web
+npm run verify --workspace=@zodiac/web
 ```
 
 ESLint (`eslint.config.js`) runs four layers on top of standard React/TypeScript checks, scoped to keep type-aware linting fast (`parserOptions.projectService`, `.eslintcache` via `npm run lint`):

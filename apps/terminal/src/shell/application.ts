@@ -1,5 +1,5 @@
 import type { Component, Terminal } from "@earendil-works/pi-tui";
-import type { WorldViewModel } from "@alignment/protocol";
+import type { WorldViewModel } from "@zodiac/protocol";
 import type { GridUpdate, Outcome } from "../frame/index.js";
 import type { LectorHost } from "../lector/lector-host.js";
 import { promptAndOpenLectorEditorNatively } from "../lector/native-editor.js";

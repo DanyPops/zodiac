@@ -1,5 +1,5 @@
 import { dirname, relative } from "node:path";
-import type { ContributionReadBounds, ContributionResourceReference } from "@alignment/protocol";
+import type { ContributionReadBounds, ContributionResourceReference } from "@zodiac/protocol";
 import { ModalEditorComponent, type ModalEditorHost } from "@danypops/pi-lector/editor";
 import type { Component } from "@earendil-works/pi-tui";
 import { Input } from "@earendil-works/pi-tui";
