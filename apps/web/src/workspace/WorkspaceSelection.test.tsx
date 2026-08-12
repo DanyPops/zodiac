@@ -62,6 +62,13 @@ function renderExpanded() {
 }
 
 describe("expanded Workspace selection", () => {
+	it("shows the user avatar beside the Zodiac wordmark in the header, a true circle rather than the header's own --app-corner-radius shapes", () => {
+		renderExpanded();
+		const avatar = screen.getByRole("img", { name: "Libra (you)" });
+		expect(avatar).toHaveClass("rounded-full", "bg-accent");
+		expect(screen.getByRole("heading", { name: "Zodiac" })).toBeInTheDocument();
+	});
+
 	it("keeps every action as its own icon, renamed to Settings for the appearance/umbrella one", () => {
 		renderExpanded();
 		expect(screen.getByRole("button", { name: "Command palette" })).toBeInTheDocument();
@@ -177,19 +184,19 @@ describe("collapsed Workspace quick selection", () => {
 		expect(nav.className).not.toMatch(/(?<!:)rounded-full/);
 	});
 
-	it("the 'A' logo sits directly in its Pillar Cap cell, no separate nested chip with its own corner radius -- same as the Surface Templates pillar's book icon", () => {
+	it("the user avatar sits directly in its Pillar Cap cell, its own true circle rather than the cell's --app-corner-radius chip shape", () => {
 		renderCollapsed();
 		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });
 		expect(toggle.className).not.toMatch(/(?<!:)rounded-md|(?<!:)rounded-\[var\(--app-corner-radius/);
-		expect(within(toggle).getByText("A").className).not.toMatch(/bg-accent/);
+		expect(within(toggle).getByRole("img", { name: "Libra (you)" })).toHaveClass("rounded-full");
 	});
 
-	it("overlays the Zodiac logo and expand glyph in one control at the same height as the expanded header", () => {
+	it("overlays the user avatar and expand glyph in one control at the same height as the expanded header", () => {
 		renderCollapsed();
 		const toggle = screen.getByRole("button", { name: "Expand workspace selection" });
 		expect(toggle).toHaveClass("h-12");
-		expect(within(toggle).getByText("A")).toBeInTheDocument();
-		expect(toggle.querySelector("svg")).not.toBeNull();
+		expect(within(toggle).getByRole("img", { name: "Libra (you)" })).toBeInTheDocument();
+		expect(toggle.querySelectorAll("svg").length).toBeGreaterThanOrEqual(2); // the zodiac glyph plus the ChevronsRight expand affordance
 	});
 
 	it("executes the same toggle command as the expanded Hide control", async () => {
