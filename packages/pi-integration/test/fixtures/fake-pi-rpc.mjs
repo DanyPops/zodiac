@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // A minimal stand-in for `pi --mode rpc`, driven by the same LF-delimited
 // JSONL framing as the real protocol (docs/rpc.md). Mirrors
-// apps/alignment/test/fixtures/fake-pi-rpc.mjs -- kept as its own copy here
+// apps/web/test/fixtures/fake-pi-rpc.mjs -- kept as its own copy here
 // since this package must stay independently testable without depending on
 // a sibling app's test fixtures.
 

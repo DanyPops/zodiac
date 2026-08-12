@@ -14,7 +14,7 @@
   "overrides": {
     "@danypops/lector": "file:vendor/danypops-lector-0.18.15.tgz",
     "@danypops/alignment-lector": {
-      "@alignment/surface-protocol": "0.0.1"
+      "@alignment/surface-protocol": "file:../../../packages/protocol"
     }
   }
 }

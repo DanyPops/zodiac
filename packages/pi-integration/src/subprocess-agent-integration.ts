@@ -1,4 +1,4 @@
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/core";
+import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@alignment/server";
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +19,7 @@ export interface SubprocessAgentIntegrationOptions {
 	/**
 	 * Alignment's own namespaced Pi config/extension/session/auth directory --
 	 * propagated to the spawned `pi` process via PI_CODING_AGENT_DIR, kept in
-	 * parity with apps/alignment/src/pi/process-rpc-session.ts (this adapter's
+	 * parity with apps/web/src/pi/process-rpc-session.ts (this adapter's
 	 * own doc comment notes it was ported from that file). Defaults to
 	 * resolveAlignmentAgentDir(); injectable for hermetic tests.
 	 */
@@ -35,7 +35,7 @@ export interface SubprocessAgentIntegrationOptions {
  * InProcessAgentIntegration produces -- a caller behind AgentIntegrationPort
  * cannot tell which adapter it's holding.
  *
- * Ported from apps/alignment/src/pi/process-rpc-session.ts, which already
+ * Ported from apps/web/src/pi/process-rpc-session.ts, which already
  * proved this spawn/framing approach works end to end (see that file's own
  * tests and the live multi-instance smoke test run against it). This
  * version additionally translates events to Alignment's bounded vocabulary
