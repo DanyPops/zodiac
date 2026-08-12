@@ -358,7 +358,7 @@ export function App(): React.JSX.Element {
 						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-[var(--app-corner-radius,16px)] bg-gray-100 dark:bg-gray-900">
 							<p className="text-sm text-gray-500 dark:text-gray-400">Send a message to start a new Workspace.</p>
 							<div className="w-full max-w-xl px-4">
-								<Composer draft={draft} onDraftChange={setDraft} onComposerFocus={contexts.enterTextInput} />
+								<Composer draft={draft} onDraftChange={setDraft} onComposerFocus={contexts.enterTextInput} bare />
 							</div>
 						</div>
 					)}

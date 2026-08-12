@@ -35,6 +35,16 @@ interface ComposerProps {
 	readonly draft: string;
 	readonly onDraftChange: (value: string) => void;
 	readonly onComposerFocus: () => void;
+	/**
+	 * Skips the outer edge-to-edge toolbar chrome (top divider, own white
+	 * backdrop, p-3 inset) and renders just the rounded input row itself.
+	 * The docked usages (ConversationSurface's own bottom bar, ChatOverlay's
+	 * collapsed peek) sit flush against a surface's own edges, where that
+	 * chrome reads as a toolbar; the landing empty-state centers the Composer
+	 * as a standalone floating card, where the same chrome instead read as a
+	 * stray sharp-cornered white square around the already-rounded input.
+	 */
+	readonly bare?: boolean;
 }
 
 /**
@@ -46,31 +56,31 @@ interface ComposerProps {
  * "Last reply" row above it (that row's own padding is matched to this
  * one's p-3, not centered independently).
  */
-export function Composer({ draft, onDraftChange, onComposerFocus }: ComposerProps): React.JSX.Element {
-	return (
-		<div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
-			<div className="flex items-stretch gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
-				<textarea
-					aria-label="Message Pi"
-					rows={2}
-					value={draft}
-					onFocus={onComposerFocus}
-					onChange={(event) => onDraftChange(event.target.value)}
-					placeholder="Message Pi"
-					className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 dark:text-gray-100 dark:placeholder:text-gray-400"
-				/>
-				{/* w-9 + self-stretch, not a fixed size-9 square -- its height tracks the row's actual height (the textarea can grow up to max-h-36), matching the composer's own height instead of a hardcoded one. */}
-				<CommandButton
-					commandId="conversation.send"
-					label="Send message"
-					disabled={!draft.trim()}
-					className="grid w-9 shrink-0 place-items-center self-stretch rounded-lg bg-accent text-white hover:bg-accent-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45"
-				>
-					<Send aria-hidden="true" size={16} />
-				</CommandButton>
-			</div>
+export function Composer({ draft, onDraftChange, onComposerFocus, bare = false }: ComposerProps): React.JSX.Element {
+	const input = (
+		<div className="flex items-stretch gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
+			<textarea
+				aria-label="Message Pi"
+				rows={2}
+				value={draft}
+				onFocus={onComposerFocus}
+				onChange={(event) => onDraftChange(event.target.value)}
+				placeholder="Message Pi"
+				className="max-h-36 min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-gray-900 outline-none placeholder:text-gray-500 dark:text-gray-100 dark:placeholder:text-gray-400"
+			/>
+			{/* w-9 + self-stretch, not a fixed size-9 square -- its height tracks the row's actual height (the textarea can grow up to max-h-36), matching the composer's own height instead of a hardcoded one. */}
+			<CommandButton
+				commandId="conversation.send"
+				label="Send message"
+				disabled={!draft.trim()}
+				className="grid w-9 shrink-0 place-items-center self-stretch rounded-lg bg-accent text-white hover:bg-accent-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45"
+			>
+				<Send aria-hidden="true" size={16} />
+			</CommandButton>
 		</div>
 	);
+	if (bare) return input;
+	return <div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">{input}</div>;
 }
 
 export function ConversationRow({ item }: { readonly item: ConversationItem }): React.JSX.Element {
