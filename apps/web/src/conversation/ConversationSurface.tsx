@@ -45,6 +45,27 @@ interface ComposerProps {
 	 * stray sharp-cornered white square around the already-rounded input.
 	 */
 	readonly bare?: boolean;
+	/**
+	 * ChatOverlay's own peek-state instance sets this: since that panel is
+	 * mounted exactly once for an app session's whole lifetime (no Workspace
+	 * is ever deleted, so `workspace.workspace` only ever goes
+	 * undefined -> defined once) and its own `visible`/`inert` props are
+	 * already correct at that one insertion, the HTML autofocus behavior
+	 * this enables fires (or, correctly, doesn't -- see below) exactly once,
+	 * exactly when the first real Workspace is created. That's precisely the
+	 * moment sendMessage()'s auto-create branch (App.tsx) starts the new
+	 * Workspace's Chat already visible, continuing the empty-state landing's
+	 * own composer without a hiccup -- carrying real focus into the new
+	 * Composer both lets the user keep typing immediately, and (a second,
+	 * load-bearing effect) satisfies useChatVisibility's own `active` check,
+	 * so its unattended-inactivity auto-hide timer never fires before the
+	 * user's first reply has a chance to render. autofocus is a no-op on an
+	 * `inert` ancestor per spec, so this is silently harmless the other time
+	 * a Workspace's first-ever ChatOverlay mount coincides with *not* having
+	 * just sent a message (e.g. the "+ New Workspace" dialog): Chat starts
+	 * hidden there, so nothing steals focus.
+	 */
+	readonly autoFocus?: boolean;
 }
 
 /**
@@ -56,13 +77,14 @@ interface ComposerProps {
  * "Last reply" row above it (that row's own padding is matched to this
  * one's p-3, not centered independently).
  */
-export function Composer({ draft, onDraftChange, onComposerFocus, bare = false }: ComposerProps): React.JSX.Element {
+export function Composer({ draft, onDraftChange, onComposerFocus, bare = false, autoFocus = false }: ComposerProps): React.JSX.Element {
 	const input = (
 		<div className="flex items-stretch gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
 			<textarea
 				aria-label="Message Pi"
 				rows={2}
 				value={draft}
+				autoFocus={autoFocus}
 				onFocus={onComposerFocus}
 				onChange={(event) => onDraftChange(event.target.value)}
 				placeholder="Message Pi"

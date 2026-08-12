@@ -128,7 +128,8 @@ export function ChatOverlay({ visible, onPointerEnter, onPointerLeave, onFocusCa
 						</span>
 						<div className="min-h-0 overflow-hidden">{lastItem ? <ConversationRow item={lastItem} /> : <p className="text-sm text-gray-600 dark:text-gray-300">No messages yet.</p>}</div>
 					</button>
-					<Composer draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} />
+					{/* autoFocus, not just autoFocus-when-visible: this panel mounts exactly once for the whole app session (see Composer's own doc comment on this prop), so this is a real one-time effect, not a repeated focus-steal every time Chat is later summoned by hover/keymap. */}
+					<Composer draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} autoFocus />
 				</>
 			)}
 		</div>
