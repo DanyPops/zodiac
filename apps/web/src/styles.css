@@ -197,12 +197,27 @@
  * one of the -dark/-light/-lighter siblings -- easy to miss), plus
  * -light/-lighter. Every group/tab/content background derives from these
  * four via var(), so overriding just the roots re-neutralizes the theme.
- * Matched to this file's own neutral-800/900/950.
+ *
+ * Matched to platform/surface-style.ts's own WELL_BG/SURFACE_BG, not a
+ * separately-chosen literal: --dv-color-abyss-dark is `.dv-shell`'s own
+ * background -- confirmed live, this is the *only* opaque layer behind the
+ * empty-Window watermark, since no group/tab exists yet to paint anything
+ * lighter over it -- so whatever this variable holds *is* what "the
+ * Window's canvas" looks like whenever nothing is docked. It was pinned to
+ * #0a0a0a (neutral-950, PAGE_BG's own *old* value) back when PAGE_BG and
+ * WELL_BG were only 13/255 apart and this mismatch was invisible either
+ * way; widening that gap (see PAGE_BG's own doc comment) exposed it as a
+ * real, separate bug -- dockview's shell was quietly rendering the *page*'s
+ * shade, not the well's, for every Window with nothing docked in it yet.
+ * --dv-color-abyss/-light get the same WELL_BG value (previously
+ * neutral-900, #171717) so a real docked layout's own group/content chrome
+ * can't reintroduce the same seam next to the shell; --dv-color-abyss-lighter
+ * keeps SURFACE_BG's own value, unchanged.
  */
 .dockview-theme-abyss-spaced {
-	--dv-color-abyss-dark: #0a0a0a !important;
-	--dv-color-abyss: #171717 !important;
-	--dv-color-abyss-light: #171717 !important;
+	--dv-color-abyss-dark: #1e1e1e !important;
+	--dv-color-abyss: #1e1e1e !important;
+	--dv-color-abyss-light: #1e1e1e !important;
 	--dv-color-abyss-lighter: #262626 !important;
 	/* Also blue-purple in the original (rgb(148, 151, 169)) -- its own inactive-tab-text role, not an accent. */
 	--dv-color-abyss-secondary-text: #a3a3a3 !important;
