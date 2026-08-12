@@ -274,12 +274,17 @@ export function App(): React.JSX.Element {
 					onWorkspaceRename={renameWorkspace}
 				/>
 
-				{/* Notifications/WatchPill sit in the gap between each side Pillar and the center column -- not spread across the column's own full width, which would strand them far from both. */}
-				<div className="shrink-0 self-start">
-					<NotificationsPill />
-				</div>
-
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
+					{/* Notifications/WatchPill hover above the Window itself (top corners of this column) instead of occupying their own flex columns -- `pointer-events-none` on the spanning wrapper keeps the empty space between them from stealing clicks meant for the Window Carousel underneath; each pill's own wrapper opts back in. */}
+					<div className="pointer-events-none absolute inset-0 z-30">
+						{/* shadow-lg, not a one-off tier: matches the app's other small floating-chrome elements (PillarTooltip, ContextMenu.Content) -- shadow-xl/2xl are reserved for full panels/modals (WorkspaceSelection's floating variant, ChatOverlay, every dialog). */}
+						<div className="pointer-events-auto absolute left-2 top-2 rounded-[var(--app-corner-radius,16px)] shadow-lg">
+							<NotificationsPill />
+						</div>
+						<div className="pointer-events-auto absolute right-2 top-2 rounded-[var(--app-corner-radius,16px)] shadow-lg">
+							<WatchPill />
+						</div>
+					</div>
 					{workspace.workspace && workspace.activeWindow ? (
 						<>
 							<WindowCarousel
@@ -362,10 +367,6 @@ export function App(): React.JSX.Element {
 							</div>
 						</div>
 					)}
-				</div>
-
-				<div className="shrink-0 self-start">
-					<WatchPill />
 				</div>
 
 				<SurfaceTemplatesPillar
