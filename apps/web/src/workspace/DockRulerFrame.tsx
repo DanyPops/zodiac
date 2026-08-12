@@ -1,6 +1,15 @@
+import type { CSSProperties } from "react";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { dockRulerGuides, type DockRulerFrameMark, type DockRulerGuide } from "./dock-ruler.js";
+import { PROXIMITY_CEILING_OPACITY, PROXIMITY_FLOOR_OPACITY } from "./proximity-zones.js";
+
+// Reference ticks share the proximity zones' own floor/ceiling and
+// animate-zone-breathe rhythm -- one ambient/passive visual family, not a
+// second one. Only the live mark + label pill stays accent-colored (see
+// RulerBar below): the one precise, confirmed "drop now" signal against an
+// otherwise neutral field.
+const AMBIENT_TICK_STYLE: CSSProperties & Record<string, string | number> = { "--zone-min-opacity": PROXIMITY_FLOOR_OPACITY, "--zone-max-opacity": PROXIMITY_CEILING_OPACITY };
 
 // Thick enough to read tick labels comfortably; thin enough to still sit in
 // the existing gutter between the dock canvas and its neighboring chrome
@@ -35,10 +44,16 @@ interface RulerBarProps {
 function RulerBar({ orientation, length, guides, markOffset, markLabel, style }: RulerBarProps): React.JSX.Element {
 	const horizontal = orientation === "horizontal";
 	return (
-		<div data-testid="dock-ruler-bar" className={cn("pointer-events-none fixed", SURFACE_BG, horizontal ? "border-y" : "border-x", "border-accent/20")} style={style}>
+		<div data-testid="dock-ruler-bar" className={cn("pointer-events-none fixed", SURFACE_BG, horizontal ? "border-y" : "border-x", "border-gray-500/40 dark:border-gray-400/40")} style={style}>
 			{guides.map((guide) => {
 				const offset = guide.ratio * length;
-				return <span key={guide.label} className={cn("absolute bg-accent/30", horizontal ? "top-1/2 h-2 w-px -translate-y-1/2" : "left-1/2 h-px w-2 -translate-x-1/2")} style={horizontal ? { left: offset } : { top: offset }} />;
+				return (
+					<span
+						key={guide.label}
+						className={cn("absolute animate-zone-breathe bg-gray-500 motion-reduce:animate-none dark:bg-gray-400", horizontal ? "top-1/2 h-2 w-px -translate-y-1/2" : "left-1/2 h-px w-2 -translate-x-1/2")}
+						style={{ ...(horizontal ? { left: offset } : { top: offset }), ...AMBIENT_TICK_STYLE, opacity: PROXIMITY_CEILING_OPACITY }}
+					/>
+				);
 			})}
 			{markOffset !== undefined && (
 				<>

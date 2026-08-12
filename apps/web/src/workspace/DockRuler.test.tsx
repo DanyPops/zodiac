@@ -34,4 +34,11 @@ describe("DockRuler", () => {
 		const shade = screen.getByTestId("dock-ruler-shade");
 		expect(shade).toHaveStyle({ top: "150px", height: "50px" }); // from 3/4 of 200 to the edge
 	});
+
+	it("matches the proximity zones' own neutral greyscale, not accent -- one consolidated ambient visual language, not two conflicting ones", () => {
+		render(<DockRuler width={400} height={200} hint={{ axis: "horizontal", edge: "left", guide: { ratio: 1 / 3, label: "1/3" } }} />);
+		const shade = screen.getByTestId("dock-ruler-shade");
+		expect(shade.className).not.toMatch(/accent/);
+		expect(shade.className).toMatch(/bg-gray-500|bg-gray-400/);
+	});
 });

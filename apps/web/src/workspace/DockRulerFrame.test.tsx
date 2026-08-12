@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { DockRulerFrame } from "./DockRulerFrame.js";
 import { dockRulerGuides } from "./dock-ruler.js";
+import { PROXIMITY_CEILING_OPACITY, PROXIMITY_FLOOR_OPACITY } from "./proximity-zones.js";
 
 const GUIDE_COUNT = dockRulerGuides().length;
 const BOX = { left: 100, top: 50, width: 400, height: 200 };
@@ -62,5 +63,31 @@ describe("DockRulerFrame", () => {
 	it("the outer wrapper itself is pointer-events-none, not just its bar children -- it spans the whole viewport (fixed inset-0) to host the bars, and without this its own transparent box still wins real hit-testing over the dock canvas beneath it, silently swallowing every drop for the drag's whole duration", () => {
 		render(<DockRulerFrame visible box={BOX} mark={undefined} />);
 		expect(screen.getByTestId("dock-ruler")).toHaveClass("pointer-events-none");
+	});
+
+	it("reference ticks and the bar's own border match the proximity zones' neutral greyscale, not accent -- one consolidated ambient visual language", () => {
+		const { container } = render(<DockRulerFrame visible box={BOX} mark={undefined} />);
+		const bar = screen.getAllByTestId("dock-ruler-bar")[0]!;
+		expect(bar.className).not.toMatch(/accent/);
+		for (const tick of container.querySelectorAll('[data-testid="dock-ruler-bar"] span')) {
+			expect(tick.className).not.toMatch(/accent/);
+			expect(tick.className).toMatch(/bg-gray-500|bg-gray-400/);
+		}
+	});
+
+	it("reference ticks breathe on the exact same animation and floor/ceiling as the ambient proximity zones -- shared rhythm, not a second one", () => {
+		const { container } = render(<DockRulerFrame visible box={BOX} mark={undefined} />);
+		const tick = container.querySelector('[data-testid="dock-ruler-bar"] span') as HTMLElement;
+		expect(tick).toHaveClass("animate-zone-breathe");
+		expect(tick).toHaveClass("motion-reduce:animate-none");
+		expect(tick.style.getPropertyValue("--zone-min-opacity")).toBe(String(PROXIMITY_FLOOR_OPACITY));
+		expect(tick.style.getPropertyValue("--zone-max-opacity")).toBe(String(PROXIMITY_CEILING_OPACITY));
+	});
+
+	it("the live mark and its label pill are the one thing that stays accent-colored -- the single precise \"drop now\" signal against an otherwise neutral field", () => {
+		render(<DockRulerFrame visible box={BOX} mark={{ axis: "horizontal", position: 200, label: "1/4" }} />);
+		const mark = screen.getAllByTestId("dock-ruler-mark")[0]!;
+		expect(mark).toHaveClass("bg-accent");
+		expect(screen.getAllByText("1/4")[0]!).toHaveClass("bg-accent");
 	});
 });
