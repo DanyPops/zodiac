@@ -9,6 +9,15 @@ function hexToRgb(hex: string): [number, number, number] {
 	return [Number.parseInt(value.slice(1, 3), 16), Number.parseInt(value.slice(3, 5), 16), Number.parseInt(value.slice(5, 7), 16)];
 }
 
+/** Resolves a `#hex` or `var(--token)` value against every `--token: #hex;` defined in the same file. */
+function resolveHex(css: string, value: string): string {
+	const ref = /^var\((--[\w-]+)\)$/.exec(value);
+	if (!ref) return value;
+	const defined = new RegExp(`${ref[1]}:\\s*(#[0-9a-fA-F]{3,6});`).exec(css);
+	if (!defined) throw new Error(`no definition found for ${ref[1]}`);
+	return defined[1]!;
+}
+
 /**
  * Regression guard for two real, live bugs, not just eyeballed screenshots:
  *
@@ -52,10 +61,11 @@ describe("black & white only palette", () => {
 
 	it("dockview's abyss-spaced dark theme's own color roots are overridden to achromatic grays, not left blue-purple", () => {
 		const block = css.slice(css.indexOf(".dockview-theme-abyss-spaced {"));
-		const matches = [...block.matchAll(/--dv-color-abyss[a-z-]*:\s*(#[0-9a-fA-F]{3,6})\s*!important;/g)];
+		const matches = [...block.matchAll(/--dv-color-abyss[a-z-]*:\s*(#[0-9a-fA-F]{3,6}|var\(--[\w-]+\))\s*!important;/g)];
 		expect(matches.length).toBeGreaterThanOrEqual(4); // dark, (bare) abyss, light, lighter
-		for (const [, hex] of matches) {
-			const [r, g, b] = hexToRgb(hex!);
+		for (const [, value] of matches) {
+			const hex = resolveHex(css, value!);
+			const [r, g, b] = hexToRgb(hex);
 			expect(r, `${hex} should be achromatic`).toBe(g);
 			expect(g, `${hex} should be achromatic`).toBe(b);
 		}
