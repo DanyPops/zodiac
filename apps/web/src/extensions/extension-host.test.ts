@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { Activity } from "lucide-react";
 import { createExtensionHost } from "./extension-host.js";
-import type { AlignmentExtension } from "./types.js";
+import type { ZodiacExtension } from "./types.js";
 
-function extension(id: string, activate: AlignmentExtension["activate"]): AlignmentExtension {
+function extension(id: string, activate: ZodiacExtension["activate"]): ZodiacExtension {
 	return { id, activate };
 }
 

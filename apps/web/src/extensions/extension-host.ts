@@ -1,10 +1,10 @@
 import { createContributionRegistry } from "@zodiac/server";
 import type { CommandDefinition } from "../commands/registry.js";
 import type { SurfaceTemplateDefinition } from "../workspace/surface-templates.js";
-import type { AlignmentExtension, AlignmentExtensionAPI, WorkspaceLifecycleEvent } from "./types.js";
+import type { ZodiacExtension, ZodiacExtensionAPI, WorkspaceLifecycleEvent } from "./types.js";
 
 export interface ExtensionHost {
-	registerExtension: (extension: AlignmentExtension) => void;
+	registerExtension: (extension: ZodiacExtension) => void;
 	emit: (event: WorkspaceLifecycleEvent) => void;
 	surfaceTemplates: () => readonly SurfaceTemplateDefinition[];
 	commands: () => readonly CommandDefinition[];
@@ -30,7 +30,7 @@ export function createExtensionHost(): ExtensionHost {
 			registry.register({
 				id: extension.id,
 				activate: (coreApi) => {
-					const api: AlignmentExtensionAPI = {
+					const api: ZodiacExtensionAPI = {
 						registerSurfaceTemplate(definition) {
 							try {
 								coreApi.registerIntegration(definition);

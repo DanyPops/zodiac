@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createExtensionHost } from "../extensions/extension-host.js";
-import { createAlignmentCommandRegistry, type AlignmentCommandActions } from "./defaults.js";
+import { createZodiacCommandRegistry, type ZodiacCommandActions } from "./defaults.js";
 
-function noopActions(): AlignmentCommandActions {
+function noopActions(): ZodiacCommandActions {
 	return {
 		toggleWorkspaceSelection: vi.fn(),
 		focusWorkspaceSelection: vi.fn(),
@@ -30,13 +30,13 @@ function noopActions(): AlignmentCommandActions {
 	};
 }
 
-describe("createAlignmentCommandRegistry with an ExtensionHost", () => {
+describe("createZodiacCommandRegistry with an ExtensionHost", () => {
 	it("an extension's registerCommand call genuinely reaches the real command registry and is executable end-to-end", () => {
 		const host = createExtensionHost();
 		const execute = vi.fn();
 		host.registerExtension({ id: "acme", activate: (api) => api.registerCommand({ id: "acme.doThing", title: "Do the thing", description: "d", execute }) });
 
-		const registry = createAlignmentCommandRegistry(noopActions(), [], host.commands());
+		const registry = createZodiacCommandRegistry(noopActions(), [], host.commands());
 
 		expect(registry.commands().some((command) => command.id === "acme.doThing")).toBe(true);
 		expect(registry.execute("acme.doThing")).toBe(true);
@@ -44,7 +44,7 @@ describe("createAlignmentCommandRegistry with an ExtensionHost", () => {
 	});
 
 	it("built-in commands still work unchanged when no extension contributes anything", () => {
-		const registry = createAlignmentCommandRegistry(noopActions());
+		const registry = createZodiacCommandRegistry(noopActions());
 		expect(registry.commands().some((command) => command.id === "palette.open")).toBe(true);
 	});
 });

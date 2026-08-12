@@ -1,7 +1,7 @@
 import { SURFACE_TEMPLATE_REGISTRY } from "../workspace/surface-templates.js";
 import { createCommandRegistry, type CommandDefinition, type KeybindingDefinition } from "./registry.js";
 
-export interface AlignmentCommandActions {
+export interface ZodiacCommandActions {
 	toggleWorkspaceSelection: () => void;
 	focusWorkspaceSelection: () => void;
 	focusCanvas: () => void;
@@ -50,7 +50,7 @@ export const DEFAULT_BINDINGS: readonly KeybindingDefinition[] = [
 	{ commandId: "appearance.open", keys: "Mod+Shift+,", context: "global" },
 ];
 
-export function createAlignmentCommandRegistry(actions: AlignmentCommandActions, userBindings: readonly KeybindingDefinition[] = [], extensionCommands: readonly CommandDefinition[] = []) {
+export function createZodiacCommandRegistry(actions: ZodiacCommandActions, userBindings: readonly KeybindingDefinition[] = [], extensionCommands: readonly CommandDefinition[] = []) {
 	const commands: CommandDefinition[] = [
 		define("workspace.toggleSelection", "Toggle workspace selection", "Show or hide the Workspace Selection surface.", actions.toggleWorkspaceSelection),
 		define("workspace.focusSelection", "Focus workspace selection", "Move focus to the selected Workspace.", actions.focusWorkspaceSelection),
@@ -61,7 +61,7 @@ export function createAlignmentCommandRegistry(actions: AlignmentCommandActions,
 		define("workspace.selectLast", "Focus last Workspace", "Move focus to the last Workspace in Workspace Selection.", actions.selectLastWorkspace),
 		define("theme.cycle", "Cycle color theme", "Cycle through light, dark, and system themes.", actions.cycleTheme),
 		{ ...define("conversation.send", "Send message", "Submit the current message to the Conversation.", actions.sendMessage), enabled: actions.canSendMessage },
-		define("palette.open", "Open command palette", "Find and execute an Alignment command.", actions.openPalette),
+		define("palette.open", "Open command palette", "Find and execute a Zodiac command.", actions.openPalette),
 		define("shortcuts.open", "Open keyboard shortcuts", "Inspect active keyboard bindings.", actions.openShortcuts),
 		define("dialog.close", "Close dialog", "Close the active dialog and restore Workspace focus.", actions.closeDialog),
 		define("conversation.open", "Open selected conversation", "Load the selected Conversation into the floating Chat Surface.", (...args) => actions.openConversation(typeof args[0] === "string" ? args[0] : undefined)),

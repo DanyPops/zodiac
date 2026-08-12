@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAlignmentCommandRegistry, type AlignmentCommandActions } from "./defaults.js";
+import { createZodiacCommandRegistry, type ZodiacCommandActions } from "./defaults.js";
 import { createCommandRegistry, type CommandDefinition, type KeybindingDefinition } from "./registry.js";
 
 function command(id: string, execute = vi.fn()): CommandDefinition {
 	return { id, title: id, description: `Run ${id}`, execute };
 }
 
-function fixtureActions(): AlignmentCommandActions {
+function fixtureActions(): ZodiacCommandActions {
 	const action = vi.fn();
 	return {
 		toggleWorkspaceSelection: action,
@@ -35,9 +35,9 @@ function fixtureActions(): AlignmentCommandActions {
 	};
 }
 
-describe("Alignment command catalog", () => {
+describe("Zodiac command catalog", () => {
 	it("gives every core navigation/dialog/window/chat command an inspectable default binding", () => {
-		const registry = createAlignmentCommandRegistry(fixtureActions());
+		const registry = createZodiacCommandRegistry(fixtureActions());
 		const mustBeBound = [
 			"workspace.toggleSelection",
 			"workspace.focusSelection",
@@ -56,7 +56,7 @@ describe("Alignment command catalog", () => {
 	});
 
 	it("registers a dock command for every built-in Surface Template, deliberately unbound by default (docked via click, drag, or the templates picker)", () => {
-		const registry = createAlignmentCommandRegistry(fixtureActions());
+		const registry = createZodiacCommandRegistry(fixtureActions());
 		const dockCommand = registry.commands().find((command) => command.id === "template.dockActivity");
 		expect(dockCommand).toBeDefined();
 		expect(registry.bindingFor("template.dockActivity")).toBeUndefined();

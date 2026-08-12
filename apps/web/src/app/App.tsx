@@ -1,7 +1,7 @@
 import type { Position } from "dockview-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommandDialog } from "../commands/CommandDialog.js";
-import { createAlignmentCommandRegistry } from "../commands/defaults.js";
+import { createZodiacCommandRegistry } from "../commands/defaults.js";
 import { CommandProvider } from "../commands/react.js";
 import { useCommandContextStack } from "../commands/useCommandContextStack.js";
 import { useKeybindingOverrides } from "../commands/useKeybindingOverrides.js";
@@ -211,7 +211,7 @@ export function App(): React.JSX.Element {
 		workspace.undockSurface(instanceId);
 	}
 
-	const registry = createAlignmentCommandRegistry(
+	const registry = createZodiacCommandRegistry(
 		{
 			toggleWorkspaceSelection() {
 				if (selection.toggle()) {

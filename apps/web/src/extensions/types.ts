@@ -17,13 +17,13 @@ export type WorkspaceLifecycleEvent =
  * vocabulary; extension-host.ts adapts between the two so every existing
  * extension here keeps working unchanged.
  */
-export interface AlignmentExtensionAPI {
+export interface ZodiacExtensionAPI {
 	registerSurfaceTemplate: (definition: SurfaceTemplateDefinition) => void;
 	registerCommand: (definition: CommandDefinition) => void;
 	on: <TType extends WorkspaceLifecycleEvent["type"]>(type: TType, handler: (event: Extract<WorkspaceLifecycleEvent, { type: TType }>) => void) => () => void;
 }
 
-export interface AlignmentExtension {
+export interface ZodiacExtension {
 	id: string;
-	activate: (api: AlignmentExtensionAPI) => void;
+	activate: (api: ZodiacExtensionAPI) => void;
 }

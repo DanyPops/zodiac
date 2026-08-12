@@ -75,7 +75,7 @@ export function CommandDialog({
 						<DialogCloseButton label={`Close ${title.toLowerCase()}`} />
 					</div>
 					<Dialog.Description className="sr-only">
-						{mode === "palette" ? "Search and execute Alignment commands." : "Inspect the active keyboard bindings for Alignment commands."}
+						{mode === "palette" ? "Search and execute Zodiac commands." : "Inspect the active keyboard bindings for Zodiac commands."}
 					</Dialog.Description>
 					{mode === "palette" && (
 						<div className="border-b border-gray-200 p-3 dark:border-gray-700">

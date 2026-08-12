@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createPreferences } from "../platform/preferences.js";
-import { createAlignmentCommandRegistry, type AlignmentCommandActions } from "./defaults.js";
+import { createZodiacCommandRegistry, type ZodiacCommandActions } from "./defaults.js";
 import { useKeybindingOverrides } from "./useKeybindingOverrides.js";
 
 function memoryStorage(): Storage {
@@ -22,7 +22,7 @@ function memoryStorage(): Storage {
 /** The full first-slice command set, so rebind validation sees every default binding it must not collide with. */
 function fullCommandSet() {
 	const noop = vi.fn();
-	const actions: AlignmentCommandActions = {
+	const actions: ZodiacCommandActions = {
 		toggleWorkspaceSelection: noop,
 		focusWorkspaceSelection: noop,
 		focusCanvas: noop,
@@ -47,7 +47,7 @@ function fullCommandSet() {
 		dockDefaultTemplate: noop,
 		openAppearance: noop,
 	};
-	return createAlignmentCommandRegistry(actions).commands();
+	return createZodiacCommandRegistry(actions).commands();
 }
 
 describe("useKeybindingOverrides", () => {
