@@ -21,11 +21,7 @@ import { findSurfaceTemplate, type SurfaceTemplateDefinition } from "./surface-t
 // spawn's snappier entrance.
 const CLOSE_FADE_MS = 220;
 
-// The debounced/idle-gated drop-preview policy for the empty-Window
-// watermark case (dockview's own root-level 'edge' overlay, a separate
-// mechanism from the Dock Ruler below -- there's no existing group to split
-// a fraction of yet, so the Ruler doesn't apply there). A fast pass over
-// several drop zones must not flicker a highlight on every one it crosses.
+// Shared idle-velocity gate for onWillShowOverlay below, every kind.
 const DRAG_HINT_IDLE_VELOCITY_PX_PER_MS = 0.5;
 
 /** The same hint computation the Dock Ruler renders, run fresh against a real drag event and its target group's own DOM box -- shared between the live overlay (onWillShowOverlay) and the actual drop (onDidDrop) so what the ruler showed and what the drop does can never disagree. */
@@ -33,6 +29,15 @@ function dockRulerHintFromEvent(nativeEvent: DragEvent | PointerEvent | Event, g
 	if (!(nativeEvent instanceof DragEvent) && !(nativeEvent instanceof PointerEvent)) return undefined;
 	const box = groupElement.getBoundingClientRect();
 	return computeDockRulerHint(nativeEvent.clientX - box.left, nativeEvent.clientY - box.top, box.width, box.height);
+}
+
+/** Pointer speed since lastMoveRef's last sample, updating it as a side effect. Infinity with no point to measure or no prior sample yet -- wait for confirmed low velocity before showing anything, not "show until proven fast". Shared by both onWillShowOverlay branches below. */
+function sampleDragVelocity(nativeEvent: DragEvent | PointerEvent | Event, lastMoveRef: { current: { x: number; y: number; t: number } | null }): number {
+	const point = nativeEvent instanceof DragEvent || nativeEvent instanceof PointerEvent ? { x: nativeEvent.clientX, y: nativeEvent.clientY, t: Date.now() } : null;
+	const last = lastMoveRef.current;
+	if (point) lastMoveRef.current = point;
+	if (!point || !last) return Infinity;
+	return Math.hypot(point.x - last.x, point.y - last.y) / Math.max(1, point.t - last.t);
 }
 
 interface SurfaceTemplatePanelParams {
@@ -357,16 +362,15 @@ export function WindowDockview({
 		});
 
 		event.api.onWillShowOverlay((overlayEvent) => {
-			// The Dock Ruler replaces dockview's own coarse quadrant overlay
-			// entirely (hidden via CSS within an existing group -- see
-			// styles.css) with a live, granular one: every dragover over an
-			// existing group's content recomputes the hint fresh and positions
-			// the ruler over that group's own real box. dockview's own overlay
-			// `_state` is left alone (no preventDefault) so its onDrop still
-			// fires normally -- onDidDrop below ignores dockview's own reported
-			// position anyway, recomputing the same hint fresh so what the
-			// ruler showed and what the drop does can never disagree.
+			// Dock Ruler: a granular overlay for an existing group's content,
+			// replacing dockview's own coarse quadrant one (hidden via CSS).
+			// No preventDefault -- onDrop still needs to fire; onDidDrop below
+			// recomputes the same hint fresh instead of trusting dockview's own.
 			if (overlayEvent.kind === "content" && overlayEvent.group) {
+				// Idle-gated like the branch below (used to run unthrottled on
+				// every dragover -- a real, reported hang during a fast drag).
+				if (sampleDragVelocity(overlayEvent.nativeEvent, lastMoveRef) > DRAG_HINT_IDLE_VELOCITY_PX_PER_MS) return;
+
 				const wrapper = wrapperRef.current;
 				const hint = wrapper ? dockRulerHintFromEvent(overlayEvent.nativeEvent, overlayEvent.group.element) : undefined;
 				if (!hint || !wrapper) {
@@ -381,27 +385,13 @@ export function WindowDockview({
 				return;
 			}
 
-			// Every other kind (the empty-Window watermark's own root-level
-			// 'edge' overlay, tab/header_space) keeps its original debounced
-			// behavior, untouched by the Dock Ruler.
+			// Every other kind (root-level edge overlay, tab/header_space). The
+			// "Spaced" theme's overlay anchor persists across frames once shown,
+			// so an unsuppressed fast frame stays visible through the rest of a
+			// fast pass even if every later frame is correctly suppressed.
 			setDockRulerBox(undefined);
 			onDockRulerHintChange(undefined);
-			const point = overlayEvent.nativeEvent instanceof DragEvent || overlayEvent.nativeEvent instanceof PointerEvent ? { x: overlayEvent.nativeEvent.clientX, y: overlayEvent.nativeEvent.clientY, t: Date.now() } : null;
-			const last = lastMoveRef.current;
-			if (point) lastMoveRef.current = point;
-			// No native point to measure, or no prior sample yet (the first
-			// dragover of a drag): suppress rather than allow. The "Spaced" theme's
-			// overlay anchor persists across frames once shown, so an unsuppressed
-			// first frame stays visible through the rest of a fast pass even if
-			// every later frame is correctly suppressed. Policy: wait for confirmed
-			// low velocity before showing, not "show until proven fast".
-			if (!point || !last) {
-				overlayEvent.preventDefault();
-				return;
-			}
-			const elapsedMs = Math.max(1, point.t - last.t);
-			const velocity = Math.hypot(point.x - last.x, point.y - last.y) / elapsedMs;
-			if (velocity > DRAG_HINT_IDLE_VELOCITY_PX_PER_MS) overlayEvent.preventDefault();
+			if (sampleDragVelocity(overlayEvent.nativeEvent, lastMoveRef) > DRAG_HINT_IDLE_VELOCITY_PX_PER_MS) overlayEvent.preventDefault();
 		});
 	}
 
