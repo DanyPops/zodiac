@@ -499,7 +499,13 @@ export function WindowDockview({
 					watermarkComponent={() => <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>}
 				/>
 				{dockRulerBox && (
-					<div className="absolute" style={{ left: dockRulerBox.left, top: dockRulerBox.top, width: dockRulerBox.width, height: dockRulerBox.height }}>
+					// pointer-events-none: this wrapper fully covers the hovered group's own
+					// content while a real drag is in progress -- without it, a genuine
+					// native drop's own hit-test resolves here (a plain div with no drop
+					// handling) instead of dockview's own content element underneath,
+					// silently swallowing the drop. DockRuler's own children were already
+					// pointer-events-none; this wrapper itself wasn't.
+					<div className="pointer-events-none absolute" style={{ left: dockRulerBox.left, top: dockRulerBox.top, width: dockRulerBox.width, height: dockRulerBox.height }}>
 						<DockRuler width={dockRulerBox.width} height={dockRulerBox.height} hint={dockRulerBox.hint} />
 					</div>
 				)}

@@ -382,9 +382,12 @@ test("Dock Ruler: dragging well inside an already-docked Surface (not the thin r
 	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
 	await glyph.dispatchEvent("dragstart", { dataTransfer });
 	await content.dispatchEvent("dragenter", { dataTransfer, clientX: quarterX, clientY: midY });
+	// Two samples at the same position: the Ruler is idle-velocity-gated too
+	// (same policy as the root-edge case below it), so a single dragover
+	// reads as an unconfirmed first sample, not a settled one.
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
 	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
 
-	// The ruler tracks live -- no settle/debounce needed, unlike the root-edge case.
 	// The frame wraps the dock area with two bars per axis (above/below the
 	// canvas) -- both show the same live label, not drawn over the content itself.
 	await expect(page.getByTestId("dock-ruler")).toBeVisible();
@@ -418,6 +421,8 @@ test("Dock Ruler: dragging past the midpoint docks to the right, sized from the 
 	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
 	await glyph.dispatchEvent("dragstart", { dataTransfer });
 	await content.dispatchEvent("dragenter", { dataTransfer, clientX: threeQuarterX, clientY: midY });
+	// Two samples at the same position -- see the idle-velocity-gate comment above.
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: threeQuarterX, clientY: midY });
 	await content.dispatchEvent("dragover", { dataTransfer, clientX: threeQuarterX, clientY: midY });
 	await expect(page.getByText("3/4").first()).toBeVisible();
 

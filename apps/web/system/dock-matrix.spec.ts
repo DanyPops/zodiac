@@ -22,6 +22,12 @@ const SPACED_THEME_GUTTER_PX = 10;
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByRole("heading", { name: "Zodiac", exact: true })).toBeVisible();
+	// Zodiac starts with zero Workspaces -- a Window Carousel only exists once
+	// one is auto-created from a first sent message (see App.tsx's own
+	// sendMessage). This spec is about docking within an existing Window, not
+	// Workspace creation, so get one the same way a real user would.
+	await page.getByRole("textbox", { name: "Message Pi" }).fill("start");
+	await page.getByRole("button", { name: "Send message" }).click();
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 });
 
@@ -37,18 +43,21 @@ async function dockViaClick(page: Page): Promise<void> {
 
 /**
  * Drag-to-dock onto `target`, at a fractional offset within its own box (0/0
- * is its top-left corner, 1/1 its bottom-right). Every drag test in this
- * suite dispatches events directly rather than driving real mouse movement --
- * Chromium's automation layer doesn't reliably synthesize a genuine native
- * HTML5 dragstart from raw mouse events (confirmed directly, not assumed --
- * see the Dock Ruler frame's own regression test/doc), so dispatchEvent is
- * the only reliable way to exercise this in Playwright. dispatchEvent skips
- * real hit-testing by design (it targets the named element directly,
- * regardless of what visually sits on top of it), so a scenario claiming to
- * catch a hit-testing bug still needs its own document.elementFromPoint
- * assertion, not just a dispatched-event outcome -- see the Dock Ruler
- * frame's own hit-testing regression test elsewhere in this suite for that
- * distinct check.
+ * is its top-left corner, 1/1 its bottom-right). Most drag tests in this
+ * suite dispatch events directly rather than driving real mouse movement --
+ * fast, and deterministic regardless of what's visually stacked on top of
+ * the target, which is exactly the point most of these scenarios care
+ * about (split geometry, tab counts). But dispatchEvent skips real
+ * hit-testing by design (targets the named element directly), so it
+ * structurally cannot catch a bug where a real drop's own hit-test resolves
+ * to the wrong element -- confirmed the hard way: a real, reported "docking
+ * onto an existing pane silently does nothing" bug turned out to be exactly
+ * that (the Dock Ruler's own overlay wrapper missing pointer-events-none,
+ * swallowing the real native drop), invisible to every dispatchEvent-based
+ * test in this file and only caught by a real page.mouse drag -- see "real
+ * mouse drag" further down. Both techniques stay in this suite: dispatchEvent
+ * for geometry/count assertions, real mouse drag wherever hit-testing itself
+ * is what's being verified.
  */
 async function dockViaDrag(page: Page, target: Locator, offsetXRatio: number, offsetYRatio: number): Promise<void> {
 	const box = (await target.boundingBox())!;
@@ -449,5 +458,83 @@ test("18. Three (mixed L-shaped layout) has no duplicate DOM: exactly as many ta
 	await expect(tabs(page)).toHaveCount(3);
 	await expect(page.locator(".dv-content-container")).toHaveCount(3);
 	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toHaveCount(0); // no leftover watermark once every pane is occupied
+	await expectNoStrayRulerArtifacts(page);
+});
+
+test("20. Docking into a second Window works the same as the first -- each Window mounts its own independent WindowDockview instance", async ({ page }) => {
+	await dockViaClick(page); // Window 0 gets its first Surface
+	await page.getByRole("button", { name: "New Window" }).click(); // Window 1, empty, now active
+
+	await expect(groups(page)).toHaveCount(0); // Window 1's own canvas, not Window 0's leftover group
+	await dockViaDrag(page, page.locator(".dv-dockview"), 0.5, 0.5);
+	await expect(groups(page)).toHaveCount(1);
+	await expect(tabs(page)).toHaveCount(1);
+
+	await dockViaDrag(page, groupContent(page, 0), 0.9, 0.5); // a second dock, by drag, onto Window 1's own now-existing pane
+	await expect(groups(page)).toHaveCount(2);
+	await expect(tabs(page)).toHaveCount(2);
+	await expectNoStrayRulerArtifacts(page);
+});
+
+/**
+ * A real page.mouse drag: hover the source, press, move in several steps
+ * (crossing the browser's own drag-initiation threshold, then two samples at
+ * rest over the target -- Playwright's own dragover note, and our idle-
+ * velocity gate, both need at least two), release. Unlike dockViaDrag, this
+ * goes through real hit-testing at every step, the only way to catch a bug
+ * where something else is actually sitting over the drop target.
+ */
+async function realMouseDrag(page: Page, source: Locator, target: Locator, targetRatio = { x: 0.5, y: 0.5 }): Promise<void> {
+	const sourceBox = (await source.boundingBox())!;
+	const targetBox = (await target.boundingBox())!;
+	await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 10, sourceBox.y + sourceBox.height / 2 + 10, { steps: 5 });
+	const tx = targetBox.x + targetBox.width * targetRatio.x;
+	const ty = targetBox.y + targetBox.height * targetRatio.y;
+	await page.mouse.move(tx, ty, { steps: 20 });
+	await page.mouse.move(tx, ty);
+	await page.mouse.up();
+}
+
+test("21. Real mouse drag (real hit-testing, not dispatchEvent) onto an existing pane's content actually docks -- regression for a real bug: the Dock Ruler's own overlay wrapper had no pointer-events-none, so a genuine drop's hit-test resolved to it instead of dockview's content, silently swallowing the drop", async ({ page }) => {
+	await dockViaClick(page);
+	await expect(groups(page)).toHaveCount(1);
+
+	const glyph = activityGlyph(page);
+	const content = groupContent(page, 0);
+	const contentBox = (await content.boundingBox())!;
+	const sourceBox = (await glyph.boundingBox())!;
+	const tx = contentBox.x + contentBox.width * 0.1;
+	const ty = contentBox.y + contentBox.height * 0.5;
+
+	await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 10, sourceBox.y + sourceBox.height / 2 + 10, { steps: 5 });
+	await page.mouse.move(tx, ty, { steps: 20 });
+	await page.mouse.move(tx, ty); // second sample at rest -- Playwright's own dragover note, and our idle-velocity gate, both need it
+
+	// The real regression, caught mid-drag while the mouse is still down and
+	// the Ruler overlay is actually showing: the drop point must hit-test to
+	// dockview's own content, never the Ruler's positioning div.
+	const hitDuringDrag = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.className ?? null, [tx, ty] as const);
+	expect(hitDuringDrag).not.toContain("dock-ruler");
+
+	await page.mouse.up();
+
+	await expect(groups(page)).toHaveCount(2); // the actual bug: this silently stayed at 1
+	await expect(tabs(page)).toHaveCount(2);
+	await expectNoStrayRulerArtifacts(page);
+});
+
+test("22. Real mouse drag also works for a second Window's second dock, not just Window 0's", async ({ page }) => {
+	await dockViaClick(page);
+	await page.getByRole("button", { name: "New Window" }).click();
+	await realMouseDrag(page, activityGlyph(page), page.locator(".dv-dockview"));
+	await expect(groups(page)).toHaveCount(1);
+
+	await realMouseDrag(page, activityGlyph(page), groupContent(page, 0), { x: 0.9, y: 0.5 });
+	await expect(groups(page)).toHaveCount(2);
+	await expect(tabs(page)).toHaveCount(2);
 	await expectNoStrayRulerArtifacts(page);
 });
