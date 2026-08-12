@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 const PORT = 4175;
 
 export default defineConfig({
-	testDir: "./e2e",
+	testDir: "./system",
 	timeout: 20_000,
 	fullyParallel: false,
 	retries: 0,

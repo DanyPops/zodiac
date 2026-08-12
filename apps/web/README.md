@@ -19,7 +19,7 @@ npm run typecheck --workspace=@zodiac/web
 npm run lint --workspace=@zodiac/web
 npm run build --workspace=@zodiac/web
 npm run check:bundle-budget --workspace=@zodiac/web
-npm run test:e2e --workspace=@zodiac/web
+npm run test:system --workspace=@zodiac/web
 
 # All of the above, in order:
 npm run verify --workspace=@zodiac/web

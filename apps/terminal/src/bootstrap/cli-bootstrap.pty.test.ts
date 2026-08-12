@@ -25,7 +25,7 @@ afterEach(async () => {
 
 describe("real CLI process bootstrap against a real Lector daemon", () => {
 	it("opens a real fixture directory and projects its own title into the World -- no longer the empty shell", async () => {
-		root = mkdtempSync(join(tmpdir(), "zodiac-cli-e2e-dir-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-dir-"));
 		writeFileSync(join(root, "a.ts"), "export const a = 1;\n");
 		mkdirSync(join(root, "src"));
 		const rootTitle = basename(root);
@@ -41,7 +41,7 @@ describe("real CLI process bootstrap against a real Lector daemon", () => {
 	}, 15_000);
 
 	it("opens a real fixture file directly, identifying its nearest real git repository root as the Workspace", async () => {
-		root = mkdtempSync(join(tmpdir(), "zodiac-cli-e2e-file-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-file-"));
 		execFileSync("git", ["init", "-q"], { cwd: root });
 		writeFileSync(join(root, "greet.ts"), "export function greet() {\n\treturn 'hi';\n}\n");
 		const rootTitle = basename(root);
@@ -54,7 +54,7 @@ describe("real CLI process bootstrap against a real Lector daemon", () => {
 	}, 15_000);
 
 	it("fails closed with a typed message and a non-zero exit for a path that does not exist -- never booting the TUI", async () => {
-		root = mkdtempSync(join(tmpdir(), "zodiac-cli-e2e-missing-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-missing-"));
 		const missing = join(root, "does-not-exist");
 		terminal = spawnLiveTerminal(process.execPath, [cli, missing], { cols: 80, rows: 24 });
 		await terminal.waitForText("no such path", 10_000);

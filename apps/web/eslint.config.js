@@ -232,7 +232,7 @@ export default tseslint.config(
 
 	// Config files, node-side script tests, and Playwright specs run under Node.
 	{
-		files: ["*.config.{ts,js}", "e2e/**/*.ts", "scripts/**/*.test.ts"],
+		files: ["*.config.{ts,js}", "system/**/*.ts", "scripts/**/*.test.ts"],
 		extends: [js.configs.recommended, tseslint.configs.recommended],
 		languageOptions: {
 			ecmaVersion: 2022,

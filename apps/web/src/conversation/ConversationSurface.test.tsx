@@ -16,8 +16,8 @@ afterEach(() => {
  * Named fixtures for every state ConversationSurface can render -- one per
  * ConversationItem kind, plus the loading/error/empty transport states.
  * Each is asserted directly at the component level instead of only being
- * incidentally exercised by whichever single state an e2e flow happens to
- * pass through.
+ * incidentally exercised by whichever single state a system-test flow
+ * happens to pass through.
  */
 const FIXTURES = {
 	loading: { items: [] as ConversationItem[], loading: true, error: undefined },

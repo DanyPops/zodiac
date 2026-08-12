@@ -40,12 +40,12 @@ Every other everyday command is a plain root-level npm script -- run from the re
 | Command | What it does |
 | --- | --- |
 | `npm test` | Runs every workspace's own test suite. |
-| `npm run test:e2e` | Runs `@zodiac/web`'s Playwright e2e suite (extra args forward through, e.g. `npm run test:e2e -- --list`). |
+| `npm run test:system` | Runs `@zodiac/web`'s Playwright system-test suite (extra args forward through, e.g. `npm run test:system -- --list`). |
 | `npm run typecheck` | `tsc --noEmit` across every workspace. |
 | `npm run lint` / `lint:ci` | ESLint across every workspace that has it (`lint:ci` is `--max-warnings 0`, what CI runs). |
 | `npm run build` | Production build of every workspace that has one. |
 | `npm run verify` | The one "did I break anything" gate: typecheck -> lint:ci -> test -> build, stopping at the first failure. |
-| `npm run verify:full` | `verify`, plus `@zodiac/web`'s e2e suite and its bundle-budget check -- slower, closer to what a release needs. |
+| `npm run verify:full` | `verify`, plus `@zodiac/web`'s system-test suite and its bundle-budget check -- slower, closer to what a release needs. |
 | `npm run clean` | Removes every workspace's own build/test output and lint cache (dist/, test-results/, playwright-report/, .eslintcache) -- never node_modules. |
 | `npm run reinstall` | The "something's actually broken" nuke: removes node_modules and package-lock.json, then reinstalls clean. |
 

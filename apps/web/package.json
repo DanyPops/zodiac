@@ -8,12 +8,12 @@
     "build": "vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:system": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --cache --cache-strategy content --cache-location .eslintcache .",
     "lint:ci": "eslint --max-warnings 0 .",
     "check:bundle-budget": "node scripts/check-bundle-budget.mjs",
-    "verify": "npm run typecheck && npm run lint:ci && npm test && npm run build && npm run check:bundle-budget && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint:ci && npm test && npm run build && npm run check:bundle-budget && npm run test:system"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
