@@ -201,17 +201,28 @@
  * dockview-core's "Abyss" dark theme is navy/purple at its color roots:
  * -dark/(bare)/-light/-lighter. Every group/tab/content background
  * derives from these four via var(), so overriding the roots re-neutralizes
- * the theme.
+ * the theme. Mapped one at a time by inspecting which real element each
+ * one actually paints (temporary debug colors, one per variable), not
+ * assumed -- confirmed live:
+ *   -dark   -> .dv-shell (the gutter between panes) AND .dv-groupview
+ *             (a group's own chrome behind its tab strip)
+ *   (bare)  -> .dv-content-container, a docked Surface's own real body
+ *   -light  -> an inactive tab's own pill background
+ *   -lighter-> the active tab's own pill background
  *
- * Reads WELL_BG/SURFACE_BG's own tokens via `var()`, not hardcoded hex --
- * `.dv-shell` (the empty-Window watermark's only opaque backing) used to
- * silently paint PAGE_BG's old value here, invisible until PAGE_BG and
- * WELL_BG's own gap widened enough to expose the mismatch. `var()`
- * prevents that drift happening again.
+ * A real, reported bug lived here: -dark and (bare) were both WELL_BG's
+ * own value, so the gutter and every docked Surface's own body rendered
+ * the identical color -- geometrically present, invisibly painted. A
+ * docked Surface is a surface (see SURFACE_BG's own doc comment) -- its
+ * real content body reads SURFACE_BG now, not WELL_BG; only the gutter
+ * itself (and a group's own thin chrome sliver, which shares -dark) stays
+ * WELL_BG. The active tab already read SURFACE_BG, popping toward the
+ * user on selection; the inactive tab keeps WELL_BG, matching the gutter
+ * it visually recedes into.
  */
 .dockview-theme-abyss-spaced {
 	--dv-color-abyss-dark: var(--color-well-dark) !important;
-	--dv-color-abyss: var(--color-well-dark) !important;
+	--dv-color-abyss: var(--color-gray-800) !important;
 	--dv-color-abyss-light: var(--color-well-dark) !important;
 	--dv-color-abyss-lighter: var(--color-gray-800) !important;
 	/* Also blue-purple in the original (rgb(148, 151, 169)) -- its own inactive-tab-text role, not an accent. */
@@ -238,9 +249,22 @@
  * dockview's own coarse per-group content highlight entirely -- dockview's
  * own overlay DOM is left alone (its onDrop still needs the same internal
  * state it drives), just hidden here.
+ *
+ * .dv-drop-target-content is the real one dockview actually renders for a
+ * per-group content hover (confirmed live via document.querySelector, not
+ * assumed) -- .dv-drop-target-dropzone/-selection above never matched
+ * anything real. It also carries .dv-drop-target-anchor, the same class
+ * the root-level rule below deliberately keeps visible *while dragging* --
+ * a real, reported bug: dockview's own quadrant preview kept rendering
+ * over an existing pane's content, at its own coarse position, disagreeing
+ * with the Ruler's fine one. Hidden unconditionally here (not gated on
+ * data-template-dragging like the root-level rule), same as the two
+ * selectors above it -- this is a *content* overlay, no legitimate state
+ * for it to ever show now that the Ruler owns that role.
  */
 .dv-groupview .dv-drop-target-dropzone,
-.dv-groupview .dv-drop-target-selection {
+.dv-groupview .dv-drop-target-selection,
+.dv-drop-target-content {
 	display: none !important;
 }
 

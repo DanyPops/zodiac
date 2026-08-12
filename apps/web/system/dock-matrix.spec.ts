@@ -538,3 +538,149 @@ test("22. Real mouse drag also works for a second Window's second dock, not just
 	await expect(tabs(page)).toHaveCount(2);
 	await expectNoStrayRulerArtifacts(page);
 });
+
+/**
+ * Regression tests filed red-first for two real, reported bugs (screenshots,
+ * not inferred): the Dock Ruler's own frame mark doesn't line up with its
+ * in-content shade, and two freshly-split panes show no gutter between
+ * them. Neither has an existing assertion anywhere in this matrix -- every
+ * scenario above either doesn't check the Ruler's cross-element geometry at
+ * all, or (for the gutter) only checks it in 2 of 22 scenarios, neither of
+ * which is this exact "one pane, drag-split into two" shape.
+ */
+
+test("23. Two side-by-side panes from a plain edge drag keep the Spaced theme's own gutter between them", async ({ page }) => {
+	await dockViaClick(page);
+	const original = groupContent(page, 0);
+	await dockViaDrag(page, original, 0.9, 0.5); // -> two side by side, exactly the reported screenshot's own shape
+
+	await expect(groups(page)).toHaveCount(2);
+	const [left, right] = (await groupBoxes(page)).sort((a, b) => a.x - b.x);
+	// The two content areas' own facing edges, not the group boxes' (which
+	// include each one's own tab strip/border -- the gutter is the gap
+	// between the two boxes themselves, already what groupBoxes reads).
+	const gap = right!.x - (left!.x + left!.width);
+	expect(Math.abs(gap - SPACED_THEME_GUTTER_PX)).toBeLessThan(4);
+});
+
+test("23b. (dark mode) the gutter is geometrically present but must also be VISIBLE -- .dv-shell (the gutter's own fill) must differ from a pane's own background, not just exist as a gap", async ({ page }) => {
+	await page.evaluate(() => localStorage.setItem("zodiac.theme", "dark"));
+	await page.reload();
+	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
+
+	await dockViaClick(page);
+	await dockViaDrag(page, groupContent(page, 0), 0.9, 0.5);
+	await expect(groups(page)).toHaveCount(2);
+
+	const colors = await page.evaluate(() => ({
+		shell: getComputedStyle(document.querySelector(".dv-shell")!).backgroundColor,
+		content: getComputedStyle(document.querySelector(".dv-content-container")!).backgroundColor,
+	}));
+	// The actual reported bug: these were identical (rgb(30,30,30) both), so
+	// the geometrically-real 10px gutter painted the exact same color as the
+	// panes on either side of it -- invisible, not just narrow.
+	expect(colors.shell).not.toBe(colors.content);
+});
+
+test("24. Dock Ruler: the frame's own live mark lines up with the in-content shade's own split boundary", async ({ page }) => {
+	await dockViaClick(page);
+	const content = groupContent(page, 0);
+	const box = (await content.boundingBox())!;
+	const quarterX = box.x + box.width / 4;
+	const midY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	await activityGlyph(page).dispatchEvent("dragstart", { dataTransfer });
+	await content.dispatchEvent("dragenter", { dataTransfer, clientX: quarterX, clientY: midY });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
+	await expect(page.getByText("1/4").first()).toBeVisible();
+
+	// The shade's own boundary: docking left, its right edge is the split
+	// line; the shade always starts flush with the group's own left edge in
+	// that case, so its right edge is left + width.
+	const shadeBox = (await page.getByTestId("dock-ruler-shade").first().boundingBox())!;
+	const shadeBoundaryX = shadeBox.x + shadeBox.width;
+
+	// The frame's own live mark, in the same page-space coordinates.
+	const markBox = (await page.getByTestId("dock-ruler-mark").first().boundingBox())!;
+	const markX = markBox.x;
+
+	expect(Math.abs(markX - shadeBoundaryX)).toBeLessThan(2);
+
+	await activityGlyph(page).dispatchEvent("dragend", { dataTransfer });
+});
+
+// Real-mouse variants of 23/24 -- dispatchEvent is a single scripted JS tick
+// per event, so it can't reproduce a timing/staleness race a genuinely
+// continuous drag might. Same invariants, driven by real page.mouse motion.
+
+test("25. (real mouse) Two side-by-side panes from a plain edge drag keep the Spaced theme's own gutter between them", async ({ page }) => {
+	await dockViaClick(page);
+	const original = groupContent(page, 0);
+	await realMouseDrag(page, activityGlyph(page), original, { x: 0.9, y: 0.5 });
+
+	await expect(groups(page)).toHaveCount(2);
+	const [left, right] = (await groupBoxes(page)).sort((a, b) => a.x - b.x);
+	const gap = right!.x - (left!.x + left!.width);
+	expect(Math.abs(gap - SPACED_THEME_GUTTER_PX)).toBeLessThan(4);
+});
+
+test("26. (real mouse) Dock Ruler: the frame's own live mark lines up with the in-content shade's own split boundary, sampled mid-drag", async ({ page }) => {
+	await dockViaClick(page);
+	const content = groupContent(page, 0);
+	const box = (await content.boundingBox())!;
+	const sourceBox = (await activityGlyph(page).boundingBox())!;
+	const tx = box.x + box.width / 4;
+	const ty = box.y + box.height / 2;
+
+	await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 10, sourceBox.y + sourceBox.height / 2 + 10, { steps: 5 });
+	await page.mouse.move(tx, ty, { steps: 20 });
+	await page.mouse.move(tx, ty);
+	await expect(page.getByText("1/4").first()).toBeVisible();
+
+	const shadeBox = (await page.getByTestId("dock-ruler-shade").first().boundingBox())!;
+	const shadeBoundaryX = shadeBox.x + shadeBox.width;
+	const markBox = (await page.getByTestId("dock-ruler-mark").first().boundingBox())!;
+
+	expect(Math.abs(markBox.x - shadeBoundaryX)).toBeLessThan(2);
+
+	await page.mouse.up();
+});
+
+test("24b. dockview's own native per-group content overlay (.dv-drop-target-content) must stay hidden while the Dock Ruler is active -- it carries .dv-drop-target-anchor too, so it's exempted by the same rule that deliberately keeps the ROOT-level edge overlay visible mid-drag, and shows its own independently-computed quadrant preview instead of agreeing with the Ruler", async ({ page }) => {
+	await dockViaClick(page);
+	const content = groupContent(page, 0);
+	const box = (await content.boundingBox())!;
+	const quarterX = box.x + box.width / 4; // comfortably off-center, well past the Ruler's own small dead-zone -- not near any root edge
+	const midY = box.y + box.height / 2;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	await activityGlyph(page).dispatchEvent("dragstart", { dataTransfer });
+	await content.dispatchEvent("dragenter", { dataTransfer, clientX: quarterX, clientY: midY });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: quarterX, clientY: midY });
+	await expect(page.getByTestId("dock-ruler-shade")).toBeVisible(); // our own Ruler IS active for this hover
+
+	await expect(page.locator(".dv-drop-target-content")).toBeHidden();
+
+	await activityGlyph(page).dispatchEvent("dragend", { dataTransfer });
+});
+
+test("27. Matches the exact reported screenshot's own shape: 3 tabs stacked into one group by repeated click-to-dock, then a 4th split off into a second group -- still keeps the gutter", async ({ page }) => {
+	await dockViaClick(page);
+	await activityGlyph(page).click();
+	await activityGlyph(page).click();
+	await expect(groups(page)).toHaveCount(1);
+	await expect(tabs(page)).toHaveCount(3);
+
+	await dockViaDrag(page, groupContent(page, 0), 0.9, 0.5);
+	await expect(groups(page)).toHaveCount(2);
+	await expect(tabs(page)).toHaveCount(4);
+
+	const [left, right] = (await groupBoxes(page)).sort((a, b) => a.x - b.x);
+	const gap = right!.x - (left!.x + left!.width);
+	expect(Math.abs(gap - SPACED_THEME_GUTTER_PX)).toBeLessThan(4);
+});
