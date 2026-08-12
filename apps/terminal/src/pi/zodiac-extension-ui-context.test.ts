@@ -1,8 +1,8 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import { createAlignmentExtensionUIContext, type AlignmentExtensionUIContextHost } from "./alignment-extension-ui-context.js";
+import { createZodiacExtensionUIContext, type ZodiacExtensionUIContextHost } from "./zodiac-extension-ui-context.js";
 
-function fakeHost(rows = 24): AlignmentExtensionUIContextHost & { shown: Component[]; hidden: number; refreshCount: number } {
+function fakeHost(rows = 24): ZodiacExtensionUIContextHost & { shown: Component[]; hidden: number; refreshCount: number } {
 	const host = {
 		shown: [] as Component[],
 		hidden: 0,
@@ -27,11 +27,11 @@ function componentRendering(lines: string[]): Component {
 	return { render: () => lines, invalidate: () => {} };
 }
 
-describe("createAlignmentExtensionUIContext", () => {
+describe("createZodiacExtensionUIContext", () => {
 	describe("custom()", () => {
 		it("mounts the factory's returned Component via the host and resolves once done() fires", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			let capturedDone: ((result: string) => void) | undefined;
 			const promise = ctx.custom<string>((_tui, _theme, _keybindings, done) => {
 				capturedDone = done;
@@ -47,7 +47,7 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("supports an async factory (a Promise-returning custom() call), matching the real interface's own signature", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.custom<undefined>(async (_tui, _theme, _keybindings, done) => {
 				await Promise.resolve();
 				const component = componentRendering(["async mounted"]);
@@ -61,7 +61,7 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("fakeTui.requestRender() calls back into the host's own refresh(), and terminal.rows reads live from the host, not a snapshot", async () => {
 			const host = fakeHost(40);
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			let observedRowsAtCall: number | undefined;
 			const promise = ctx.custom<undefined>((tui, _theme, _keybindings, done) => {
 				tui.requestRender();
@@ -76,7 +76,7 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("theme.fg() emits real SGR codes for a syntax color a real editor factory calls, recoverable by parseAnsiLine", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			let styled: string | undefined;
 			const promise = ctx.custom<undefined>((_tui, theme, _keybindings, done) => {
 				styled = theme.fg("syntaxKeyword", "const");
@@ -103,7 +103,7 @@ describe("createAlignmentExtensionUIContext", () => {
 	describe("select()", () => {
 		it("resolves with the chosen option once Enter is pressed after moving the selection", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.select("Pick one", ["alpha", "beta"]);
 			await Promise.resolve();
 			const mounted = host.shown[0]!;
@@ -114,14 +114,14 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("resolves undefined immediately for an empty option list, without mounting anything", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			await expect(ctx.select("Pick one", [])).resolves.toBeUndefined();
 			expect(host.shown).toHaveLength(0);
 		});
 
 		it("resolves undefined once Escape is pressed", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.select("Pick one", ["alpha"]);
 			await Promise.resolve();
 			host.shown[0]!.handleInput?.(ESCAPE);
@@ -132,7 +132,7 @@ describe("createAlignmentExtensionUIContext", () => {
 	describe("confirm()", () => {
 		it("resolves true when Enter is pressed on the default (first) choice, Yes", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.confirm("Delete?", "This cannot be undone");
 			await Promise.resolve();
 			host.shown[0]!.handleInput?.(ENTER);
@@ -141,7 +141,7 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("resolves false when the user moves down to No and presses Enter", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.confirm("Delete?", "This cannot be undone");
 			await Promise.resolve();
 			const mounted = host.shown[0]!;
@@ -154,7 +154,7 @@ describe("createAlignmentExtensionUIContext", () => {
 	describe("input()", () => {
 		it("resolves with the typed value once Enter is pressed", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.input("Name?");
 			await Promise.resolve();
 			const mounted = host.shown[0]!;
@@ -165,7 +165,7 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("resolves undefined once Escape is pressed", async () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			const promise = ctx.input("Name?");
 			await Promise.resolve();
 			host.shown[0]!.handleInput?.(ESCAPE);
@@ -176,7 +176,7 @@ describe("createAlignmentExtensionUIContext", () => {
 	describe("no-op members, matching pi-coding-agent's own noOpUIContext defaults", () => {
 		it("notify/setStatus/setWidget/etc never throw and do nothing observable", () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			expect(() => ctx.notify("hi")).not.toThrow();
 			expect(() => ctx.setStatus("k", "v")).not.toThrow();
 			expect(() => ctx.setWidget("k", undefined)).not.toThrow();
@@ -189,7 +189,7 @@ describe("createAlignmentExtensionUIContext", () => {
 
 		it("theme getter returns something with a working fg()", () => {
 			const host = fakeHost();
-			const ctx = createAlignmentExtensionUIContext(host);
+			const ctx = createZodiacExtensionUIContext(host);
 			expect(ctx.theme.fg("error", "boom")).toContain("boom");
 		});
 	});

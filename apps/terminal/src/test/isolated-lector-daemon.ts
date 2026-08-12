@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 /**
  * Lector's own daemon unconditionally constructs a PushChannel (WebSocket-upgrade support),
  * which only Bun provides -- see startLectorDaemon's own "requires the Bun runtime" failure
- * under Node. Alignment's own test runner is Node/Vitest, so a real isolated daemon here must
+ * under Node. Zodiac's own test runner is Node/Vitest, so a real isolated daemon here must
  * be a genuine separate Bun process, exactly like a real deployment -- never in-process.
  */
 function lectorCliPath(): string {

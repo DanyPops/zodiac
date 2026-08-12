@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ContributionReadBoundsSchema, ContributionResourceReferenceSchema, type AlignmentContribution, type ContributionHost } from "./contributions.js";
+import { ContributionReadBoundsSchema, ContributionResourceReferenceSchema, type ZodiacContribution, type ContributionHost } from "./contributions.js";
 
 describe("package contribution contract", () => {
   it("bounds framework-neutral resource references and reads", () => {
@@ -15,7 +15,7 @@ describe("package contribution contract", () => {
       registerCommand: command => { registrations.push(command.id); return () => registrations.splice(registrations.indexOf(command.id), 1); },
       registerResourceProvider: provider => { registrations.push(provider.scheme); return () => registrations.splice(registrations.indexOf(provider.scheme), 1); },
     };
-    const contribution: AlignmentContribution = {
+    const contribution: ZodiacContribution = {
       describe: () => ({ id: "example", title: "Example", commands: [], resourceSchemes: [] }),
       activate: () => { host.registerCommand({ id: "example.open", title: "Open", execute: async () => ({ ok: false, code: "not-ready", message: "Not ready" }) }); },
       dispose: () => { registrations.length = 0; },

@@ -134,12 +134,12 @@ describe("TerminalPaneComponent -- a real shell mounted natively, no Lector, no 
 	});
 
 	/**
-	 * A real, user-reported bug: pressing Ctrl+] in a real running Alignment process did nothing.
+	 * A real, user-reported bug: pressing Ctrl+] in a real running Zodiac process did nothing.
 	 * Root cause confirmed directly (not assumed): every OTHER keybinding in this codebase
 	 * (keymap.ts's own Ctrl+E/Ctrl+O/Ctrl+T) is recognized via matchesKey(data, Key.ctrl(...)) --
 	 * a matcher proven to handle both the legacy raw C0 control byte AND the Kitty keyboard
 	 * protocol's own CSI-u encoding of the same chord (a real terminal negotiating Kitty protocol
-	 * with Alignment can send \x1b[93;5u for Ctrl+] instead of the raw \x1d byte -- this codebase's
+	 * with Zodiac can send \x1b[93;5u for Ctrl+] instead of the raw \x1d byte -- this codebase's
 	 * own keymap.ts already documents exactly this class of encoding difference for other chords).
 	 * TerminalPaneComponent's own exit check used a naive `data === "\x1d"` literal comparison
 	 * instead, silently forwarding a Kitty-encoded Ctrl+] straight to the child shell as if it were

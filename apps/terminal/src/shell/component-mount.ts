@@ -13,10 +13,10 @@ import { parseAnsiLine } from "./ansi-segments.js";
  *
  * This is the whole trick that lets an extension-mounted Component (e.g.
  * pi-lector's `ModalEditorComponent`, shown via
- * `ExtensionUIContext.custom()`) actually get pixels onto Alignment's own
+ * `ExtensionUIContext.custom()`) actually get pixels onto Zodiac's own
  * cell grid: it renders itself exactly as it would for a real pi-tui `TUI`
  * (plain strings with embedded SGR escapes), and this adapter is the only
- * piece that needs to know both that convention and Alignment's own grid
+ * piece that needs to know both that convention and Zodiac's own grid
  * model -- the Component itself never does.
  *
  * `paintText` already clips per cell against both the frame's real bounds

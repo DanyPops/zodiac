@@ -7,7 +7,7 @@ import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";
 import { bootstrapWorkspace } from "./bootstrap/workspace-bootstrap.js";
 import { createLectorHost, type LectorHost } from "./lector/lector-host.js";
-import { createAlignmentExtensionUIContext } from "./pi/alignment-extension-ui-context.js";
+import { createZodiacExtensionUIContext } from "./pi/zodiac-extension-ui-context.js";
 import { startFooterChat } from "./pi/start-footer-chat.js";
 import { SemanticShellApplication } from "./shell/application.js";
 
@@ -19,7 +19,7 @@ function resolveAgentCwd(classified: ClassifiedPath): string {
 }
 
 function fail(message: string): void {
-  process.stderr.write(`Alignment: ${message}\n`);
+  process.stderr.write(`Zodiac: ${message}\n`);
   process.exitCode = 1;
 }
 
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   if (classified.kind === "denied") return fail(`permission denied: ${classified.path}`);
   if (classified.kind === "unsupported") return fail(`not a file or directory: ${classified.path}`);
 
-  const world = createWorldStore(worldId("alignment"));
+  const world = createWorldStore(worldId("zodiac"));
   let host: LectorHost | undefined;
   // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
   // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch
@@ -50,14 +50,14 @@ async function main(): Promise<void> {
   }
 
   // The application must exist *before* startFooterChat() runs:
-  // AlignmentExtensionUIContext needs a real host to route .custom() through,
+  // ZodiacExtensionUIContext needs a real host to route .custom() through,
   // but startFooterChat() is also what produces the FooterChatController the
   // application itself renders -- see attachFooterChat's own doc comment for
   // why this order (application, then uiContext, then startFooterChat, then
   // attach) is the one that actually breaks that cycle.
   const terminal = new ProcessTerminal();
   const application = new SemanticShellApplication(world, terminal, undefined, host, rootPath);
-  const uiContext = createAlignmentExtensionUIContext(application);
+  const uiContext = createZodiacExtensionUIContext(application);
   const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext });
   if (chat) application.attachFooterChat(chat.footerChat);
   let stopping = false;
@@ -87,16 +87,16 @@ async function main(): Promise<void> {
       // is real, meaningful input to whatever owns focus there (a footer
       // draft, or a mounted extension Component's own modal-editing Escape,
       // e.g. pi-lector's modal editor's insert-to-normal-mode transition) --
-      // never Alignment's own "quit" shortcut while either holds focus.
+      // never Zodiac's own "quit" shortcut while either holds focus.
       else if (matchesKey(data, Key.escape) && application.focusedRegion() !== "footer" && application.focusedRegion() !== "external") void stop();
       else application.handleInput(data);
     },
     () => application.resize(terminal.columns, terminal.rows),
   );
-  terminal.setTitle("Alignment");
+  terminal.setTitle("Zodiac");
   const boot = application.boot(terminal.columns, terminal.rows);
   if (!boot.ok) {
-    terminal.write(`\r\nAlignment failed to start: ${boot.error.message}\r\n`);
+    terminal.write(`\r\nZodiac failed to start: ${boot.error.message}\r\n`);
     void stop(1);
   }
   process.once("SIGTERM", () => void stop());

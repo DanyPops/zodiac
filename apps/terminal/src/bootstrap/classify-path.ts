@@ -16,7 +16,7 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
 /**
  * Classifies a single CLI path argument before any Lector I/O -- the boundary this slice's own
  * unit matrix targets. `undefined` (no argument given) is its own real outcome, not an error:
- * Alignment still boots its empty shell exactly as Slice 0 did. Every other outcome is resolved
+ * Zodiac still boots its empty shell exactly as Slice 0 did. Every other outcome is resolved
  * to an absolute path so a workspace/file identity never depends on the process's own cwd later.
  */
 export function classifyPath(rawArgument: string | undefined, cwd: string = process.cwd()): ClassifiedPath {

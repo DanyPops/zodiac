@@ -19,19 +19,19 @@ import { join } from "node:path";
  * the duplication cost is low compared to re-breaking every apps/web
  * test via vite.config.ts failing to load at all.
  */
-export function resolveAlignmentAgentDir(env: Record<string, string | undefined> = process.env): string {
-	const override = env.ALIGNMENT_PI_AGENT_DIR;
+export function resolveZodiacAgentDir(env: Record<string, string | undefined> = process.env): string {
+	const override = env.ZODIAC_PI_AGENT_DIR ?? env.ALIGNMENT_PI_AGENT_DIR;
 	if (override) return override;
-	return join(homedir(), ".alignment", "pi-agent");
+	return join(homedir(), ".zodiac", "pi-agent");
 }
 
-export interface SeedAlignmentAuthOptions {
+export interface SeedZodiacAuthOptions {
 	readonly agentDir: string;
 	readonly sourceAgentDir: string;
 }
 
-/** See @zodiac/server's seedAlignmentAuthOnce for the full doc comment -- identical behavior. */
-export function seedAlignmentAuthOnce(options: SeedAlignmentAuthOptions): void {
+/** See @zodiac/server's seedZodiacAuthOnce for the full doc comment -- identical behavior. */
+export function seedZodiacAuthOnce(options: SeedZodiacAuthOptions): void {
 	const destAuthPath = join(options.agentDir, "auth.json");
 	if (existsSync(destAuthPath)) return;
 	const sourceAuthPath = join(options.sourceAgentDir, "auth.json");

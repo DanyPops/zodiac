@@ -88,7 +88,7 @@ export function describeTerminalMismatch(expected: string, actual: string, maxCo
   ].join("; ");
 }
 
-/** Applies Alignment's bounded cell patches through Pi's public Terminal boundary. */
+/** Applies Zodiac's bounded cell patches through Pi's public Terminal boundary. */
 export class GridTerminal {
   private previous: GridFrame | undefined;
 

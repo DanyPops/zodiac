@@ -1,4 +1,4 @@
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "@zodiac/server/pi-agent-dir";
+import { resolveZodiacAgentDir, seedZodiacAuthOnce } from "@zodiac/server/pi-agent-dir";
 import { createInProcessAgentIntegration } from "@zodiac/pi";
 import {
 	createAgentSession,
@@ -16,19 +16,27 @@ import { createFooterChatController, type FooterChatController } from "./footer-
 export interface StartFooterChatOptions {
 	readonly cwd: string;
 	/**
-	 * Alignment's own namespaced Pi config/extension/session/auth directory --
+	 * Zodiac's own namespaced Pi config/extension/session/auth directory --
 	 * deliberately separate from the user's personal ~/.pi/agent (see
-	 * resolveAlignmentAgentDir's own doc comment for why). Defaults to
-	 * resolveAlignmentAgentDir(); injectable so tests never touch a real
+	 * resolveZodiacAgentDir's own doc comment for why). Defaults to
+	 * resolveZodiacAgentDir(); injectable so tests never touch a real
 	 * directory on the machine running them.
 	 */
 	readonly agentDir?: string;
 	/**
-	 * Where seedAlignmentAuthOnce copies an initial auth.json from. Defaults to
+	 * Where seedZodiacAuthOnce copies an initial auth.json from. Defaults to
 	 * the user's real ~/.pi/agent; injectable purely so tests never touch a
 	 * real developer machine's actual personal credentials directory.
 	 */
 	readonly sourceAgentDir?: string;
+	/**
+	 * Where seedZodiacAuthOnce's own *migration* copies an initial auth.json
+	 * from, if agentDir doesn't have one yet -- this product's own prior
+	 * namespaced dir, before the Alignment -> Zodiac rename. Defaults to
+	 * ~/.alignment/pi-agent; injectable for the same hermetic-test reason as
+	 * sourceAgentDir.
+	 */
+	readonly legacyAlignmentAgentDir?: string;
 	/** Injection points for hermetic tests -- every field defaults to exactly the production behavior when omitted. */
 	readonly modelRuntime?: ModelRuntime;
 	readonly resourceLoader?: ResourceLoader;
@@ -36,11 +44,11 @@ export interface StartFooterChatOptions {
 	readonly settingsManager?: SettingsManager;
 	/**
 	 * Routes an extension's `.custom()`/select()/confirm()/input() UI requests
-	 * (e.g. pi-lector's `/editor`) to Alignment's own mounted-Component facade
-	 * (see createAlignmentExtensionUIContext) instead of pi-coding-agent's own
+	 * (e.g. pi-lector's `/editor`) to Zodiac's own mounted-Component facade
+	 * (see createZodiacExtensionUIContext) instead of pi-coding-agent's own
 	 * default `noOpUIContext`, which silently drops every such request. Built
 	 * from a real SemanticShellApplication in cli.ts, constructed *before* this
-	 * function runs -- see AlignmentExtensionUIContextHost's own doc comment
+	 * function runs -- see ZodiacExtensionUIContextHost's own doc comment
 	 * for why that ordering is unavoidable. Absent means extensions requesting
 	 * interactive UI silently no-op, exactly like today.
 	 */
@@ -50,31 +58,35 @@ export interface StartFooterChatOptions {
 /**
  * Constructs a real, live Pi conversation via @earendil-works/pi-coding-agent's
  * public SDK (createAgentSession) -- the "proper" in-process path, not a
- * subprocess. Uses Alignment's own namespaced agent directory (see
- * resolveAlignmentAgentDir), not the user's personal ~/.pi/agent -- so
- * Alignment's embedded session never sees whatever extensions the user has
+ * subprocess. Uses Zodiac's own namespaced agent directory (see
+ * resolveZodiacAgentDir), not the user's personal ~/.pi/agent -- so
+ * Zodiac's embedded session never sees whatever extensions the user has
  * personally `pkg_install`'d for their own CLI use (the concrete, real bug
  * that motivated this: an old transitive dependency of one such extension
- * emitted a Node deprecation warning inside Alignment's own process). The
- * very first time Alignment's own agent dir has no auth.json yet, one
+ * emitted a Node deprecation warning inside Zodiac's own process). The
+ * very first time Zodiac's own agent dir has no auth.json yet, one
  * credentials-only copy from the user's real ~/.pi/agent/auth.json seeds it
- * (seedAlignmentAuthOnce), so this doesn't silently lose access to
+ * (seedZodiacAuthOnce), so this doesn't silently lose access to
  * already-configured model credentials -- settings.json/extensions/sessions
  * are deliberately never copied. An in-memory SessionManager on top of that,
- * so opening Alignment's TUI never writes a new session file as a side
+ * so opening Zodiac's TUI never writes a new session file as a side
  * effect. Failure (no model configured, no network, ...) is not fatal to
- * the rest of Alignment booting -- the Footer just stays "unavailable", exactly
+ * the rest of Zodiac booting -- the Footer just stays "unavailable", exactly
  * like today's LectorHost activation failure path.
  */
 export async function startFooterChat(options: StartFooterChatOptions): Promise<{ footerChat: FooterChatController; session: AgentSession } | undefined> {
 	try {
-		const agentDir = options.agentDir ?? resolveAlignmentAgentDir();
-		// Only actually touches the filesystem in production: seedAlignmentAuthOnce
+		const agentDir = options.agentDir ?? resolveZodiacAgentDir();
+		// Only actually touches the filesystem in production: seedZodiacAuthOnce
 		// no-ops the instant <agentDir>/auth.json already exists, which every
 		// hermetic test's own injected modelRuntime/settingsManager/resourceLoader
-		// (bypassing this entirely) never reaches anyway.
+		// (bypassing this entirely) never reaches anyway. Two calls, not one --
+		// see @zodiac/server's seedZodiacAuthOnce doc comment for why chaining
+		// the Alignment -> Zodiac migration ahead of the usual personal-Pi-dir
+		// seed is safe.
 		if (!options.modelRuntime) {
-			seedAlignmentAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
+			seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.legacyAlignmentAgentDir ?? join(homedir(), ".alignment", "pi-agent") });
+			seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
 		}
 		const modelRuntime =
 			options.modelRuntime ??

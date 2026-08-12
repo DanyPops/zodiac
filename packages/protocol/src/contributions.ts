@@ -39,7 +39,7 @@ export interface ContributionDescription {
   readonly resourceSchemes: readonly string[];
 }
 
-export interface AlignmentContribution {
+export interface ZodiacContribution {
   describe(): ContributionDescription;
   activate(host: ContributionHost): void | Promise<void>;
   dispose(): void | Promise<void>;

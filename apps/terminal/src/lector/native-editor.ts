@@ -5,19 +5,19 @@ import type { Component } from "@earendil-works/pi-tui";
 import { Input } from "@earendil-works/pi-tui";
 import { nearestGitRoot } from "../bootstrap/nearest-git-root.js";
 import { workspaceIdFromReference } from "../bootstrap/workspace-bootstrap.js";
-import { createAlignmentEditorTheme, TitledComponent } from "../pi/alignment-extension-ui-context.js";
+import { createZodiacEditorTheme, TitledComponent } from "../pi/zodiac-extension-ui-context.js";
 import type { LectorHost } from "./lector-host.js";
 
 /**
- * Alignment's own native host surface for mounting a real Lector editor Component --
- * deliberately the same shape as AlignmentExtensionUIContextHost (showExternalComponent/
+ * Zodiac's own native host surface for mounting a real Lector editor Component --
+ * deliberately the same shape as ZodiacExtensionUIContextHost (showExternalComponent/
  * hideExternalComponent/refresh/terminalRows), since both ultimately mount into the exact same
  * SemanticShellApplication machinery, but this one has zero Pi-extension involvement: no
  * AgentSession, no ExtensionRunner, no session.prompt()/slash-command dispatch, no chat-history
  * side effect at all. See Doc "Alignment: host Lector's editor natively via mountComponent" for
- * why this exists as a second, independent path rather than reusing AlignmentExtensionUIContext
+ * why this exists as a second, independent path rather than reusing ZodiacExtensionUIContext
  * itself -- that facade is scoped to the generic in-process-AgentSession-extension case; this one
- * is Alignment's own first-party integration with Lector specifically.
+ * is Zodiac's own first-party integration with Lector specifically.
  */
 export interface NativeEditorHost {
 	showExternalComponent(component: Component): void;
@@ -116,10 +116,10 @@ function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, abs
  * ExtensionRunner, no Pi extension involvement at all. Resolves the file's nearest git root as
  * its Lector workspace (mirroring bootstrapWorkspace's own convention), opens both through the
  * existing lector-host.ts contribution commands, constructs a real ModalEditorComponent against
- * a fake tui/theme (the same real, working substitutes AlignmentExtensionUIContext already
+ * a fake tui/theme (the same real, working substitutes ZodiacExtensionUIContext already
  * proved live against this exact Component), and mounts it via host.showExternalComponent() --
  * the same full-viewport mechanism the Pi-extension-facade path already uses, reused here because
- * Alignment's TUI has no other Surface-hosting mechanism yet (see the Window/Surface-docking
+ * Zodiac's TUI has no other Surface-hosting mechanism yet (see the Window/Surface-docking
  * discussion this task deliberately excludes from scope).
  */
 export async function openLectorEditorNatively(host: NativeEditorHost, lectorHost: LectorHost, absolutePath: string): Promise<void> {
@@ -139,7 +139,7 @@ export async function openLectorEditorNatively(host: NativeEditorHost, lectorHos
 	if (content === undefined) throw new Error(`Lector returned an unrecognized file read for "${absolutePath}"`);
 
 	const editorHost = createLectorEditorHost(lectorHost, workspaceId, absolutePath, relativePath);
-	const theme = createAlignmentEditorTheme();
+	const theme = createZodiacEditorTheme();
 	await new Promise<void>((resolve) => {
 		function done(): void {
 			host.hideExternalComponent();
@@ -147,7 +147,7 @@ export async function openLectorEditorNatively(host: NativeEditorHost, lectorHos
 			resolve();
 		}
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- same pragmatic
-		// cast AlignmentExtensionUIContext already relies on: ModalEditorComponent's real coupling
+		// cast ZodiacExtensionUIContext already relies on: ModalEditorComponent's real coupling
 		// surface is exactly {requestRender, terminal.rows} and {fg, bg}, proven by direct source
 		// read, not pi-coding-agent's full TUI/Theme classes (which have private fields no plain
 		// object can satisfy structurally).
@@ -159,7 +159,7 @@ export async function openLectorEditorNatively(host: NativeEditorHost, lectorHos
 
 /**
  * Prompts for a file path via a real mounted Input Component (the same primitive
- * AlignmentExtensionUIContext.input() uses), then opens it natively. The interim invocation UI
+ * ZodiacExtensionUIContext.input() uses), then opens it natively. The interim invocation UI
  * until a real file browser exists (deliberately out of scope for this task).
  */
 export async function promptAndOpenLectorEditorNatively(host: NativeEditorHost, lectorHost: LectorHost): Promise<void> {

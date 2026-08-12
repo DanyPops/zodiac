@@ -3,13 +3,13 @@ import type { Component, SelectListTheme, TUI } from "@earendil-works/pi-tui";
 import { Input, SelectList, type SelectItem } from "@earendil-works/pi-tui";
 
 /**
- * Everything AlignmentExtensionUIContext needs from a real
+ * Everything ZodiacExtensionUIContext needs from a real
  * SemanticShellApplication, narrowed to exactly this facade's own
  * requirements -- see SemanticShellApplication's own showExternalComponent/
  * hideExternalComponent/terminalRows/refresh doc comments for how each maps
  * onto the real shell.
  */
-export interface AlignmentExtensionUIContextHost {
+export interface ZodiacExtensionUIContextHost {
 	showExternalComponent(component: Component): void;
 	hideExternalComponent(): void;
 	refresh(): void;
@@ -59,7 +59,7 @@ function sgrFg(code: number, text: string): string {
  * surface).
  */
 /** Exported for reuse by any other native (non-Pi-extension) host that needs the same small, real theme substitute -- e.g. native-editor.ts's own direct ModalEditorComponent construction. */
-export function createAlignmentEditorTheme(): { fg(color: string, text: string): string; bg(color: string, text: string): string } {
+export function createZodiacEditorTheme(): { fg(color: string, text: string): string; bg(color: string, text: string): string } {
 	return {
 		fg(color, text) {
 			const code = THEME_COLOR_CODE[color];
@@ -85,7 +85,7 @@ function selectListTheme(): SelectListTheme {
 }
 
 /** Prepends a bold title row above an inner Component's own rendered lines and forwards input -- SelectList/Input have no title concept of their own, and this is the one piece select()/confirm()/input() all three need in common. */
-/** Exported for the same reuse reason as createAlignmentEditorTheme above. */
+/** Exported for the same reuse reason as createZodiacEditorTheme above. */
 export class TitledComponent implements Component {
 	constructor(
 		private readonly title: string,
@@ -103,7 +103,7 @@ export class TitledComponent implements Component {
 }
 
 /**
- * Alignment's real, working ExtensionUIContext for the in-process
+ * Zodiac's real, working ExtensionUIContext for the in-process
  * AgentSession path -- built once the real coupling surface was traced
  * end to end (not assumed): `TUI`/`KeybindingsManager` are real
  * pi-coding-agent/pi-tui classes with private fields, so no object literal
@@ -122,7 +122,7 @@ export class TitledComponent implements Component {
  * no-op matching pi-coding-agent's own `noOpUIContext` defaults -- real,
  * scoped follow-up work, not an oversight.
  */
-export function createAlignmentExtensionUIContext(host: AlignmentExtensionUIContextHost): ExtensionUIContext {
+export function createZodiacExtensionUIContext(host: ZodiacExtensionUIContextHost): ExtensionUIContext {
 	async function custom<T>(
 		factory: (tui: TUI, theme: Theme, keybindings: KeybindingsManager, done: (result: T) => void) => (Component & { dispose?(): void }) | Promise<Component & { dispose?(): void }>,
 	): Promise<T> {
@@ -139,7 +139,7 @@ export function createAlignmentExtensionUIContext(host: AlignmentExtensionUICont
 			// (both name this factory parameter `_keybindings`) -- an empty
 			// object is enough; nothing calls a method on it.
 			const keybindings = {} as unknown as KeybindingsManager;
-			const theme = createAlignmentEditorTheme() as unknown as Theme;
+			const theme = createZodiacEditorTheme() as unknown as Theme;
 			function done(result: T): void {
 				host.hideExternalComponent();
 				host.refresh();
@@ -203,7 +203,7 @@ export function createAlignmentExtensionUIContext(host: AlignmentExtensionUICont
 		setEditorComponent: () => {},
 		getEditorComponent: () => undefined,
 		get theme() {
-			return createAlignmentEditorTheme() as unknown as Theme;
+			return createZodiacEditorTheme() as unknown as Theme;
 		},
 		getAllThemes: () => [],
 		getTheme: () => undefined,

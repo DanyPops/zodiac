@@ -31,7 +31,7 @@ export interface BootstrappedWorkspace {
 	/** Local-only: used to resolve a bare file's path relative to its workspace root. Never enters World state -- see workspaceId. */
 	readonly rootPath: string;
 	readonly rootTitle: string;
-	/** Lector's own opaque, content-derived workspace identity (see deriveWorkspaceId) -- the only identifier that may become an Alignment WorkspaceId. */
+	/** Lector's own opaque, content-derived workspace identity (see deriveWorkspaceId) -- the only identifier that may become a Zodiac WorkspaceId. */
 	readonly workspaceId: string;
 	readonly workspace: ContributionResourceReference;
 	readonly kind: "directory" | "file";

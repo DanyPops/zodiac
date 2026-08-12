@@ -19,5 +19,18 @@ export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions }
 
 export type { SurfaceRenderer } from "./renderer.js";
 
-export type { AlignmentContribution, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
+export type { ZodiacContribution, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
 export { ContributionReadBoundsSchema, ContributionResourceReferenceSchema } from "./contributions.js";
+// Compatibility alias, not dead weight: the vendored, unpublished
+// @danypops/alignment-lector's own frozen source (repacked upstream, not
+// ours to edit) does `import type { AlignmentContribution } from
+// "@alignment/surface-protocol"` -- and the root package.json's own
+// override resolves that literal package name to *this* package's real
+// content (see apps/terminal/vendor/README.md for the full override
+// story). A plain rename without this alias breaks that external import
+// outright (a real, confirmed `tsc` error: "has no exported member
+// 'AlignmentContribution'"), even though every one of *our own* call
+// sites already uses ZodiacContribution. TypeScript's interfaces are
+// structurally typed, so this costs nothing beyond the export line
+// itself -- both names describe the exact same type.
+export type { ZodiacContribution as AlignmentContribution } from "./contributions.js";

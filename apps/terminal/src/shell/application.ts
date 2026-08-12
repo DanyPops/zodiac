@@ -21,7 +21,7 @@ export class SemanticShellApplication {
   private width = 0;
   private height = 0;
 
-  /** Absent means no live Pi integration was constructed yet (no model configured, construction failed, still awaiting startFooterChat's own async setup, ...) -- the Footer renders its existing "unavailable" state and Enter/typing in the footer are no-ops. Not readonly: startFooterChat's own bindExtensions() call (which needs a real AlignmentExtensionUIContext, which needs a real SemanticShellApplication to route custom()'s mounted Components through) necessarily resolves *before* this application even exists in cli.ts's own construction order -- see attachFooterChat's own doc comment. */
+  /** Absent means no live Pi integration was constructed yet (no model configured, construction failed, still awaiting startFooterChat's own async setup, ...) -- the Footer renders its existing "unavailable" state and Enter/typing in the footer are no-ops. Not readonly: startFooterChat's own bindExtensions() call (which needs a real ZodiacExtensionUIContext, which needs a real SemanticShellApplication to route custom()'s mounted Components through) necessarily resolves *before* this application even exists in cli.ts's own construction order -- see attachFooterChat's own doc comment. */
   private footerChat?: FooterChatController;
 
   constructor(
@@ -39,7 +39,7 @@ export class SemanticShellApplication {
 
   /**
    * Attaches a FooterChatController constructed *after* this application
-   * already exists -- the real cli.ts sequencing: AlignmentExtensionUIContext
+   * already exists -- the real cli.ts sequencing: ZodiacExtensionUIContext
    * needs a live SemanticShellApplication before startFooterChat() calls
    * session.bindExtensions({ uiContext }), but startFooterChat() is also what
    * produces the FooterChatController itself. Breaking that cycle means
@@ -53,11 +53,11 @@ export class SemanticShellApplication {
   boot(width: number, height: number): Outcome<GridUpdate> { this.width = width; this.height = height; return this.render(); }
   resize(width: number, height: number): Outcome<GridUpdate> { this.width = width; this.height = height; return this.render(); }
   focusedRegion(): ShellFocus { return this.shell.focusedRegion(); }
-  /** Current terminal row count -- what AlignmentExtensionUIContext's fakeTui.terminal.rows reads live on every custom() call, matching a real TUI.terminal.rows read fresh each time rather than cached at mount. */
+  /** Current terminal row count -- what ZodiacExtensionUIContext's fakeTui.terminal.rows reads live on every custom() call, matching a real TUI.terminal.rows read fresh each time rather than cached at mount. */
   terminalRows(): number { return this.height; }
   /** Gives an extension-mounted Component (ExtensionUIContext.custom()) full ownership of the viewport and every keystroke -- see SemanticShell.enterExternal's own doc comment. Callers must call refresh() afterward to actually paint it; this only changes state. */
   showExternalComponent(component: Component): void { this.shell.enterExternal(component); }
-  /** Hands focus and the viewport back to Alignment's own chrome -- see SemanticShell.exitExternal's own doc comment. Callers must call refresh() afterward. */
+  /** Hands focus and the viewport back to Zodiac's own chrome -- see SemanticShell.exitExternal's own doc comment. Callers must call refresh() afterward. */
   hideExternalComponent(): void { this.shell.exitExternal(); }
 
   /** Re-renders at the current size without changing focus or layout -- what a footerChat subscriber calls when a streaming event changes what the Footer should show, independent of any real keyboard input. */
@@ -112,7 +112,7 @@ export class SemanticShellApplication {
     void promptAndOpenLectorEditorNatively(this, this.lectorHost).catch(() => {
       // Opening failed before any Component ever mounted (e.g. the initial workspace/file open
       // itself rejected) -- nothing is showing external focus in that case, so just refresh back
-      // to Alignment's own chrome instead of leaving a dead promise with no user-visible outcome.
+      // to Zodiac's own chrome instead of leaving a dead promise with no user-visible outcome.
       this.hideExternalComponent();
       this.refresh();
     });

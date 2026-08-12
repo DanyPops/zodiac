@@ -159,10 +159,11 @@ describe("startFooterChat", () => {
 			root = undefined;
 		});
 
-		it("seeds Alignment's own agentDir auth.json from sourceAgentDir on first run, via the real (non-injected) ModelRuntime construction path", async () => {
-			root = mkdtempSync(join(tmpdir(), "alignment-footer-chat-"));
+		it("seeds Zodiac's own agentDir auth.json from sourceAgentDir on first run, via the real (non-injected) ModelRuntime construction path", async () => {
+			root = mkdtempSync(join(tmpdir(), "zodiac-footer-chat-"));
 			const sourceAgentDir = join(root, "personal-pi-agent");
-			const agentDir = join(root, "alignment-pi-agent");
+			const legacyAlignmentAgentDir = join(root, "legacy-alignment-pi-agent");
+			const agentDir = join(root, "zodiac-pi-agent");
 			mkdirSync(sourceAgentDir, { recursive: true });
 			writeFileSync(join(sourceAgentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "personal-real-key" } }));
 
@@ -170,6 +171,7 @@ describe("startFooterChat", () => {
 				cwd: process.cwd(),
 				agentDir,
 				sourceAgentDir,
+				legacyAlignmentAgentDir,
 				resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir, noExtensions: true }),
 				sessionManager: SessionManager.inMemory(),
 				settingsManager: SettingsManager.inMemory(),
@@ -180,9 +182,10 @@ describe("startFooterChat", () => {
 		});
 
 		it("never touches the filesystem for seeding when a modelRuntime is already injected (every other test in this file)", async () => {
-			root = mkdtempSync(join(tmpdir(), "alignment-footer-chat-"));
+			root = mkdtempSync(join(tmpdir(), "zodiac-footer-chat-"));
 			const sourceAgentDir = join(root, "personal-pi-agent");
-			const agentDir = join(root, "alignment-pi-agent");
+			const legacyAlignmentAgentDir = join(root, "legacy-alignment-pi-agent");
+			const agentDir = join(root, "zodiac-pi-agent");
 			mkdirSync(sourceAgentDir, { recursive: true });
 			writeFileSync(join(sourceAgentDir, "auth.json"), "{}");
 
@@ -192,6 +195,7 @@ describe("startFooterChat", () => {
 				cwd: process.cwd(),
 				agentDir,
 				sourceAgentDir,
+				legacyAlignmentAgentDir,
 				modelRuntime,
 				resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir, noExtensions: true }),
 				sessionManager: SessionManager.inMemory(),

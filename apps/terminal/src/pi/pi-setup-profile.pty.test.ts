@@ -35,6 +35,6 @@ describe("real CLI boot with a real per-workspace pi-setup.json/profiles.json, a
 		await terminal.waitForText("Chat", 20_000);
 		const snapshot = terminal.snapshot();
 		expect(snapshot).toContain("Chat");
-		expect(snapshot).not.toContain("Alignment: ");
+		expect(snapshot).not.toContain("Zodiac: ");
 	}, 25_000);
 });

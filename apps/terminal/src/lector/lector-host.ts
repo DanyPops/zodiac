@@ -1,6 +1,6 @@
 import { createLectorAlignmentContribution, type LectorOperations } from "@danypops/alignment-lector";
 import type {
-	AlignmentContribution,
+	ZodiacContribution,
 	ContributionCommand,
 	ContributionOutcome,
 	ContributionReadBounds,
@@ -9,7 +9,7 @@ import type {
 } from "@zodiac/protocol";
 
 /**
- * Alignment's own real ContributionHost for `@danypops/alignment-lector` -- the one production
+ * Zodiac's own real ContributionHost for `@danypops/alignment-lector` -- the one production
  * seam every IDE-PoC slice (workspace, editor, semantic navigation, call graph, Git) calls
  * through. A test's own inline `host()` helper (see the Lector package's own contract tests) is
  * this exact shape; this is that same object made real and reusable, not a parallel design.
@@ -21,7 +21,7 @@ export interface LectorHost {
 	read(resource: ContributionResourceReference, bounds: ContributionReadBounds): Promise<ContributionOutcome<unknown>>;
 }
 
-export function createLectorHost(options: { operations?: LectorOperations; contribution?: AlignmentContribution } = {}): LectorHost {
+export function createLectorHost(options: { operations?: LectorOperations; contribution?: ZodiacContribution } = {}): LectorHost {
 	const contribution = options.contribution ?? createLectorAlignmentContribution({ operations: options.operations });
 	const commands = new Map<string, ContributionCommand>();
 	let provider: ContributionResourceProvider | undefined;

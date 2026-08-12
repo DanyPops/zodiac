@@ -365,7 +365,7 @@ export class SemanticShell {
     const bordered = paintBorders(frame, t, width, height, focus, { base: MUTED, active: BORDER_ACTIVE });
     if (!bordered.ok) return bordered;
     // Pillar names ride their own top-border segment, the same slot
-    // "Alignment" used to sit in, rather than a separate content heading one
+    // "Zodiac" used to sit in, rather than a separate content heading one
     // row down -- one fewer thing painted per frame, and it reads exactly
     // like tmux/zellij's own pane-title-in-the-border convention.
     const leftPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "left");

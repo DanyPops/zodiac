@@ -52,7 +52,7 @@ async function render(width: number, height: number, focusSteps = 0) {
   return { shell, frame: frame.value, terminal: await renderToTerminal([encoded.value], { cols: width, rows: height }) };
 }
 
-describe("semantic empty Alignment shell", () => {
+describe("semantic empty Zodiac shell", () => {
   it.each([[60, 12], [80, 24], [120, 40]])("renders all five semantic regions at %ix%i", async (width, height) => {
     const result = await render(width, height);
     try {
@@ -70,10 +70,10 @@ describe("semantic empty Alignment shell", () => {
     const result = await render(80, 24);
     try {
       const lines = result.terminal.plainLines();
-      // The top border row carries both pillar names now -- "Alignment" is gone entirely.
+      // The top border row carries both pillar names now -- "Zodiac" is gone entirely.
       expect(lines[0]).toContain("Workspaces");
       expect(lines[0]).toContain("Integrations");
-      expect(lines[0]).not.toContain("Alignment");
+      expect(lines[0]).not.toContain("Zodiac");
       // The outer bottom border row carries "Chat", centered.
       expect(lines.at(-1)).toContain("Chat");
       // Each pillar's own content starts immediately at row 1 (no heading row

@@ -10,13 +10,15 @@ const FIXTURE = fileURLToPath(new URL("../../test/fixtures/fake-pi-rpc.mjs", imp
 const ENV_PROBE_FIXTURE = fileURLToPath(new URL("../../test/fixtures/env-probe-rpc.mjs", import.meta.url));
 
 let session: PiRpcSession | undefined;
-// A real fixture directory pair every test in this file passes explicitly as
-// agentDir/sourceAgentDir -- without this, spawnPiRpcSession's own default
-// (resolveAlignmentAgentDir() + the machine's real ~/.pi/agent) would run a
-// real one-time auth.json copy against this developer machine's actual
-// personal Pi directory on every test run. The fixture command here is a
-// plain `node` script, not `pi`, so PI_CODING_AGENT_DIR is inert either way
-// -- these dirs exist purely to keep the seeding side effect hermetic.
+// A real fixture directory triple every test in this file passes explicitly
+// as agentDir/sourceAgentDir/legacyAlignmentAgentDir -- without this,
+// spawnPiRpcSession's own default (resolveZodiacAgentDir() + the machine's
+// real ~/.pi/agent + the machine's real ~/.alignment/pi-agent, if this
+// product's prior-named build ever ran here) would run a real one-time
+// auth.json copy against this developer machine's actual personal
+// directories on every test run. The fixture command here is a plain `node`
+// script, not `pi`, so PI_CODING_AGENT_DIR is inert either way -- these dirs
+// exist purely to keep the seeding side effect hermetic.
 let agentDirRoot: string | undefined;
 
 afterEach(() => {
@@ -26,9 +28,9 @@ afterEach(() => {
 	agentDirRoot = undefined;
 });
 
-function isolatedAgentDirs(): { agentDir: string; sourceAgentDir: string } {
-	agentDirRoot = mkdtempSync(join(tmpdir(), "alignment-rpc-session-"));
-	return { agentDir: join(agentDirRoot, "alignment-pi-agent"), sourceAgentDir: join(agentDirRoot, "personal-pi-agent") };
+function isolatedAgentDirs(): { agentDir: string; sourceAgentDir: string; legacyAlignmentAgentDir: string } {
+	agentDirRoot = mkdtempSync(join(tmpdir(), "zodiac-rpc-session-"));
+	return { agentDir: join(agentDirRoot, "zodiac-pi-agent"), sourceAgentDir: join(agentDirRoot, "personal-pi-agent"), legacyAlignmentAgentDir: join(agentDirRoot, "legacy-alignment-pi-agent") };
 }
 
 function collectUntil(target: PiRpcSession, predicate: (event: PiRpcEvent) => boolean, timeoutMs = 5000): Promise<PiRpcEvent[]> {
@@ -115,33 +117,33 @@ describe("spawnPiRpcSession", () => {
 
 	describe("agent dir namespacing", () => {
 		it("propagates agentDir to the spawned process as PI_CODING_AGENT_DIR, not the inherited default", async () => {
-			const { agentDir, sourceAgentDir } = isolatedAgentDirs();
-			session = spawnPiRpcSession({ command: ["node", ENV_PROBE_FIXTURE], agentDir, sourceAgentDir });
+			const { agentDir, sourceAgentDir, legacyAlignmentAgentDir } = isolatedAgentDirs();
+			session = spawnPiRpcSession({ command: ["node", ENV_PROBE_FIXTURE], agentDir, sourceAgentDir, legacyAlignmentAgentDir });
 			const [event] = await collectUntil(session, () => true);
 			expect(event).toEqual({ type: "response", command: "env-probe", success: true, error: agentDir });
 		});
 
 		it("seeds agentDir/auth.json from sourceAgentDir on first spawn", async () => {
-			const { agentDir, sourceAgentDir } = isolatedAgentDirs();
+			const { agentDir, sourceAgentDir, legacyAlignmentAgentDir } = isolatedAgentDirs();
 			mkdirSync(sourceAgentDir, { recursive: true });
 			writeFileSync(join(sourceAgentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "personal-real-key" } }));
 
-			session = spawnPiRpcSession({ command: ["node", FIXTURE], agentDir, sourceAgentDir });
+			session = spawnPiRpcSession({ command: ["node", FIXTURE], agentDir, sourceAgentDir, legacyAlignmentAgentDir });
 
 			expect(existsSync(join(agentDir, "auth.json"))).toBe(true);
 			expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "personal-real-key" } }));
 		});
 
 		it("never overwrites an already-existing agentDir/auth.json", async () => {
-			const { agentDir, sourceAgentDir } = isolatedAgentDirs();
+			const { agentDir, sourceAgentDir, legacyAlignmentAgentDir } = isolatedAgentDirs();
 			mkdirSync(sourceAgentDir, { recursive: true });
 			mkdirSync(agentDir, { recursive: true });
 			writeFileSync(join(sourceAgentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "personal-key" } }));
-			writeFileSync(join(agentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "alignment-own-key" } }));
+			writeFileSync(join(agentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "zodiac-own-key" } }));
 
-			session = spawnPiRpcSession({ command: ["node", FIXTURE], agentDir, sourceAgentDir });
+			session = spawnPiRpcSession({ command: ["node", FIXTURE], agentDir, sourceAgentDir, legacyAlignmentAgentDir });
 
-			expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "alignment-own-key" } }));
+			expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "zodiac-own-key" } }));
 		});
 	});
 });

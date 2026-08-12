@@ -169,7 +169,7 @@ describe("SemanticShellApplication lifecycle", () => {
 
   /**
    * These two tests exist specifically because a real, shipped bug slipped through every other
-   * test in this codebase: pressing Ctrl+T through a real, running Alignment process with no
+   * test in this codebase: pressing Ctrl+T through a real, running Zodiac process with no
    * workspace opened at boot did nothing at all -- openTerminal()'s own `if (!this.rootPath)
    * return;` guard, never exercised by keymap.test.ts (only proves the byte translates to the
    * right ShellCommand) or native-terminal.test.ts (only drives an already-mounted component's
@@ -180,7 +180,7 @@ describe("SemanticShellApplication lifecycle", () => {
    * accepts an absent rootPath, so both the fixed happy path and the still-real defensive no-op
    * are worth pinning here, at the one layer that actually owns the guard.
    */
-  it("Ctrl+T through the real application opens a real terminal pane when rootPath is present -- focus moves to \"external\", and Ctrl+] inside it returns focus to Alignment's own chrome", () => {
+  it("Ctrl+T through the real application opens a real terminal pane when rootPath is present -- focus moves to \"external\", and Ctrl+] inside it returns focus to Zodiac's own chrome", () => {
     const app = new SemanticShellApplication(createWorldStore(worldId("empty")), { write: () => {} }, undefined, undefined, process.cwd());
     app.boot(80, 24);
     expect(app.focusedRegion()).not.toBe("external");

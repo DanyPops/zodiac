@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "./agent-dir.js";
+import { resolveZodiacAgentDir, seedZodiacAuthOnce } from "./agent-dir.js";
 
 /**
  * Mirrors @zodiac/server's own pi-agent-dir.test.ts -- see agent-dir.ts's
@@ -17,52 +17,57 @@ afterEach(() => {
 	root = undefined;
 });
 
-describe("resolveAlignmentAgentDir", () => {
-	it("defaults to ~/.alignment/pi-agent when no override is set", () => {
-		const dir = resolveAlignmentAgentDir({});
-		expect(dir.endsWith(join(".alignment", "pi-agent"))).toBe(true);
+describe("resolveZodiacAgentDir", () => {
+	it("defaults to ~/.zodiac/pi-agent when no override is set", () => {
+		const dir = resolveZodiacAgentDir({});
+		expect(dir.endsWith(join(".zodiac", "pi-agent"))).toBe(true);
 	});
 
-	it("honors ALIGNMENT_PI_AGENT_DIR when set", () => {
-		const dir = resolveAlignmentAgentDir({ ALIGNMENT_PI_AGENT_DIR: "/tmp/some-custom-dir" });
+	it("honors ZODIAC_PI_AGENT_DIR when set", () => {
+		const dir = resolveZodiacAgentDir({ ZODIAC_PI_AGENT_DIR: "/tmp/some-custom-dir" });
 		expect(dir).toBe("/tmp/some-custom-dir");
+	});
+
+	it("falls back to the older ALIGNMENT_PI_AGENT_DIR when ZODIAC_PI_AGENT_DIR isn't set", () => {
+		const dir = resolveZodiacAgentDir({ ALIGNMENT_PI_AGENT_DIR: "/tmp/legacy-alignment-dir" });
+		expect(dir).toBe("/tmp/legacy-alignment-dir");
 	});
 });
 
-describe("seedAlignmentAuthOnce", () => {
+describe("seedZodiacAuthOnce", () => {
 	it("copies auth.json from the source agent dir the first time", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-agent-dir-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-agent-dir-"));
 		const sourceAgentDir = join(root, "source");
 		const agentDir = join(root, "dest");
 		mkdirSync(sourceAgentDir, { recursive: true });
 		writeFileSync(join(sourceAgentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "real-key" } }));
 
-		seedAlignmentAuthOnce({ agentDir, sourceAgentDir });
+		seedZodiacAuthOnce({ agentDir, sourceAgentDir });
 
 		expect(existsSync(join(agentDir, "auth.json"))).toBe(true);
 		expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "real-key" } }));
 	});
 
 	it("never overwrites an already-existing destination auth.json", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-agent-dir-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-agent-dir-"));
 		const sourceAgentDir = join(root, "source");
 		const agentDir = join(root, "dest");
 		mkdirSync(sourceAgentDir, { recursive: true });
 		mkdirSync(agentDir, { recursive: true });
 		writeFileSync(join(sourceAgentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "personal-key" } }));
-		writeFileSync(join(agentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "alignment-own-key" } }));
+		writeFileSync(join(agentDir, "auth.json"), JSON.stringify({ anthropic: { apiKey: "zodiac-own-key" } }));
 
-		seedAlignmentAuthOnce({ agentDir, sourceAgentDir });
+		seedZodiacAuthOnce({ agentDir, sourceAgentDir });
 
-		expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "alignment-own-key" } }));
+		expect(readFileSync(join(agentDir, "auth.json"), "utf-8")).toBe(JSON.stringify({ anthropic: { apiKey: "zodiac-own-key" } }));
 	});
 
 	it("no-ops silently when the source has no auth.json to copy", () => {
-		root = mkdtempSync(join(tmpdir(), "alignment-agent-dir-"));
+		root = mkdtempSync(join(tmpdir(), "zodiac-agent-dir-"));
 		const sourceAgentDir = join(root, "source");
 		const agentDir = join(root, "dest");
 
-		expect(() => seedAlignmentAuthOnce({ agentDir, sourceAgentDir })).not.toThrow();
+		expect(() => seedZodiacAuthOnce({ agentDir, sourceAgentDir })).not.toThrow();
 		expect(existsSync(join(agentDir, "auth.json"))).toBe(false);
 	});
 });

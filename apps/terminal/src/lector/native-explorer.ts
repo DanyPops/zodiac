@@ -2,12 +2,12 @@ import type { ContributionReadBounds, ContributionResourceReference } from "@zod
 import { type DirectoryExplorerSession, ExplorerComponent, type ExplorerFlowHost, type ExplorerResult, runExplorerFlow } from "@danypops/pi-lector/editor";
 import { nearestGitRoot } from "../bootstrap/nearest-git-root.js";
 import { workspaceIdFromReference } from "../bootstrap/workspace-bootstrap.js";
-import { createAlignmentEditorTheme } from "../pi/alignment-extension-ui-context.js";
+import { createZodiacEditorTheme } from "../pi/zodiac-extension-ui-context.js";
 import type { LectorHost } from "./lector-host.js";
 import { fakeTui, openLectorEditorNatively, type NativeEditorHost } from "./native-editor.js";
 
 /**
- * Alignment's own native host surface for mounting a real Lector explorer Component -- the exact
+ * Zodiac's own native host surface for mounting a real Lector explorer Component -- the exact
  * same NativeEditorHost interface native-editor.ts already defines, reused as-is (see this file's
  * own doc comment: explorer and editor both ultimately mount into the same SemanticShellApplication
  * machinery, and neither needs a field the other doesn't already have).
@@ -56,7 +56,7 @@ function workspaceResource(workspaceId: string, path: string): ContributionResou
 }
 
 /**
- * Builds a DirectoryExplorerSession backed entirely by Alignment's own lector-host.ts contribution
+ * Builds a DirectoryExplorerSession backed entirely by Zodiac's own lector-host.ts contribution
  * commands -- the five new mutation commands (lector.file.create/delete, lector.directory.create/
  * delete, lector.path.rename) plus a directly-constructed workspace resource read for listDirectory,
  * exactly mirroring createLectorEditorHost's own precedent of never touching pi-lector's own
@@ -104,7 +104,7 @@ export async function openLectorExplorerNatively(host: NativeEditorHost, lectorH
 	if (!workspaceId) throw new Error(`Lector returned an unrecognized workspace resource for "${rootPath}"`);
 
 	const session = createLectorExplorerSession(lectorHost, workspaceId, rootPath);
-	const theme = createAlignmentEditorTheme();
+	const theme = createZodiacEditorTheme();
 
 	const flowHost: ExplorerFlowHost = {
 		showExplorer: (explorerSession, relativePath) =>

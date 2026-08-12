@@ -45,7 +45,7 @@ export interface NativeTerminalHost {
 // matchesKey/Key.ctrl, not a literal string comparison -- the same reliability bar keymap.ts's
 // own doc comments already hold every other binding in this app to. A naive `data === "\x1d"`
 // check (this line's own prior form) only recognizes the legacy raw C0 control byte -- a real
-// terminal negotiating Kitty keyboard protocol with Alignment can send \x1b[93;5u for the exact
+// terminal negotiating Kitty keyboard protocol with Zodiac can send \x1b[93;5u for the exact
 // same chord instead, confirmed directly as the real cause of a real, user-reported "Ctrl+] does
 // nothing" bug.
 const EXIT_KEY = Key.ctrl("]");

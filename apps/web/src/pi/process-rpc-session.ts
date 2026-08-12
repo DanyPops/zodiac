@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import type { Readable, Writable } from "node:stream";
 import { encodeRpcCommand, parseRpcLine, type PiRpcCommand, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
-import { resolveAlignmentAgentDir, seedAlignmentAuthOnce } from "./agent-dir.js";
+import { resolveZodiacAgentDir, seedZodiacAuthOnce } from "./agent-dir.js";
 
 const DEFAULT_COMMAND = ["pi", "--mode", "rpc", "--no-session"] as const;
 
@@ -16,15 +16,17 @@ export interface PiRpcSessionOptions {
 	readonly command?: readonly string[];
 	readonly cwd?: string;
 	/**
-	 * Alignment's own namespaced Pi config/extension/session/auth directory --
+	 * Zodiac's own namespaced Pi config/extension/session/auth directory --
 	 * propagated to the spawned `pi` process via PI_CODING_AGENT_DIR so it
 	 * never shares the user's personal ~/.pi/agent (extensions, settings,
-	 * sessions). Defaults to resolveAlignmentAgentDir(); injectable so tests
+	 * sessions). Defaults to resolveZodiacAgentDir(); injectable so tests
 	 * never touch a real directory on the machine running them.
 	 */
 	readonly agentDir?: string;
 	/** Where a one-time auth.json seed is copied from. Defaults to the user's real ~/.pi/agent; injectable for the same reason as agentDir. */
 	readonly sourceAgentDir?: string;
+	/** Where a one-time auth.json *migration* is copied from, if agentDir doesn't have one yet -- this product's own prior namespaced dir, before the Alignment -> Zodiac rename. Defaults to ~/.alignment/pi-agent; injectable for the same hermetic-test reason as sourceAgentDir. */
+	readonly legacyAlignmentAgentDir?: string;
 }
 
 export interface PiRpcSession {
@@ -47,8 +49,10 @@ export interface PiRpcSession {
  */
 export function spawnPiRpcSession(options: PiRpcSessionOptions = {}): PiRpcSession {
 	const [command = DEFAULT_COMMAND[0], ...args] = options.command ?? DEFAULT_COMMAND;
-	const agentDir = options.agentDir ?? resolveAlignmentAgentDir();
-	seedAlignmentAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
+	const agentDir = options.agentDir ?? resolveZodiacAgentDir();
+	// Two calls, not one -- see @zodiac/server's seedZodiacAuthOnce doc comment.
+	seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.legacyAlignmentAgentDir ?? join(homedir(), ".alignment", "pi-agent") });
+	seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
 	const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(command, args, {
 		cwd: options.cwd,
 		stdio: ["pipe", "pipe", "pipe"],

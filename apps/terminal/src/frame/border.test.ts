@@ -113,11 +113,11 @@ describe("labelSegment", () => {
     const area = createRect(0, 0, 40, 4);
     expect(area.ok).toBe(true);
     if (!area.ok) return;
-    expect(labelSegment(frame.value, area.value, 2, 20, 0, "Alignment", {}).ok).toBe(true);
+    expect(labelSegment(frame.value, area.value, 2, 20, 0, "Zodiac", {}).ok).toBe(true);
     const rendered = frame.value.cells.slice(0, 40).map(cell => cell.grapheme).join("");
-    expect(rendered).toContain("Alignment");
+    expect(rendered).toContain("Zodiac");
 
-    expect(labelSegment(frame.value, area.value, 2, 3, 1, "Alignment", {}).ok).toBe(true);
+    expect(labelSegment(frame.value, area.value, 2, 3, 1, "Zodiac", {}).ok).toBe(true);
     const untouchedRow = frame.value.cells.slice(40, 80).map(cell => cell.grapheme).join("");
     expect(untouchedRow.trim()).toBe("");
   });

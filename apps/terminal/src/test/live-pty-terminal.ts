@@ -62,7 +62,7 @@ export interface LiveTerminalOptions {
  * via `stripTerminalSequences` (a flat, ANSI-stripped string, not a real
  * screen), which cannot correctly represent cursor-addressed rendering like
  * GridTerminal's own output. Anything that needs to assert "what does the
- * screen actually look like right now" against a live, running Alignment
+ * screen actually look like right now" against a live, running Zodiac
  * TUI process -- a real regression test, or ad hoc exploratory verification
  * -- should use this rather than hand-rolling PTY+xterm wiring again.
  */

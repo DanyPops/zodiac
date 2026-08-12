@@ -33,7 +33,7 @@ function fileBootstrap(rootPath: string): BootstrappedWorkspace {
 
 describe("applyBootstrapToWorld", () => {
 	it("creates a Workspace titled after the root and docks a 'Files' Surface for a directory", () => {
-		const world = createWorldStore(worldId("alignment"));
+		const world = createWorldStore(worldId("zodiac"));
 		applyBootstrapToWorld(world, directoryBootstrap("/home/someone/project"));
 
 		const view = world.worldViewModel();
@@ -44,7 +44,7 @@ describe("applyBootstrapToWorld", () => {
 	});
 
 	it("docks a Surface titled after the opened file's own basename for a direct file open", () => {
-		const world = createWorldStore(worldId("alignment"));
+		const world = createWorldStore(worldId("zodiac"));
 		applyBootstrapToWorld(world, fileBootstrap("/home/someone/project"));
 
 		const view = world.worldViewModel();
@@ -53,13 +53,13 @@ describe("applyBootstrapToWorld", () => {
 	});
 
 	it("derives a stable Workspace id from Lector's own opaque workspace id, so WorldStore's own duplicate guard rejects a second bootstrap of the same root", () => {
-		const world = createWorldStore(worldId("alignment"));
+		const world = createWorldStore(worldId("zodiac"));
 		applyBootstrapToWorld(world, directoryBootstrap("/home/someone/project"));
 		expect(() => applyBootstrapToWorld(world, directoryBootstrap("/home/someone/project"))).toThrow(/already has a Workspace/);
 	});
 
 	it("R1 REWORK regression: the raw absolute rootPath never appears anywhere in the World's own renderer-facing or persisted shape (CWE-200 full-path-disclosure)", () => {
-		const world = createWorldStore(worldId("alignment"));
+		const world = createWorldStore(worldId("zodiac"));
 		const rootPath = "/home/someone/very-real-project";
 		applyBootstrapToWorld(world, directoryBootstrap(rootPath));
 
