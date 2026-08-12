@@ -7,9 +7,18 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "npm run dev --workspace=@zodiac/web --",
+    "terminal": "npm run build --workspace=@zodiac/terminal && node apps/terminal/dist/cli.js",
     "test": "npm test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace=@zodiac/web --",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present --",
+    "lint:ci": "npm run lint:ci --workspaces --if-present --",
+    "build": "npm run build --workspaces --if-present",
+    "clean": "node scripts/clean.mjs",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install",
+    "verify": "npm run typecheck && npm run lint:ci && npm test && npm run build",
+    "verify:full": "npm run verify && npm run test:e2e --workspace=@zodiac/web && npm run check:bundle-budget --workspace=@zodiac/web"
   },
   "overrides": {
     "@danypops/lector": "file:vendor/danypops-lector-0.18.15.tgz",

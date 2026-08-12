@@ -29,12 +29,24 @@ zodiac/
 ## Development
 
 ```bash
-npm install
-npm test
-npm run typecheck
-npm run build
-npm run dev --workspace=@zodiac/web
-npm run test:e2e --workspace=@zodiac/web
+npm install       # once, or after pulling a dependency change
+npm run dev       # bring up the web client (@zodiac/web) at http://127.0.0.1:5173
+npm run terminal  # build and launch the terminal client (@zodiac/terminal) against the cwd
 ```
+
+Every other everyday command is a plain root-level npm script -- run from the repo root, no
+`--workspace=` flag to remember:
+
+| Command | What it does |
+| --- | --- |
+| `npm test` | Runs every workspace's own test suite. |
+| `npm run test:e2e` | Runs `@zodiac/web`'s Playwright e2e suite (extra args forward through, e.g. `npm run test:e2e -- --list`). |
+| `npm run typecheck` | `tsc --noEmit` across every workspace. |
+| `npm run lint` / `lint:ci` | ESLint across every workspace that has it (`lint:ci` is `--max-warnings 0`, what CI runs). |
+| `npm run build` | Production build of every workspace that has one. |
+| `npm run verify` | The one "did I break anything" gate: typecheck -> lint:ci -> test -> build, stopping at the first failure. |
+| `npm run verify:full` | `verify`, plus `@zodiac/web`'s e2e suite and its bundle-budget check -- slower, closer to what a release needs. |
+| `npm run clean` | Removes every workspace's own build/test output and lint cache (dist/, test-results/, playwright-report/, .eslintcache) -- never node_modules. |
+| `npm run reinstall` | The "something's actually broken" nuke: removes node_modules and package-lock.json, then reinstalls clean. |
 
 The application reads Alef's local session store through a development-server adapter. Browser code receives opaque conversation identifiers and normalized events; it does not receive filesystem paths.
