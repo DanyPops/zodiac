@@ -1,9 +1,6 @@
 /** Every ruler offers guides at these fraction denominators -- halves through sixths, per the literal ask. */
 export const DOCK_RULER_DENOMINATORS: readonly number[] = [2, 3, 4, 5, 6];
 
-/** How close to the exact center (as a fraction of each axis, independently) the pointer must be on BOTH axes to read as "dock as a tab" instead of a sized split. Small and deliberate: dragging to a tab is still reachable, but the granular ruler owns nearly the whole pane -- click-to-dock and the keyboard TemplatesDialog flow remain the primary way to dock as a tab regardless. */
-const CENTER_DEADZONE_RATIO = 0.06;
-
 export interface DockRulerGuide {
 	/** 0..1, position along the relevant axis. */
 	readonly ratio: number;
@@ -49,9 +46,13 @@ export interface DockRulerHint {
 
 /**
  * Which split (axis + side) the pointer currently favors within a target
- * box, plus the nearest fraction guide along that axis -- or `undefined`
- * when the pointer sits in the small dead-zone at the exact center (reads
- * as "dock as a tab", matching dockview's own center-drop zone).
+ * box, plus the nearest fraction guide along that axis. Always resolves to
+ * a real split, even at the exact center (a deterministic tie-break, not a
+ * "dock as a tab" dead-zone) -- tab-insertion via drag is reached by
+ * dropping onto a group's own header/tab-strip instead, a structurally
+ * different dockview drop target (`onWillShowOverlay`'s own `kind` is
+ * `'tab'`/`'header_space'` there, never `'content'`) this function never
+ * sees. `undefined` only for a degenerate (zero-sized) target.
  *
  * Axis selection: whichever of X/Y the pointer is more off-center on wins,
  * as a ratio of that axis's own size -- symmetric and aspect-ratio
@@ -66,8 +67,6 @@ export function computeDockRulerHint(offsetX: number, offsetY: number, width: nu
 	const xOffCenter = Math.abs(xRatio - 0.5);
 	const yOffCenter = Math.abs(yRatio - 0.5);
 
-	if (xOffCenter < CENTER_DEADZONE_RATIO && yOffCenter < CENTER_DEADZONE_RATIO) return undefined;
-
 	if (xOffCenter >= yOffCenter) {
 		return { axis: "horizontal", edge: xRatio < 0.5 ? "left" : "right", guide: nearestDockRulerGuide(xRatio, guides) };
 	}
@@ -79,6 +78,23 @@ interface DockRulerTargetBox {
 	readonly top: number;
 	readonly width: number;
 	readonly height: number;
+}
+
+export interface DockRulerRect {
+	readonly left: number;
+	readonly top: number;
+	readonly width: number;
+	readonly height: number;
+}
+
+/** The exact rectangle a hint's own split preview covers within a `width` x `height` target -- e.g. docking left at 1/4 covers the left quarter, full height. Shared by the in-content DockRuler shade and anything else that needs the same live-fraction geometry, so they can never disagree with each other. */
+export function dockRulerHintRect(hint: DockRulerHint, width: number, height: number): DockRulerRect {
+	const horizontal = hint.axis === "horizontal";
+	const activeAxisPx = horizontal ? width * hint.guide.ratio : height * hint.guide.ratio;
+	const fromStart = hint.edge === "left" || hint.edge === "top";
+	return horizontal
+		? { top: 0, height, left: fromStart ? 0 : activeAxisPx, width: fromStart ? activeAxisPx : width - activeAxisPx }
+		: { left: 0, width, top: fromStart ? 0 : activeAxisPx, height: fromStart ? activeAxisPx : height - activeAxisPx };
 }
 
 export interface DockRulerFrameMark {

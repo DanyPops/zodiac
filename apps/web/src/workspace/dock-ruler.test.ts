@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDockRulerHint, dockRulerFrameMark, dockRulerGuides, nearestDockRulerGuide } from "./dock-ruler.js";
+import { computeDockRulerHint, dockRulerFrameMark, dockRulerGuides, dockRulerHintRect, nearestDockRulerGuide } from "./dock-ruler.js";
 
 describe("dockRulerGuides", () => {
 	it("produces every reduced fraction from denominators 2 through 6, deduped", () => {
@@ -41,8 +41,8 @@ describe("computeDockRulerHint", () => {
 	const width = 400;
 	const height = 200;
 
-	it("is undefined at the exact center -- the small dead-zone that keeps dragging to a tab reachable", () => {
-		expect(computeDockRulerHint(width / 2, height / 2, width, height)).toBeUndefined();
+	it("real fix for a reported bug: the exact center still resolves to a real 50% split, not a tab dead-zone -- a drop onto the group's own content always splits; tab-insertion is reachable only by dragging onto the group's own header, a structurally different dockview drop target this function never sees", () => {
+		expect(computeDockRulerHint(width / 2, height / 2, width, height)).toEqual({ axis: "horizontal", edge: "right", guide: expect.objectContaining({ label: "1/2" }) });
 	});
 
 	it("picks the horizontal axis and left side when the pointer is off-center mostly along X", () => {
@@ -73,6 +73,28 @@ describe("computeDockRulerHint", () => {
 
 	it("is undefined for a zero-sized target", () => {
 		expect(computeDockRulerHint(0, 0, 0, 0)).toBeUndefined();
+	});
+});
+
+describe("dockRulerHintRect", () => {
+	it("docking left: spans from the left edge to the guide's own fraction of the width, full height", () => {
+		const rect = dockRulerHintRect({ axis: "horizontal", edge: "left", guide: { ratio: 1 / 4, label: "1/4" } }, 400, 200);
+		expect(rect).toEqual({ left: 0, top: 0, width: 100, height: 200 });
+	});
+
+	it("docking right: spans from the guide's own fraction to the right edge, full height", () => {
+		const rect = dockRulerHintRect({ axis: "horizontal", edge: "right", guide: { ratio: 3 / 4, label: "3/4" } }, 400, 200);
+		expect(rect).toEqual({ left: 300, top: 0, width: 100, height: 200 });
+	});
+
+	it("docking top: spans from the top edge to the guide's own fraction of the height, full width", () => {
+		const rect = dockRulerHintRect({ axis: "vertical", edge: "top", guide: { ratio: 1 / 4, label: "1/4" } }, 400, 200);
+		expect(rect).toEqual({ left: 0, top: 0, width: 400, height: 50 });
+	});
+
+	it("docking bottom: spans from the guide's own fraction to the bottom edge, full width", () => {
+		const rect = dockRulerHintRect({ axis: "vertical", edge: "bottom", guide: { ratio: 3 / 4, label: "3/4" } }, 400, 200);
+		expect(rect).toEqual({ left: 0, top: 150, width: 400, height: 50 });
 	});
 });
 

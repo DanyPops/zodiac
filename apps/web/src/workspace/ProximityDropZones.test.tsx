@@ -47,6 +47,11 @@ describe("ProximityDropZones", () => {
 		expect(screen.getByTestId("drop-zone-g1:left").className).not.toMatch(/accent/);
 	});
 
+	it("rounds its corners with the same shared --app-corner-radius token every other shell shape follows", () => {
+		render(<ProximityDropZones zones={[zone]} zoneOpacities={new Map()} />);
+		expect(screen.getByTestId("drop-zone-g1:left").className).toMatch(/rounded-\[var\(--app-corner-radius/);
+	});
+
 	it("renders one element per zone", () => {
 		const other: DropZone = { ...zone, id: "root:top", groupId: undefined, position: "top" };
 		render(<ProximityDropZones zones={[zone, other]} zoneOpacities={new Map()} />);

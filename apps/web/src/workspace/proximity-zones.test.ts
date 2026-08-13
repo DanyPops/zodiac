@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDropZones, dropZoneCloseness, dropZoneOpacity, PROXIMITY_CEILING_OPACITY, PROXIMITY_FLOOR_OPACITY, proximityInfluenceRadius } from "./proximity-zones.js";
+import { ACTIVE_ZONE_CEILING_OPACITY, ACTIVE_ZONE_FLOOR_OPACITY, computeDropZones, dropZoneCloseness, dropZoneOpacity, PROXIMITY_CEILING_OPACITY, PROXIMITY_FLOOR_OPACITY, proximityInfluenceRadius } from "./proximity-zones.js";
 
 const canvasRect = { left: 0, top: 0, width: 800, height: 400 };
 
@@ -119,5 +119,15 @@ describe("dropZoneOpacity", () => {
 
 	it("interpolates linearly between floor and ceiling for a mid closeness", () => {
 		expect(dropZoneOpacity(0.5)).toBeCloseTo((PROXIMITY_FLOOR_OPACITY + PROXIMITY_CEILING_OPACITY) / 2, 5);
+	});
+});
+
+describe("the active (Dock Ruler) zone's own breathing range", () => {
+	it("never dims as low as an ambient zone's own floor -- it's a confirmed target, not a proximity guess", () => {
+		expect(ACTIVE_ZONE_FLOOR_OPACITY).toBeGreaterThan(PROXIMITY_FLOOR_OPACITY);
+	});
+
+	it("peaks at least as bright as the brightest ambient zone ever gets", () => {
+		expect(ACTIVE_ZONE_CEILING_OPACITY).toBeGreaterThanOrEqual(PROXIMITY_CEILING_OPACITY);
 	});
 });

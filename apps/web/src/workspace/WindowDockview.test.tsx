@@ -83,7 +83,7 @@ function renderWindowDockview({ onDockRulerHintChange = () => {}, onExternalTemp
 class FakeDragEvent extends Event {}
 
 // Fixed, off-center content box -- never the small center dead-zone, so a hint always resolves once the gate lets one through.
-const fakeGroup = { element: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON() {} }) } };
+const fakeGroup = { id: "group-1", element: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON() {} }) } };
 
 function contentOverlayEvent(clientX: number, clientY = 50) {
 	return { kind: "content", group: fakeGroup, nativeEvent: new PointerEvent("pointermove", { clientX, clientY }) };
@@ -153,11 +153,34 @@ describe("WindowDockview's onDidDrop", () => {
 
 	it("a drop onto an existing group's content -- the second dock, not the first -- still docks, sized from the recomputed hint", () => {
 		const onExternalTemplateDrop = vi.fn();
-		const { onDidDrop } = renderWindowDockview({ onExternalTemplateDrop });
+		const { onWillShowOverlay, onDidDrop } = renderWindowDockview({ onExternalTemplateDrop });
+		// A real drop is always preceded by dragover events for the same group --
+		// this is what actually marks the group as "currently a content hover" (see
+		// the header-drop regression test below for why that distinction matters).
+		// Twice: the idle-velocity gate reads the very first sample as infinitely
+		// fast (nothing to compare against yet), same as every other test here.
+		onWillShowOverlay(contentOverlayEvent(20));
+		onWillShowOverlay(contentOverlayEvent(20));
 
 		onDidDrop(dropEvent("activity", { group: { id: "group-1", element: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON() {} }) as DOMRect } }, clientX: 20, clientY: 50 }));
 
 		expect(onExternalTemplateDrop).toHaveBeenCalledWith("activity", "left", "group-1", expect.any(Number));
+	});
+
+	it("real fix for a reported bug: a drop reported with a group but never preceded by a content-kind hover for it (a header/tab-strip drop) defers entirely to dockview's own reported position instead of recomputing a split -- tabs are only reachable by dragging onto a group's own header, never its content", () => {
+		const onExternalTemplateDrop = vi.fn();
+		const { onDidDrop } = renderWindowDockview({ onExternalTemplateDrop });
+		// No onWillShowOverlay(contentOverlayEvent(...)) call first -- this group
+		// was never marked as a content hover (onWillShowOverlay's own kind would
+		// have been 'tab'/'header_space' for a real header drop, never 'content').
+
+		onDidDrop(dropEvent("activity", { group: { id: "group-1", element: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON() {} }) as DOMRect } }, position: "right", clientX: 20, clientY: 50 }));
+
+		// dockview's own reported position ("right" here, but for a real header
+		// drop it reports the tab-insert position) wins, with no computed ratio --
+		// not the "left" a naive coordinate recompute against this exact clientX/Y
+		// would produce (see the test above, same coordinates, different outcome).
+		expect(onExternalTemplateDrop).toHaveBeenCalledWith("activity", "right", "group-1", undefined);
 	});
 });
 
@@ -221,8 +244,14 @@ describe("WindowDockview's ambient proximity drop zones", () => {
 	it("adds 5 more zones per existing docked group", () => {
 		dockview.api.groups = [{ id: "group-1", element: { getBoundingClientRect: () => rect(0, 0, 400, 200) } }];
 		const { wrapper } = renderWindowDockview({ dragActive: true });
-		dispatch(wrapper, dragOverAt(20));
-		dispatch(wrapper, dragOverAt(20));
+		// Outside the group's own rect entirely -- computeDockRulerHint no longer
+		// has a dead-zone (a real fix: dragging to a group's own exact center now
+		// always splits, see dock-ruler.test.ts), so hovering anywhere *inside* a
+		// group now always suppresses exactly one of its 5 positions in favor of
+		// the Ruler's own live highlight -- this checks the other 4 root zones'
+		// own math, unaffected since no group is actually being hovered here.
+		dispatch(wrapper, dragOverAt(500, 300));
+		dispatch(wrapper, dragOverAt(500, 300));
 		for (const position of ["left", "right", "top", "bottom", "center"]) expect(wrapper.querySelector(`[data-testid="drop-zone-group-1:${position}"]`)).not.toBeNull();
 		expect(wrapper.querySelectorAll('[data-testid^="drop-zone-"]')).toHaveLength(5 + 4);
 	});
@@ -247,12 +276,27 @@ describe("WindowDockview's ambient proximity drop zones", () => {
 		// jsdom never performs real layout -- getBoundingClientRect defaults to
 		// all-zero, which would zero out proximityInfluenceRadius too.
 		vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue(rect(0, 0, 800, 400));
-		// Pointer near the left edge -- close to group-1:left's own centroid, far from group-1:right's.
-		dispatch(wrapper, dragOverAt(10, 200));
-		dispatch(wrapper, dragOverAt(10, 200));
+		// Off-center toward the top-left -- the Ruler itself favors "top" here
+		// (suppressing group-1:top, see the regression test above), leaving
+		// left/right both still ambient: left, closer to the pointer's own x, should read brighter.
+		dispatch(wrapper, dragOverAt(200, 50));
+		dispatch(wrapper, dragOverAt(200, 50));
 		const leftPeak = Number.parseFloat((wrapper.querySelector('[data-testid="drop-zone-group-1:left"]') as HTMLElement).style.getPropertyValue("--zone-max-opacity"));
 		const rightPeak = Number.parseFloat((wrapper.querySelector('[data-testid="drop-zone-group-1:right"]') as HTMLElement).style.getPropertyValue("--zone-max-opacity"));
 		expect(leftPeak).toBeGreaterThan(rightPeak);
+	});
+
+	it("real regression: suppresses the one ambient zone matching the Dock Ruler's own currently-favored position, so the two visual systems can never disagree about the same spot", () => {
+		dockview.api.groups = [{ id: "group-1", element: { getBoundingClientRect: () => rect(0, 0, 800, 400) } }];
+		const { wrapper } = renderWindowDockview({ dragActive: true });
+		// Near the left edge -- the Ruler would favor "left" for this exact group.
+		dispatch(wrapper, dragOverAt(10, 200));
+		dispatch(wrapper, dragOverAt(10, 200));
+
+		expect(wrapper.querySelector('[data-testid="drop-zone-group-1:left"]')).toBeNull();
+		expect(wrapper.querySelector('[data-testid="drop-zone-group-1:right"]')).not.toBeNull();
+		expect(wrapper.querySelector('[data-testid="drop-zone-group-1:center"]')).not.toBeNull();
+		expect(wrapper.querySelectorAll('[data-testid^="drop-zone-"]')).toHaveLength(5 + 4 - 1);
 	});
 
 	it("clears once the drag ends by any means -- dragActive flipping false, matching the Ruler's own cleanup", () => {

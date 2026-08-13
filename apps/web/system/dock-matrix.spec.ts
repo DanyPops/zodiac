@@ -226,13 +226,15 @@ test("6. One (full) -> Two, drag onto the BOTTOM edge -> vertical split, new pan
 	await expectNoStrayRulerArtifacts(page);
 });
 
-test("7. One (full) -> Two, drag onto dead center -> tab-inserted into the SAME group, not a split", async ({ page }) => {
+test("7. One (full) -> Two, drag onto dead center -> a real 50/50 split, not a tab -- real fix for a reported bug: tabs are only reachable by dragging onto a pane's own header (see test 33), never its content, even at the exact center", async ({ page }) => {
 	await dockViaClick(page);
 	const original = groupContent(page, 0);
 	await dockViaDrag(page, original, 0.5, 0.5);
 
-	await expect(groups(page)).toHaveCount(1); // still one pane...
-	await expect(tabs(page)).toHaveCount(2); // ...now with two tabs
+	await expect(groups(page)).toHaveCount(2); // a real split now, not a tab-insert
+	await expect(tabs(page)).toHaveCount(2);
+	const [left, right] = (await groupBoxes(page)).sort((a, b) => a.x - b.x);
+	expect(Math.abs(left!.width - right!.width)).toBeLessThan(6); // a real 50/50 split
 	await expectNoStrayRulerArtifacts(page);
 });
 
@@ -307,7 +309,7 @@ test("11. Two (top/bottom split) -> Three, drag onto the BOTTOM pane's own RIGHT
 	await expectNoStrayRulerArtifacts(page);
 });
 
-test("12. Two (left|right split) -> Three docked Surfaces but still TWO panes, drag onto one pane's dead center -> tab-inserted there, the other pane untouched", async ({ page }) => {
+test("12. Two (left|right split) -> Three, drag onto one pane's dead center -> that pane splits again, the other pane untouched -- real fix for a reported bug, same as test 7", async ({ page }) => {
 	await dockViaClick(page);
 	await dockViaDrag(page, groupContent(page, 0), 0.9, 0.5); // -> two side by side
 	await expect(groups(page)).toHaveCount(2);
@@ -315,8 +317,8 @@ test("12. Two (left|right split) -> Three docked Surfaces but still TWO panes, d
 	const left = await leftmostGroupContent(page);
 	await dockViaDrag(page, left, 0.5, 0.5);
 
-	await expect(groups(page)).toHaveCount(2); // still two panes...
-	await expect(tabs(page)).toHaveCount(3); // ...but three docked Surfaces total
+	await expect(groups(page)).toHaveCount(3); // the left pane split again
+	await expect(tabs(page)).toHaveCount(3);
 	await expectNoStrayRulerArtifacts(page);
 });
 
@@ -654,7 +656,7 @@ test("24b. dockview's own native per-group content overlay (.dv-drop-target-cont
 	await dockViaClick(page);
 	const content = groupContent(page, 0);
 	const box = (await content.boundingBox())!;
-	const quarterX = box.x + box.width / 4; // comfortably off-center, well past the Ruler's own small dead-zone -- not near any root edge
+	const quarterX = box.x + box.width / 4; // comfortably off-center -- not near any root edge
 	const midY = box.y + box.height / 2;
 
 	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
@@ -736,29 +738,92 @@ test("28. Smart proximity drop zones: every possible position renders, faint by 
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 });
 
-test("29. Smart proximity drop zones: docking one pane adds its own 5 positions (4 edges + center), and whichever is closest breathes brighter", async ({ page }) => {
+test("29. Smart proximity drop zones: docking one pane adds its own 5 positions, but hovering its content always suppresses exactly one (the Ruler's own live pick) -- even at the exact center, which now favors a real 50% split (see test 7) instead of nothing", async ({ page }) => {
 	await dockViaClick(page);
 	const wrapper = windowWrapper(page);
 	const box = (await groupContent(page, 0).boundingBox())!;
-	const nearLeftX = box.x + box.width * 0.05;
-	const midY = box.y + box.height * 0.5;
+	const centerX = box.x + box.width * 0.5;
+	const centerY = box.y + box.height * 0.5;
 
 	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
 	const glyph = activityGlyph(page);
 	await glyph.dispatchEvent("dragstart", { dataTransfer });
-	await wrapper.dispatchEvent("dragenter", { dataTransfer, clientX: nearLeftX, clientY: midY });
-	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: nearLeftX, clientY: midY });
-	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: nearLeftX, clientY: midY });
+	await wrapper.dispatchEvent("dragenter", { dataTransfer, clientX: centerX, clientY: centerY });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: centerX, clientY: centerY });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: centerX, clientY: centerY });
 
 	const zones = await readZones(page);
 	const rootZones = zones.filter((zone) => zone.testId.startsWith("drop-zone-root:"));
 	const groupZones = zones.filter((zone) => !zone.testId.startsWith("drop-zone-root:"));
 	expect(rootZones).toHaveLength(4);
-	expect(groupZones).toHaveLength(5); // left/right/top/bottom/center for the one real docked group
-
-	const groupLeft = groupZones.find((zone) => zone.testId.endsWith(":left"))!;
-	const groupRight = groupZones.find((zone) => zone.testId.endsWith(":right"))!;
-	expect(groupLeft.peak).toBeGreaterThan(groupRight.peak); // pointer near the pane's own left edge
+	expect(groupZones).toHaveLength(4); // one of the 5 is always suppressed once any position is actually favored
 
 	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
+
+test("30. Smart proximity drop zones: off-center toward one edge, the still-ambient sibling zones (not the one the Ruler currently favors) keep reflecting real proximity", async ({ page }) => {
+	await dockViaClick(page);
+	const wrapper = windowWrapper(page);
+	const box = (await groupContent(page, 0).boundingBox())!;
+	// Off-center toward the top-left -- closer to top than to either side, so
+	// the Ruler favors "top" (suppressing that one ambient zone, see test 31),
+	// leaving left/right both still ambient and comparable.
+	const x = box.x + box.width * 0.25;
+	const y = box.y + box.height * 0.1;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	const glyph = activityGlyph(page);
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await wrapper.dispatchEvent("dragenter", { dataTransfer, clientX: x, clientY: y });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+
+	const zones = await readZones(page);
+	const groupZones = zones.filter((zone) => !zone.testId.startsWith("drop-zone-root:"));
+	const groupLeft = groupZones.find((zone) => zone.testId.endsWith(":left"))!;
+	const groupRight = groupZones.find((zone) => zone.testId.endsWith(":right"))!;
+	expect(groupLeft.peak).toBeGreaterThan(groupRight.peak); // pointer closer to the pane's own left half
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
+
+test("31. Real fix for a reported bug: the Dock Ruler and the ambient proximity zones must never disagree about the same position -- the matching ambient zone is suppressed while the Ruler's own live highlight covers it", async ({ page }) => {
+	await dockViaClick(page);
+	const wrapper = windowWrapper(page);
+	const content = groupContent(page, 0);
+	const box = (await content.boundingBox())!;
+	// Comfortably left of center -- the Ruler favors "left" here.
+	const x = box.x + box.width * 0.1;
+	const y = box.y + box.height * 0.5;
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	const glyph = activityGlyph(page);
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await content.dispatchEvent("dragenter", { dataTransfer, clientX: x, clientY: y });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+	await content.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+	await wrapper.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+
+	// The Ruler's own live highlight is showing...
+	await expect(page.getByTestId("dock-ruler-shade")).toBeVisible();
+	// ...and the previously-reported bug: a DIFFERENT, disagreeing rectangle
+	// (the static ambient zone for the same "left" position) no longer
+	// coexists with it.
+	const zones = await readZones(page);
+	expect(zones.some((zone) => zone.testId.endsWith(":left") && !zone.testId.startsWith("drop-zone-root:"))).toBe(false);
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
+
+test("32. Real fix for a reported bug: dragging onto a pane's own header/tab-strip inserts a tab, not a split -- tabs should only happen there, never from a content-area drag", async ({ page }) => {
+	await dockViaClick(page);
+	await expect(groups(page)).toHaveCount(1);
+	await expect(tabs(page)).toHaveCount(1);
+
+	const header = page.locator(".dv-tabs-and-actions-container");
+	await realMouseDrag(page, activityGlyph(page), header);
+
+	await expect(groups(page)).toHaveCount(1); // still one pane -- a tab, not a new split
+	await expect(tabs(page)).toHaveCount(2);
 });

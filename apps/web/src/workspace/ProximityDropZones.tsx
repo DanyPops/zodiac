@@ -31,7 +31,7 @@ export function ProximityDropZones({ zones, zoneOpacities }: ProximityDropZonesP
 					"--zone-max-opacity": peakOpacity,
 				};
 				return (
-					<div key={zone.id} data-testid={`drop-zone-${zone.id}`} className="pointer-events-none absolute animate-zone-breathe border border-gray-500 motion-reduce:animate-none dark:border-gray-400" style={style}>
+					<div key={zone.id} data-testid={`drop-zone-${zone.id}`} className="pointer-events-none absolute animate-zone-breathe rounded-[var(--app-corner-radius,16px)] border border-gray-500 motion-reduce:animate-none dark:border-gray-400" style={style}>
 						<span className="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-500 dark:bg-gray-400" />
 					</div>
 				);

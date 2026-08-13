@@ -214,7 +214,7 @@ interface WindowDockviewProps {
 	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too (or float it, for Chat). */
 	readonly onPanelClosed: (instanceId: string) => void;
 	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined, newGroupSizeRatio: number | undefined) => void;
-	/** The Dock Ruler's outer frame (DockRulerFrame, rendered outside this Window's own overflow-hidden canvas by a parent) needs the live hint too, converted into an absolute page-space mark -- undefined outside a drag, once the pointer leaves the target, or in the small center dead-zone. */
+	/** The Dock Ruler's outer frame (DockRulerFrame, rendered outside this Window's own overflow-hidden canvas by a parent) needs the live hint too, converted into an absolute page-space mark -- undefined outside a drag, or once the pointer leaves the target. */
 	readonly onDockRulerHintChange?: (mark: DockRulerFrameMark | undefined) => void;
 	/** App.tsx's own templateDragging -- true for a Surface Template drag's entire duration, regardless of where it started or how it concludes. Used only to force-clear the in-content Dock Ruler shade once a drag ends by any means other than a drop or the pointer visibly leaving (a cancelled drag, or one dropped outside any valid target) -- see the effect below. */
 	readonly dragActive?: boolean;
@@ -269,11 +269,18 @@ export function WindowDockview({
 	// not dockview's onWillShowOverlay, so sharing one ref would double-sample
 	// the same native event and corrupt both gates' velocity readings.
 	const zoneLastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
+	// The group id (if any) onWillShowOverlay's own content-kind branch most
+	// recently ran for -- onDidDrop reads this to tell a real content drop
+	// (recompute a split) apart from a header/tab-strip drop (defer to
+	// dockview's own reported position). Real fix for a reported bug: dropping
+	// onto a group's own header used to still recompute a split from raw
+	// clientY against the group's *whole* element (header included), since
+	// DockviewDidDropEvent carries no `kind` of its own to check directly.
+	const contentHoverGroupIdRef = useRef<string | undefined>(undefined);
 	const [saveAsTemplateRequest, setSaveAsTemplateRequest] = useState<{ templateId: string; defaultTitle: string } | undefined>(undefined);
 	// The live Dock Ruler overlay's own position/hint while dragging over an
 	// existing group's content -- undefined outside a drag, or once the
-	// pointer leaves the target, drops, or lands in the small center
-	// dead-zone (tab-insert, no fraction to show).
+	// pointer leaves the target or drops.
 	const [dockRulerBox, setDockRulerBox] = useState<{ left: number; top: number; width: number; height: number; hint: DockRulerHint } | undefined>(undefined);
 	// Every possible drop position for the current drag (see computeDropZones)
 	// and each one's own current breathing-peak opacity -- the ambient,
@@ -303,6 +310,7 @@ export function WindowDockview({
 	// ever cleared dockRulerBox for it.
 	useEffect(() => {
 		if (dragActive) return;
+		contentHoverGroupIdRef.current = undefined;
 		setDockRulerBox(undefined);
 		onDockRulerHintChange(undefined);
 		setDropZones([]);
@@ -332,8 +340,22 @@ export function WindowDockview({
 			const zones = computeDropZones(groups, canvasRect);
 			const pointer = { x: nativeEvent.clientX - wrapperBox.left, y: nativeEvent.clientY - wrapperBox.top };
 			const radius = proximityInfluenceRadius(canvasRect);
-			setDropZones(zones);
-			setDropZoneOpacities(new Map(zones.map((zone) => [zone.id, dropZoneOpacity(dropZoneCloseness(pointer, zone, radius))])));
+
+			// The Dock Ruler (content-kind onWillShowOverlay, above) shows its own
+			// live-fraction highlight for whichever exact position the pointer
+			// currently favors within a hovered group -- recomputed independently
+			// here (not read from the other listener's own state, see this
+			// effect's own comment on why) with the same computeDockRulerHint used
+			// there. Excluding that one ambient zone avoids showing two
+			// disagreeing rectangles for the same position: a static half-of-group
+			// guess next to the Ruler's own live, precise one.
+			const hoveredGroup = groups.find((group) => pointer.x >= group.rect.left && pointer.x <= group.rect.left + group.rect.width && pointer.y >= group.rect.top && pointer.y <= group.rect.top + group.rect.height);
+			const activeHint = hoveredGroup ? computeDockRulerHint(pointer.x - hoveredGroup.rect.left, pointer.y - hoveredGroup.rect.top, hoveredGroup.rect.width, hoveredGroup.rect.height) : undefined;
+			const suppressedZoneId = hoveredGroup && activeHint ? `${hoveredGroup.id}:${activeHint.edge}` : undefined;
+			const visibleZones = suppressedZoneId ? zones.filter((zone) => zone.id !== suppressedZoneId) : zones;
+
+			setDropZones(visibleZones);
+			setDropZoneOpacities(new Map(visibleZones.map((zone) => [zone.id, dropZoneOpacity(dropZoneCloseness(pointer, zone, radius))])));
 		}
 		wrapper.addEventListener("dragover", onDragOver);
 		return () => wrapper.removeEventListener("dragover", onDragOver);
@@ -443,10 +465,12 @@ export function WindowDockview({
 				const wrapper = wrapperRef.current;
 				const hint = wrapper ? dockRulerHintFromEvent(overlayEvent.nativeEvent, overlayEvent.group.element) : undefined;
 				if (!hint || !wrapper) {
+					contentHoverGroupIdRef.current = undefined;
 					setDockRulerBox(undefined);
 					onDockRulerHintChange(undefined);
 					return;
 				}
+				contentHoverGroupIdRef.current = overlayEvent.group.id;
 				const groupBox = overlayEvent.group.element.getBoundingClientRect();
 				const wrapperBox = wrapper.getBoundingClientRect();
 				setDockRulerBox({ left: groupBox.left - wrapperBox.left, top: groupBox.top - wrapperBox.top, width: groupBox.width, height: groupBox.height, hint });
@@ -458,6 +482,7 @@ export function WindowDockview({
 			// "Spaced" theme's overlay anchor persists across frames once shown,
 			// so an unsuppressed fast frame stays visible through the rest of a
 			// fast pass even if every later frame is correctly suppressed.
+			contentHoverGroupIdRef.current = undefined;
 			setDockRulerBox(undefined);
 			onDockRulerHintChange(undefined);
 			if (sampleDragVelocity(overlayEvent.nativeEvent, lastMoveRef) > DRAG_HINT_IDLE_VELOCITY_PX_PER_MS) overlayEvent.preventDefault();
@@ -516,6 +541,8 @@ export function WindowDockview({
 		(event: DockviewDidDropEvent) => {
 			const dataTransfer = event.nativeEvent instanceof DragEvent ? event.nativeEvent.dataTransfer : null;
 			const templateId = dataTransfer?.getData(TEMPLATE_DRAG_MIME_TYPE);
+			const hoveredGroupId = contentHoverGroupIdRef.current;
+			contentHoverGroupIdRef.current = undefined;
 			setDockRulerBox(undefined);
 			onDockRulerHintChange(undefined);
 			setDropZones([]);
@@ -524,10 +551,15 @@ export function WindowDockview({
 			// Recompute the same hint fresh, rather than trusting dockview's own
 			// reported `event.position` -- its quadrant thresholds are much
 			// narrower than the Dock Ruler's, so they can disagree near the
-			// pane's own center. Falls back to dockview's own position/no ratio
-			// when there's no group to measure (the empty-Window watermark) or
-			// the pointer was in the ruler's own small center dead-zone.
-			const hint = event.group ? dockRulerHintFromEvent(event.nativeEvent, event.group.element) : undefined;
+			// pane's own center. Only for a drop actually preceded by a
+			// content-kind hover for this exact group -- DockviewDidDropEvent
+			// carries no `kind` of its own, so without this check a header/tab-
+			// strip drop's clientY (still "inside" the group's *whole* element,
+			// header included) would get recomputed as a bogus split instead of
+			// deferring to dockview's own correct tab-insert. Falls back to
+			// dockview's own position/no ratio for that case, or when there's no
+			// group to measure (the empty-Window watermark).
+			const hint = event.group && event.group.id === hoveredGroupId ? dockRulerHintFromEvent(event.nativeEvent, event.group.element) : undefined;
 			if (!hint) {
 				onExternalTemplateDrop(templateId, event.position, event.group?.id, undefined);
 				return;

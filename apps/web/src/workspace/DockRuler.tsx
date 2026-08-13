@@ -1,4 +1,6 @@
-import type { DockRulerHint } from "./dock-ruler.js";
+import type { CSSProperties } from "react";
+import { dockRulerHintRect, type DockRulerHint } from "./dock-ruler.js";
+import { ACTIVE_ZONE_CEILING_OPACITY, ACTIVE_ZONE_FLOOR_OPACITY } from "./proximity-zones.js";
 
 interface DockRulerProps {
 	readonly width: number;
@@ -7,26 +9,24 @@ interface DockRulerProps {
 }
 
 /**
- * The live shaded preview shown over an existing docked Surface's own
+ * The live split preview shown over an existing docked Surface's own
  * content while dragging -- exactly how much of the pane the new split
  * will take. The ruler's own ticks/labels live outside the content
  * entirely now, in DockRulerFrame's outer bars; this is deliberately just
  * the in-content preview, `pointer-events-none` so it never competes with
  * the native HTML5 drag events dockview itself listens for underneath it.
  *
- * Neutral grey, matching the ambient proximity zones -- not accent. This is
- * a confirmed, already-decided target (the pointer is right over it), so it
- * stays solid rather than breathing like the zones' own still-ambiguous
- * guidance; only the frame's own live mark/label stays accent-colored, as
- * the one precise "drop now" signal.
+ * A thicker, brighter-breathing instance of the ambient proximity zones'
+ * own border-box language, not a separate "blocky overlay" motif -- same
+ * neutral grey, same animate-zone-breathe rhythm, same shared corner-radius
+ * token, just a brighter range since this is a confirmed target, not a
+ * proximity guess. WindowDockview suppresses the matching ambient zone
+ * while this is showing, so the two can never disagree about where a drop
+ * would land -- this is the only rectangle shown for that position.
  */
 export function DockRuler({ width, height, hint }: DockRulerProps): React.JSX.Element {
-	const horizontal = hint.axis === "horizontal";
-	const activeAxisPx = horizontal ? width * hint.guide.ratio : height * hint.guide.ratio;
-	const fromStart = hint.edge === "left" || hint.edge === "top";
-	const shadeStyle = horizontal
-		? { top: 0, height, left: fromStart ? 0 : activeAxisPx, width: fromStart ? activeAxisPx : width - activeAxisPx }
-		: { left: 0, width, top: fromStart ? 0 : activeAxisPx, height: fromStart ? activeAxisPx : height - activeAxisPx };
+	const rect = dockRulerHintRect(hint, width, height);
+	const style: CSSProperties & Record<string, string | number> = { left: rect.left, top: rect.top, width: rect.width, height: rect.height, "--zone-min-opacity": ACTIVE_ZONE_FLOOR_OPACITY, "--zone-max-opacity": ACTIVE_ZONE_CEILING_OPACITY };
 
-	return <div data-testid="dock-ruler-shade" className="pointer-events-none absolute z-40 bg-gray-500/20 dark:bg-gray-400/20" style={shadeStyle} />;
+	return <div data-testid="dock-ruler-shade" className="pointer-events-none absolute z-40 animate-zone-breathe rounded-[var(--app-corner-radius,16px)] border-2 border-gray-500 motion-reduce:animate-none dark:border-gray-400" style={style} />;
 }

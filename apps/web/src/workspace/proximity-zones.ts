@@ -111,3 +111,12 @@ export function dropZoneCloseness(pointer: Point, zone: DropZone, maxInfluenceRa
 export function dropZoneOpacity(closeness: number): number {
 	return PROXIMITY_FLOOR_OPACITY + (PROXIMITY_CEILING_OPACITY - PROXIMITY_FLOOR_OPACITY) * closeness;
 }
+
+/**
+ * The Dock Ruler's own live split preview (DockRuler.tsx) is the single
+ * confirmed target the pointer is already on, not a proximity-scored
+ * candidate -- it breathes brighter than any ambient zone ever does, and
+ * never dims to their faint floor. Same shared breathing rhythm, own range.
+ */
+export const ACTIVE_ZONE_FLOOR_OPACITY = 0.5;
+export const ACTIVE_ZONE_CEILING_OPACITY = 1;
