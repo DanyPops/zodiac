@@ -10,7 +10,7 @@ import { SURFACE_BG } from "../platform/surface-style.js";
 import { DockRuler } from "./DockRuler.js";
 import { computeDockRulerHint, dockRulerFrameMark, type DockRulerFrameMark, type DockRulerHint } from "./dock-ruler.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";
-import { computeDropZones, dropZoneCloseness, dropZoneOpacity, proximityInfluenceRadius, type DropZone } from "./proximity-zones.js";
+import { ACTIVE_ZONE_CEILING_OPACITY, computeDropZones, dropZoneCloseness, dropZoneOpacity, proximityInfluenceRadius, type DropZone } from "./proximity-zones.js";
 import { ProximityDropZones } from "./ProximityDropZones.js";
 import { CHAT_TEMPLATE_ID, type DockedSurfaceInstance } from "./model.js";
 import { SaveAsTemplateDialog } from "./SaveAsTemplateDialog.js";
@@ -277,6 +277,18 @@ export function WindowDockview({
 	// clientY against the group's *whole* element (header included), since
 	// DockviewDidDropEvent carries no `kind` of its own to check directly.
 	const contentHoverGroupIdRef = useRef<string | undefined>(undefined);
+	// dockview's own real root-edge classification (onWillShowOverlay's kind
+	// === "edge", no group of its own) -- the ambient listener below is a
+	// separate native dragover listener with its own independent geometry math
+	// (computeDockRulerHint against whichever group's rect the raw pointer
+	// happens to sit inside), which has no way to know dockview itself will
+	// actually perform a *root-level* split there instead of a split inside
+	// that group -- a real, reported bug: a group thin enough (or close enough
+	// to the canvas's own edge) that dockview reclassifies a content hover as
+	// a root edge still lit up its own small per-group zone brightest (pure
+	// centroid-distance proximity, unaware of the reclassification), promising
+	// a modest in-group split that dropping there would never actually produce.
+	const rootEdgeHintRef = useRef<Position | undefined>(undefined);
 	const [saveAsTemplateRequest, setSaveAsTemplateRequest] = useState<{ templateId: string; defaultTitle: string } | undefined>(undefined);
 	// The live Dock Ruler overlay's own position/hint while dragging over an
 	// existing group's content -- undefined outside a drag, or once the
@@ -311,6 +323,7 @@ export function WindowDockview({
 	useEffect(() => {
 		if (dragActive) return;
 		contentHoverGroupIdRef.current = undefined;
+		rootEdgeHintRef.current = undefined;
 		setDockRulerBox(undefined);
 		onDockRulerHintChange(undefined);
 		setDropZones([]);
@@ -352,10 +365,22 @@ export function WindowDockview({
 			const hoveredGroup = groups.find((group) => pointer.x >= group.rect.left && pointer.x <= group.rect.left + group.rect.width && pointer.y >= group.rect.top && pointer.y <= group.rect.top + group.rect.height);
 			const activeHint = hoveredGroup ? computeDockRulerHint(pointer.x - hoveredGroup.rect.left, pointer.y - hoveredGroup.rect.top, hoveredGroup.rect.width, hoveredGroup.rect.height) : undefined;
 			const suppressedZoneId = hoveredGroup && activeHint ? `${hoveredGroup.id}:${activeHint.edge}` : undefined;
-			const visibleZones = suppressedZoneId ? zones.filter((zone) => zone.id !== suppressedZoneId) : zones;
+
+			// dockview's own real classification overrides our own geometry guess
+			// above whenever they disagree -- see rootEdgeHintRef's own comment.
+			// The nearby group's zone for that same direction is just as misleading
+			// as the one the Ruler already suppresses, so it's excluded the same
+			// way; the matching root zone gets promoted to the Ruler's own
+			// confirmed-target brightness instead of a mere proximity guess, since
+			// dockview will actually perform exactly that split.
+			const rootEdgePosition = rootEdgeHintRef.current;
+			const edgeSuppressedZoneId = hoveredGroup && rootEdgePosition ? `${hoveredGroup.id}:${rootEdgePosition}` : undefined;
+			const visibleZones = zones.filter((zone) => zone.id !== suppressedZoneId && zone.id !== edgeSuppressedZoneId);
 
 			setDropZones(visibleZones);
-			setDropZoneOpacities(new Map(visibleZones.map((zone) => [zone.id, dropZoneOpacity(dropZoneCloseness(pointer, zone, radius))])));
+			const opacities = new Map(visibleZones.map((zone) => [zone.id, dropZoneOpacity(dropZoneCloseness(pointer, zone, radius))]));
+			if (rootEdgePosition) opacities.set(`root:${rootEdgePosition}`, ACTIVE_ZONE_CEILING_OPACITY);
+			setDropZoneOpacities(opacities);
 		}
 		wrapper.addEventListener("dragover", onDragOver);
 		return () => wrapper.removeEventListener("dragover", onDragOver);
@@ -453,6 +478,11 @@ export function WindowDockview({
 		});
 
 		event.api.onWillShowOverlay((overlayEvent) => {
+			// Real-time root-edge classification for the ambient listener above,
+			// unconditional (not idle-gated) -- always the freshest ground truth
+			// regardless of which branch below actually renders anything.
+			rootEdgeHintRef.current = overlayEvent.kind === "edge" ? overlayEvent.position : undefined;
+
 			// Dock Ruler: a granular overlay for an existing group's content,
 			// replacing dockview's own coarse quadrant one (hidden via CSS).
 			// No preventDefault -- onDrop still needs to fire; onDidDrop below

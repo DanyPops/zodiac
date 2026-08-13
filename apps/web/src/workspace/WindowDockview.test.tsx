@@ -299,6 +299,28 @@ describe("WindowDockview's ambient proximity drop zones", () => {
 		expect(wrapper.querySelectorAll('[data-testid^="drop-zone-"]')).toHaveLength(5 + 4 - 1);
 	});
 
+	it("real regression: dockview's own root-edge classification overrides our own geometry guess -- a group close enough to the canvas's own edge that dockview reclassifies a content hover as a root split no longer lights up its own small per-group zone, and the matching root zone gets promoted to the confirmed-target brightness instead of a mere proximity guess", () => {
+		dockview.api.groups = [{ id: "group-1", element: { getBoundingClientRect: () => rect(0, 300, 800, 100) } }];
+		const { wrapper, onWillShowOverlay } = renderWindowDockview({ dragActive: true });
+		vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue(rect(0, 0, 800, 400));
+
+		// dockview's own real hit-testing decided this exact position is a
+		// root-level edge (no group of its own), not a content split inside
+		// group-1 -- exactly what happens for a group thin enough, or close
+		// enough to the canvas's own edge, in a real browser.
+		onWillShowOverlay({ kind: "edge", group: undefined, position: "bottom", nativeEvent: new PointerEvent("pointermove"), preventDefault: () => {} });
+
+		// The raw pointer still geometrically sits inside group-1's own rect.
+		dispatch(wrapper, dragOverAt(400, 380));
+		dispatch(wrapper, dragOverAt(400, 380));
+
+		expect(wrapper.querySelector('[data-testid="drop-zone-group-1:bottom"]')).toBeNull();
+		expect(wrapper.querySelector('[data-testid="drop-zone-group-1:top"]')).not.toBeNull();
+		const rootBottom = wrapper.querySelector('[data-testid="drop-zone-root:bottom"]') as HTMLElement;
+		expect(rootBottom).not.toBeNull();
+		expect(Number.parseFloat(rootBottom.style.getPropertyValue("--zone-max-opacity"))).toBe(1);
+	});
+
 	it("clears once the drag ends by any means -- dragActive flipping false, matching the Ruler's own cleanup", () => {
 		const { wrapper, rerenderWithDragActive } = renderWindowDockview({ dragActive: true });
 		dispatch(wrapper, dragOverAt(20));

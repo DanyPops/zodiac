@@ -827,3 +827,40 @@ test("32. Real fix for a reported bug: dragging onto a pane's own header/tab-str
 	await expect(groups(page)).toHaveCount(1); // still one pane -- a tab, not a new split
 	await expect(tabs(page)).toHaveCount(2);
 });
+
+test("33. Real fix for a reported bug: our own ambient zones and dockview's own real edge/content classification must agree -- a group thin enough (or close enough to the canvas's own edge) that dockview reclassifies a content hover as a root-level split boosts the matching root zone to the confirmed-target brightness instead of leaving it at an ordinary proximity guess", async ({ page }) => {
+	await dockViaClick(page);
+	// A short bottom pane, close to the canvas's own bottom edge -- exactly the
+	// shape that made dockview itself reclassify a content hover as a root edge.
+	await dockViaDrag(page, groupContent(page, 0), 0.5, 0.85);
+	await expect(groups(page)).toHaveCount(2);
+
+	const bottomContent = await bottommostGroupContent(page);
+	const box = (await bottomContent.boundingBox())!;
+	const x = box.x + box.width * 0.5;
+	const y = box.y + box.height * 0.95; // well within dockview's own root-edge activation band
+
+	const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+	const glyph = activityGlyph(page);
+	await glyph.dispatchEvent("dragstart", { dataTransfer });
+	await bottomContent.dispatchEvent("dragenter", { dataTransfer, clientX: x, clientY: y });
+	await bottomContent.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+	await bottomContent.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+	await bottomContent.dispatchEvent("dragover", { dataTransfer, clientX: x, clientY: y });
+
+	// dockview's own real hit-testing agrees this is a root-level edge, not a
+	// content split inside the small bottom group.
+	await expect(page.locator(".dv-drop-target-edge.dv-drop-target-bottom")).toBeVisible();
+
+	const zones = await readZones(page);
+	// The one, unambiguous signal only this fix produces: a bare proximity
+	// guess for root:bottom (always < 1 -- see test 30/31's own comparisons)
+	// promoted to the Ruler's own confirmed-target ceiling, because dockview
+	// itself will actually perform exactly this split.
+	const rootBottom = zones.find((zone) => zone.testId === "drop-zone-root:bottom");
+	expect(rootBottom?.peak).toBe(1);
+	// The misleading small-group zone for the very same direction never shows.
+	expect(zones.some((zone) => zone.testId === "drop-zone-2:bottom")).toBe(false);
+
+	await glyph.dispatchEvent("dragend", { dataTransfer });
+});
