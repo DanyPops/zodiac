@@ -1,10 +1,12 @@
+import { centroidOf, type Point } from "./geometry.js";
+
 /**
  * Driven port: measures the on-screen offset between the Wisp Cursor's
  * static idle anchor and a Window Carousel pill, without the rest of the
  * app touching `window`/`document` directly.
  */
 export interface WispTargetMeasurer {
-	measure: (windowIndex: number) => { x: number; y: number } | undefined;
+	measure: (windowIndex: number) => Point | undefined;
 	onResize: (callback: () => void) => () => void;
 }
 
@@ -14,12 +16,9 @@ export function createDomWispTargetMeasurer(): WispTargetMeasurer {
 			const anchor = document.querySelector<HTMLElement>("[data-wisp-cursor-anchor]");
 			const button = document.querySelector<HTMLElement>(`[aria-label="Windows"] [data-window-index="${windowIndex}"]`);
 			if (!anchor || !button) return undefined;
-			const anchorRect = anchor.getBoundingClientRect();
-			const buttonRect = button.getBoundingClientRect();
-			return {
-				x: buttonRect.left + buttonRect.width / 2 - (anchorRect.left + anchorRect.width / 2),
-				y: buttonRect.top + buttonRect.height / 2 - (anchorRect.top + anchorRect.height / 2),
-			};
+			const anchorCenter = centroidOf(anchor.getBoundingClientRect());
+			const buttonCenter = centroidOf(button.getBoundingClientRect());
+			return { x: buttonCenter.x - anchorCenter.x, y: buttonCenter.y - anchorCenter.y };
 		},
 		onResize(callback) {
 			window.addEventListener("resize", callback);

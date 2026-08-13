@@ -1,3 +1,5 @@
+import { splitRect, type Rect } from "../platform/geometry.js";
+
 /** Every ruler offers guides at these fraction denominators -- halves through sixths, per the literal ask. */
 export const DOCK_RULER_DENOMINATORS: readonly number[] = [2, 3, 4, 5, 6];
 
@@ -73,28 +75,10 @@ export function computeDockRulerHint(offsetX: number, offsetY: number, width: nu
 	return { axis: "vertical", edge: yRatio < 0.5 ? "top" : "bottom", guide: nearestDockRulerGuide(yRatio, guides) };
 }
 
-interface DockRulerTargetBox {
-	readonly left: number;
-	readonly top: number;
-	readonly width: number;
-	readonly height: number;
-}
-
-export interface DockRulerRect {
-	readonly left: number;
-	readonly top: number;
-	readonly width: number;
-	readonly height: number;
-}
-
-/** The exact rectangle a hint's own split preview covers within a `width` x `height` target -- e.g. docking left at 1/4 covers the left quarter, full height. Shared by the in-content DockRuler shade and anything else that needs the same live-fraction geometry, so they can never disagree with each other. */
-export function dockRulerHintRect(hint: DockRulerHint, width: number, height: number): DockRulerRect {
-	const horizontal = hint.axis === "horizontal";
-	const activeAxisPx = horizontal ? width * hint.guide.ratio : height * hint.guide.ratio;
+/** The exact rectangle a hint's own split preview covers within a `width` x `height` target -- e.g. docking left at 1/4 covers the left quarter, full height. Shared by the in-content DockRuler shade and anything else that needs the same live-fraction geometry, so they can never disagree with each other. A thin wrapper over platform/geometry.js's splitRect -- the same operation proximity-zones.ts's groupPositionRect reduces to, kept as one function specifically because those two drifted apart once already (a real, shipped misalignment bug) when they were independent. */
+export function dockRulerHintRect(hint: DockRulerHint, width: number, height: number): Rect {
 	const fromStart = hint.edge === "left" || hint.edge === "top";
-	return horizontal
-		? { top: 0, height, left: fromStart ? 0 : activeAxisPx, width: fromStart ? activeAxisPx : width - activeAxisPx }
-		: { left: 0, width, top: fromStart ? 0 : activeAxisPx, height: fromStart ? activeAxisPx : height - activeAxisPx };
+	return splitRect({ left: 0, top: 0, width, height }, hint.axis, fromStart, hint.guide.ratio);
 }
 
 export interface DockRulerFrameMark {
@@ -113,7 +97,7 @@ export interface DockRulerFrameMark {
  * legitimately fall between the frame's own generic canvas-wide reference
  * ticks when the target is a nested sub-group rather than the whole canvas.
  */
-export function dockRulerFrameMark(hint: DockRulerHint, targetBox: DockRulerTargetBox): DockRulerFrameMark {
+export function dockRulerFrameMark(hint: DockRulerHint, targetBox: Rect): DockRulerFrameMark {
 	if (hint.axis === "horizontal") return { axis: "horizontal", position: targetBox.left + hint.guide.ratio * targetBox.width, label: hint.guide.label };
 	return { axis: "vertical", position: targetBox.top + hint.guide.ratio * targetBox.height, label: hint.guide.label };
 }

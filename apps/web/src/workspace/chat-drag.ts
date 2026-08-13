@@ -1,8 +1,7 @@
+import type { Point } from "../platform/geometry.js";
+
 /** Pure drag math for the floating Chat Surface -- real position state, not a fixed popup. */
-export interface ChatPosition {
-	x: number;
-	y: number;
-}
+export type ChatPosition = Point;
 
 export interface PointerSample {
 	readonly clientX: number;

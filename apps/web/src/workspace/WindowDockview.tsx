@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
 import { cn } from "../platform/cn.js";
+import { toLocalRect, type Rect } from "../platform/geometry.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { DockRuler } from "./DockRuler.js";
 import { computeDockRulerHint, dockRulerFrameMark, type DockRulerFrameMark, type DockRulerHint } from "./dock-ruler.js";
@@ -293,7 +294,7 @@ export function WindowDockview({
 	// The live Dock Ruler overlay's own position/hint while dragging over an
 	// existing group's content -- undefined outside a drag, or once the
 	// pointer leaves the target or drops.
-	const [dockRulerBox, setDockRulerBox] = useState<{ left: number; top: number; width: number; height: number; hint: DockRulerHint } | undefined>(undefined);
+	const [dockRulerBox, setDockRulerBox] = useState<(Rect & { hint: DockRulerHint }) | undefined>(undefined);
 	// Every possible drop position for the current drag (see computeDropZones)
 	// and each one's own current breathing-peak opacity -- the ambient,
 	// always-on-during-a-drag layer, distinct from dockRulerBox above which
@@ -348,7 +349,7 @@ export function WindowDockview({
 			const canvasRect = { left: 0, top: 0, width: wrapperBox.width, height: wrapperBox.height };
 			const groups = api.groups.map((group) => {
 				const box = group.element.getBoundingClientRect();
-				return { id: group.id, rect: { left: box.left - wrapperBox.left, top: box.top - wrapperBox.top, width: box.width, height: box.height } };
+				return { id: group.id, rect: toLocalRect(box, wrapperBox) };
 			});
 			const zones = computeDropZones(groups, canvasRect);
 			const pointer = { x: nativeEvent.clientX - wrapperBox.left, y: nativeEvent.clientY - wrapperBox.top };
@@ -503,7 +504,7 @@ export function WindowDockview({
 				contentHoverGroupIdRef.current = overlayEvent.group.id;
 				const groupBox = overlayEvent.group.element.getBoundingClientRect();
 				const wrapperBox = wrapper.getBoundingClientRect();
-				setDockRulerBox({ left: groupBox.left - wrapperBox.left, top: groupBox.top - wrapperBox.top, width: groupBox.width, height: groupBox.height, hint });
+				setDockRulerBox({ ...toLocalRect(groupBox, wrapperBox), hint });
 				onDockRulerHintChange(dockRulerFrameMark(hint, groupBox));
 				return;
 			}

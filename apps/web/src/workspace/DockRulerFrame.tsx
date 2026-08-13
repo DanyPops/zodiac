@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { cn } from "../platform/cn.js";
+import type { Rect } from "../platform/geometry.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 import { dockRulerGuides, type DockRulerFrameMark, type DockRulerGuide } from "./dock-ruler.js";
 import { PROXIMITY_CEILING_OPACITY, PROXIMITY_FLOOR_OPACITY } from "./proximity-zones.js";
@@ -17,16 +18,9 @@ const AMBIENT_TICK_STYLE: CSSProperties & Record<string, string | number> = { "-
 // this is an overlay, appearing only for a drag's duration, not reserved space.
 const RULER_THICKNESS_PX = 28;
 
-export interface DockRulerFrameBox {
-	readonly left: number;
-	readonly top: number;
-	readonly width: number;
-	readonly height: number;
-}
-
 interface DockRulerFrameProps {
 	readonly visible: boolean;
-	readonly box: DockRulerFrameBox | undefined;
+	readonly box: Rect | undefined;
 	readonly mark: DockRulerFrameMark | undefined;
 	readonly guides?: readonly DockRulerGuide[];
 }

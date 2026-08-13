@@ -1,16 +1,11 @@
 import type { Position } from "dockview-react";
+import { centroidOf, distanceBetween, splitRect, type Point, type Rect } from "../platform/geometry.js";
 
-export interface Rect {
-	readonly left: number;
-	readonly top: number;
-	readonly width: number;
-	readonly height: number;
-}
-
-export interface Point {
-	readonly x: number;
-	readonly y: number;
-}
+// Re-exported so every existing import site (WindowDockview.tsx, DockRuler.tsx,
+// ProximityDropZones.tsx, this file's own tests) keeps working unmodified --
+// this used to be where Rect/Point were declared; platform/geometry.js is now
+// the single source of truth, shared with dock-ruler.ts and DockRulerFrame.tsx.
+export type { Point, Rect };
 
 /** Reuses dockview-react's own Position type -- these are exactly the positions its addPanel/onDidDrop API already accepts, not a parallel vocabulary. */
 const EDGE_POSITIONS: readonly Position[] = ["left", "right", "top", "bottom"];
@@ -28,20 +23,20 @@ export interface DropZone {
 	readonly centroid: Point;
 }
 
-function centroidOf(rect: Rect): Point {
-	return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-}
-
+// A fixed 0.5 ratio through the same splitRect the Dock Ruler's own
+// arbitrary-fraction dockRulerHintRect uses -- these two used to be
+// independent implementations of the same operation, and drifted apart
+// once already (a real, shipped misalignment bug).
 function groupPositionRect(rect: Rect, position: Position): Rect {
 	switch (position) {
 		case "left":
-			return { left: rect.left, top: rect.top, width: rect.width / 2, height: rect.height };
+			return splitRect(rect, "horizontal", true, 0.5);
 		case "right":
-			return { left: rect.left + rect.width / 2, top: rect.top, width: rect.width / 2, height: rect.height };
+			return splitRect(rect, "horizontal", false, 0.5);
 		case "top":
-			return { left: rect.left, top: rect.top, width: rect.width, height: rect.height / 2 };
+			return splitRect(rect, "vertical", true, 0.5);
 		case "bottom":
-			return { left: rect.left, top: rect.top + rect.height / 2, width: rect.width, height: rect.height / 2 };
+			return splitRect(rect, "vertical", false, 0.5);
 		default:
 			return rect; // "center" -- dock as a tab, occupies the group's whole rect
 	}
@@ -102,7 +97,7 @@ export const PROXIMITY_CEILING_OPACITY = 0.85;
  */
 export function dropZoneCloseness(pointer: Point, zone: DropZone, maxInfluenceRadius: number): number {
 	if (maxInfluenceRadius <= 0) return 0;
-	const distance = Math.hypot(pointer.x - zone.centroid.x, pointer.y - zone.centroid.y);
+	const distance = distanceBetween(pointer, zone.centroid);
 	const linear = Math.max(0, 1 - distance / maxInfluenceRadius);
 	return linear * linear;
 }

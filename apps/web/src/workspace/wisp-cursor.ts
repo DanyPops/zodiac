@@ -1,11 +1,9 @@
 import type { ConversationItem } from "../conversation/projector.js";
+import type { Point } from "../platform/geometry.js";
 import { findDockedSurfaceForToolName, type Workspace } from "./model.js";
 
 /** Pure position/style math for the Wisp Cursor -- a cosmetic indicator of where the agent is "going" during global (undocked) chat. */
-export interface WispCursorPosition {
-	x: number;
-	y: number;
-}
+export type WispCursorPosition = Point;
 
 export interface WispCursorState {
 	visible: boolean;

@@ -38,8 +38,9 @@ import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
 import { NotificationsPill } from "../workspace/NotificationsPill.js";
-import { DockRulerFrame, type DockRulerFrameBox } from "../workspace/DockRulerFrame.js";
+import { DockRulerFrame } from "../workspace/DockRulerFrame.js";
 import type { DockRulerFrameMark } from "../workspace/dock-ruler.js";
+import type { Rect } from "../platform/geometry.js";
 import { WatchPill } from "../workspace/WatchPill.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
@@ -155,7 +156,7 @@ export function App(): React.JSX.Element {
 	// frame's position: fixed bars need real page coordinates, not a layout ref.
 	const [templateDragging, setTemplateDragging] = useState(false);
 	const [dockRulerMark, setDockRulerMark] = useState<DockRulerFrameMark | undefined>(undefined);
-	const [dockCanvasBox, setDockCanvasBox] = useState<DockRulerFrameBox | undefined>(undefined);
+	const [dockCanvasBox, setDockCanvasBox] = useState<Rect | undefined>(undefined);
 
 	const chatVisibility = useChatVisibility({ visible: workspace.workspace?.chatVisible ?? false, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
 	const dragTracker = useMemo(() => createWindowDragTracker(), []);
