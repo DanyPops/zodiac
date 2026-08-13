@@ -4,15 +4,15 @@ import { getHotkeyManager } from "@tanstack/react-hotkeys";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommandProvider } from "../commands/react.js";
 import { createCommandRegistry } from "../commands/registry.js";
-import type { VisualDna } from "../platform/visual-dna.js";
-import { VisualDnaDialog } from "./VisualDnaDialog.js";
+import type { ShapeSettings } from "../platform/shape-settings.js";
+import { SettingsDialog } from "./SettingsDialog.js";
 
 afterEach(() => {
 	cleanup();
 	getHotkeyManager().destroy();
 });
 
-function renderDialog(value: VisualDna = { vibe: 100, cornerSharpness: 50 }) {
+function renderDialog(value: ShapeSettings = { strokeWidth: 100, cornerRadius: 50 }) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "dialog.close", title: "Close dialog", description: "Closes the open dialog.", execute: vi.fn() },
@@ -22,49 +22,49 @@ function renderDialog(value: VisualDna = { vibe: 100, cornerSharpness: 50 }) {
 		],
 		bindings: [],
 	});
-	const onVibeChange = vi.fn();
-	const onCornerSharpnessChange = vi.fn();
+	const onStrokeWidthChange = vi.fn();
+	const onCornerRadiusChange = vi.fn();
 	const onClose = vi.fn();
 	render(
 		<CommandProvider registry={registry} activeContexts={["dialog"]}>
-			<VisualDnaDialog open onClose={onClose} value={value} onVibeChange={onVibeChange} onCornerSharpnessChange={onCornerSharpnessChange} />
+			<SettingsDialog open onClose={onClose} value={value} onStrokeWidthChange={onStrokeWidthChange} onCornerRadiusChange={onCornerRadiusChange} />
 		</CommandProvider>,
 	);
-	return { onVibeChange, onCornerSharpnessChange, onClose };
+	return { onStrokeWidthChange, onCornerRadiusChange, onClose };
 }
 
-describe("VisualDnaDialog", () => {
+describe("SettingsDialog", () => {
 	it("shows both sliders at their current value, labeled Cartoon/Comfy/Professional and Square/Circle", () => {
-		renderDialog({ vibe: 40, cornerSharpness: 75 });
+		renderDialog({ strokeWidth: 40, cornerRadius: 75 });
 
-		const vibe = screen.getByLabelText("Vibe") as HTMLInputElement;
-		expect(vibe.value).toBe("40");
+		const strokeWidth = screen.getByLabelText("Stroke Width") as HTMLInputElement;
+		expect(strokeWidth.value).toBe("40");
 		expect(screen.getByText("Cartoon")).toBeInTheDocument();
 		expect(screen.getByText("Comfy")).toBeInTheDocument();
 		expect(screen.getByText("Professional")).toBeInTheDocument();
 
-		const corner = screen.getByLabelText("Corner Sharpness") as HTMLInputElement;
+		const corner = screen.getByLabelText("Corner Radius") as HTMLInputElement;
 		expect(corner.value).toBe("75");
 		expect(screen.getByText("Square")).toBeInTheDocument();
 		expect(screen.getByText("Circle")).toBeInTheDocument();
 	});
 
-	it("moving the Vibe slider reports the new value without touching Corner Sharpness", () => {
-		const { onVibeChange, onCornerSharpnessChange } = renderDialog();
-		fireEvent.change(screen.getByLabelText("Vibe"), { target: { value: "20" } });
-		expect(onVibeChange).toHaveBeenCalledWith(20);
-		expect(onCornerSharpnessChange).not.toHaveBeenCalled();
+	it("moving the Stroke Width slider reports the new value without touching Corner Radius", () => {
+		const { onStrokeWidthChange, onCornerRadiusChange } = renderDialog();
+		fireEvent.change(screen.getByLabelText("Stroke Width"), { target: { value: "20" } });
+		expect(onStrokeWidthChange).toHaveBeenCalledWith(20);
+		expect(onCornerRadiusChange).not.toHaveBeenCalled();
 	});
 
-	it("moving the Corner Sharpness slider reports the new value", () => {
-		const { onCornerSharpnessChange } = renderDialog();
-		fireEvent.change(screen.getByLabelText("Corner Sharpness"), { target: { value: "90" } });
-		expect(onCornerSharpnessChange).toHaveBeenCalledWith(90);
+	it("moving the Corner Radius slider reports the new value", () => {
+		const { onCornerRadiusChange } = renderDialog();
+		fireEvent.change(screen.getByLabelText("Corner Radius"), { target: { value: "90" } });
+		expect(onCornerRadiusChange).toHaveBeenCalledWith(90);
 	});
 
 	it("the preview swatch's own inline style tracks the current value directly, not a CSS custom property that could drift", () => {
-		renderDialog({ vibe: 0, cornerSharpness: 0 });
-		const preview = screen.getByTestId("visual-dna-preview");
+		renderDialog({ strokeWidth: 0, cornerRadius: 0 });
+		const preview = screen.getByTestId("shape-preview");
 		expect(preview.style.borderWidth).toBe("3px");
 		expect(preview.style.borderRadius).toBe("0px");
 	});

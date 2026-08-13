@@ -1,4 +1,4 @@
-interface VisualDnaSliderProps {
+interface ShapeSliderProps {
 	readonly id: string;
 	readonly label: string;
 	readonly value: number;
@@ -16,7 +16,7 @@ interface VisualDnaSliderProps {
  * keys, Home/End, screen-reader value announcement) for free, so this stays
  * a thin Tailwind skin over it rather than reimplementing that.
  */
-export function VisualDnaSlider({ id, label, value, onChange, minLabel, midLabel, maxLabel }: VisualDnaSliderProps): React.JSX.Element {
+export function ShapeSlider({ id, label, value, onChange, minLabel, midLabel, maxLabel }: ShapeSliderProps): React.JSX.Element {
 	return (
 		<div className="flex flex-col gap-1.5">
 			<div className="flex items-baseline justify-between">

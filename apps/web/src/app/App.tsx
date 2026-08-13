@@ -17,9 +17,9 @@ import { createWindowPointerTracker } from "../platform/pointer.js";
 import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
 import { createExtensionHost } from "../extensions/extension-host.js";
 import { useDraggablePosition } from "../workspace/useDraggablePosition.js";
-import { VisualDnaDialog } from "../settings/VisualDnaDialog.js";
+import { SettingsDialog } from "../settings/SettingsDialog.js";
 import { useTheme } from "../theme-hooks.js";
-import { useVisualDna } from "../visual-dna-hooks.js";
+import { useShapeSettings } from "../shape-settings-hooks.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
 import { Composer } from "../conversation/ConversationSurface.js";
 import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, isChatDocked, showChat, type Workspace } from "../workspace/model.js";
@@ -67,7 +67,7 @@ export function App(): React.JSX.Element {
 	const extensionSurfaceTemplates = useMemo(() => extensionHost.surfaceTemplates(), [extensionHost]);
 	const extensionCommands = useMemo(() => extensionHost.commands(), [extensionHost]);
 	const theme = useTheme();
-	const visualDna = useVisualDna(preferences);
+	const shapeSettings = useShapeSettings(preferences);
 	const selection = useWorkspaceSelectionCollapse(preferences);
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
@@ -436,15 +436,15 @@ export function App(): React.JSX.Element {
 						contexts.enterGlobal();
 					}}
 				/>
-				<VisualDnaDialog
+				<SettingsDialog
 					open={contexts.dialogMode === "appearance"}
 					onClose={() => {
 						contexts.closeDialog();
 						contexts.enterGlobal();
 					}}
-					value={visualDna.value}
-					onVibeChange={visualDna.setVibe}
-					onCornerSharpnessChange={visualDna.setCornerSharpness}
+					value={shapeSettings.value}
+					onStrokeWidthChange={shapeSettings.setStrokeWidth}
+					onCornerRadiusChange={shapeSettings.setCornerRadius}
 				/>
 				<CreateWorkspaceDialog
 					open={creatingWorkspace}

@@ -1,11 +1,11 @@
 import type { CommandContext, KeybindingDefinition } from "../commands/registry.js";
-import { clampVisualDna, DEFAULT_VISUAL_DNA, isVisualDna, type VisualDna } from "./visual-dna.js";
+import { clampShapeSettings, DEFAULT_SHAPE_SETTINGS, isShapeSettings, type ShapeSettings } from "./shape-settings.js";
 
 const WORKSPACE_SELECTION_KEY = "zodiac.workspace-selection-collapsed";
 const KEYBINDINGS_KEY = "zodiac.keybindings";
 const SAVED_SURFACE_TEMPLATES_KEY = "zodiac.saved-surface-templates";
 const USER_WORKSPACES_KEY = "zodiac.user-workspaces";
-const VISUAL_DNA_KEY = "zodiac.visual-dna";
+const SHAPE_KEY = "zodiac.shape";
 const MAX_USER_WORKSPACES = 50;
 // Two product names ago (agent-deck) and one product name ago (Alignment) --
 // each a real, no-longer-current localStorage namespace an existing user's
@@ -18,6 +18,10 @@ const LEGACY_SIDEBAR_KEY = "agent-deck-sidebar-collapsed";
 const LEGACY_ALIGNMENT_KEYBINDINGS_KEY = "alignment.keybindings";
 const LEGACY_ALIGNMENT_SAVED_SURFACE_TEMPLATES_KEY = "alignment.saved-surface-templates";
 const LEGACY_ALIGNMENT_USER_WORKSPACES_KEY = "alignment.user-workspaces";
+// zodiac.visual-dna: the pre-rename key, same field shape as alignment.visual-dna
+// below (both used { vibe, cornerSharpness } -- migrateShapeSettings translates
+// both into the current { strokeWidth, cornerRadius } shape, not a raw copy.
+const LEGACY_ZODIAC_VISUAL_DNA_KEY = "zodiac.visual-dna";
 const LEGACY_ALIGNMENT_VISUAL_DNA_KEY = "alignment.visual-dna";
 const LEGACY_LAYOUT_KEY = "agent-deck-dashboard-layout";
 const LEGACY_ALIGNMENT_LAYOUT_KEY = "alignment.workspace-layout.legacy-v1";
@@ -52,8 +56,8 @@ export interface Preferences {
 	setSavedSurfaceTemplates: (templates: readonly SavedSurfaceTemplate[]) => void;
 	userWorkspaces: () => SavedWorkspace[];
 	setUserWorkspaces: (workspaces: readonly SavedWorkspace[]) => void;
-	visualDna: () => VisualDna;
-	setVisualDna: (value: VisualDna) => void;
+	shapeSettings: () => ShapeSettings;
+	setShapeSettings: (value: ShapeSettings) => void;
 }
 
 export function createPreferences(storage: Storage): Preferences {
@@ -63,9 +67,9 @@ export function createPreferences(storage: Storage): Preferences {
 	migrateOnce(storage, LEGACY_ALIGNMENT_KEYBINDINGS_KEY, KEYBINDINGS_KEY);
 	migrateOnce(storage, LEGACY_ALIGNMENT_SAVED_SURFACE_TEMPLATES_KEY, SAVED_SURFACE_TEMPLATES_KEY);
 	migrateOnce(storage, LEGACY_ALIGNMENT_USER_WORKSPACES_KEY, USER_WORKSPACES_KEY);
-	migrateOnce(storage, LEGACY_ALIGNMENT_VISUAL_DNA_KEY, VISUAL_DNA_KEY);
 	migrateOnce(storage, LEGACY_ALIGNMENT_LAYOUT_KEY, PRESERVED_LAYOUT_KEY);
 	migrateLegacyLayout(storage);
+	migrateShapeSettings(storage);
 
 	function readCollapsed(): boolean {
 		try {
@@ -139,19 +143,19 @@ export function createPreferences(storage: Storage): Preferences {
 				// The active in-memory user Workspaces remain usable when storage is unavailable.
 			}
 		},
-		visualDna() {
+		shapeSettings() {
 			try {
-				const value: unknown = JSON.parse(storage.getItem(VISUAL_DNA_KEY) ?? "null");
-				return isVisualDna(value) ? clampVisualDna(value) : DEFAULT_VISUAL_DNA;
+				const value: unknown = JSON.parse(storage.getItem(SHAPE_KEY) ?? "null");
+				return isShapeSettings(value) ? clampShapeSettings(value) : DEFAULT_SHAPE_SETTINGS;
 			} catch {
-				return DEFAULT_VISUAL_DNA;
+				return DEFAULT_SHAPE_SETTINGS;
 			}
 		},
-		setVisualDna(value) {
+		setShapeSettings(value) {
 			try {
-				storage.setItem(VISUAL_DNA_KEY, JSON.stringify(clampVisualDna(value)));
+				storage.setItem(SHAPE_KEY, JSON.stringify(clampShapeSettings(value)));
 			} catch {
-				// The active in-memory Visual DNA remains usable when storage is unavailable.
+				// The active in-memory Shape settings remain usable when storage is unavailable.
 			}
 		},
 	};
@@ -192,6 +196,36 @@ function migrateOnce(storage: Storage, legacyKey: string, currentKey: string): v
 		if (legacy === null) return;
 		storage.setItem(currentKey, legacy);
 		storage.removeItem(legacyKey);
+	} catch {
+		// Preserve startup when storage is unavailable; no key is removed unless the copy succeeds.
+	}
+}
+
+/** legacyKey's { vibe, cornerSharpness } shape, translated into the current { strokeWidth, cornerRadius } one -- unrecognized JSON is dropped rather than carried over malformed. */
+function transformLegacyShapeSettings(raw: string): string | null {
+	try {
+		const value: unknown = JSON.parse(raw);
+		if (typeof value !== "object" || value === null) return null;
+		const legacy = value as Record<string, unknown>;
+		if (typeof legacy.vibe !== "number" || typeof legacy.cornerSharpness !== "number") return null;
+		return JSON.stringify({ strokeWidth: legacy.vibe, cornerRadius: legacy.cornerSharpness });
+	} catch {
+		return null;
+	}
+}
+
+/** Like migrateOnce, but translates the legacy { vibe, cornerSharpness } field shape into the current { strokeWidth, cornerRadius } one instead of copying raw JSON verbatim -- a plain copy would leave old field names the current isShapeSettings guard doesn't recognize, silently discarding a user's saved values back to defaults. Tries the two legacy keys oldest-last, same precedence as migrateOnce elsewhere. */
+function migrateShapeSettings(storage: Storage): void {
+	try {
+		if (storage.getItem(SHAPE_KEY) !== null) return;
+		for (const legacyKey of [LEGACY_ZODIAC_VISUAL_DNA_KEY, LEGACY_ALIGNMENT_VISUAL_DNA_KEY]) {
+			const legacy = storage.getItem(legacyKey);
+			if (legacy === null) continue;
+			const transformed = transformLegacyShapeSettings(legacy);
+			if (transformed !== null) storage.setItem(SHAPE_KEY, transformed);
+			storage.removeItem(legacyKey);
+			return;
+		}
 	} catch {
 		// Preserve startup when storage is unavailable; no key is removed unless the copy succeeds.
 	}

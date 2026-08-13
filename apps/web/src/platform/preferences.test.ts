@@ -112,24 +112,48 @@ describe("Zodiac preferences", () => {
 		expect(storage.getItem("alignment.user-workspaces")).toBeNull();
 	});
 
-	it("round-trips a bounded, clamped Visual DNA and falls back on malformed storage", () => {
+	it("round-trips bounded, clamped Shape settings and falls back on malformed storage", () => {
 		const storage = memoryStorage();
 		const preferences = createPreferences(storage);
-		expect(preferences.visualDna()).toEqual({ vibe: 100, cornerSharpness: 50 });
+		expect(preferences.shapeSettings()).toEqual({ strokeWidth: 100, cornerRadius: 50 });
 
-		preferences.setVisualDna({ vibe: 150, cornerSharpness: -20 });
-		expect(createPreferences(storage).visualDna()).toEqual({ vibe: 100, cornerSharpness: 0 });
+		preferences.setShapeSettings({ strokeWidth: 150, cornerRadius: -20 });
+		expect(createPreferences(storage).shapeSettings()).toEqual({ strokeWidth: 100, cornerRadius: 0 });
 
-		storage.setItem("zodiac.visual-dna", JSON.stringify({ vibe: "oops" }));
-		expect(createPreferences(storage).visualDna()).toEqual({ vibe: 100, cornerSharpness: 50 });
+		storage.setItem("zodiac.shape", JSON.stringify({ strokeWidth: "oops" }));
+		expect(createPreferences(storage).shapeSettings()).toEqual({ strokeWidth: 100, cornerRadius: 50 });
 	});
 
-	it("migrates an Alignment-era Visual DNA once", () => {
+	it("migrates a zodiac.visual-dna-era Shape settings value once, translating its old { vibe, cornerSharpness } field names", () => {
+		const storage = memoryStorage();
+		storage.setItem("zodiac.visual-dna", JSON.stringify({ vibe: 30, cornerSharpness: 40 }));
+		const preferences = createPreferences(storage);
+		expect(preferences.shapeSettings()).toEqual({ strokeWidth: 30, cornerRadius: 40 });
+		expect(storage.getItem("zodiac.visual-dna")).toBeNull();
+	});
+
+	it("migrates an Alignment-era Visual DNA once, translating its old { vibe, cornerSharpness } field names", () => {
 		const storage = memoryStorage();
 		storage.setItem("alignment.visual-dna", JSON.stringify({ vibe: 20, cornerSharpness: 10 }));
 		const preferences = createPreferences(storage);
-		expect(preferences.visualDna()).toEqual({ vibe: 20, cornerSharpness: 10 });
+		expect(preferences.shapeSettings()).toEqual({ strokeWidth: 20, cornerRadius: 10 });
 		expect(storage.getItem("alignment.visual-dna")).toBeNull();
+	});
+
+	it("prefers the more recent zodiac.visual-dna key over the older alignment.visual-dna one when both exist", () => {
+		const storage = memoryStorage();
+		storage.setItem("alignment.visual-dna", JSON.stringify({ vibe: 1, cornerSharpness: 1 }));
+		storage.setItem("zodiac.visual-dna", JSON.stringify({ vibe: 30, cornerSharpness: 40 }));
+		const preferences = createPreferences(storage);
+		expect(preferences.shapeSettings()).toEqual({ strokeWidth: 30, cornerRadius: 40 });
+	});
+
+	it("discards an unrecognized legacy shape value instead of carrying it over malformed", () => {
+		const storage = memoryStorage();
+		storage.setItem("zodiac.visual-dna", JSON.stringify({ notShape: true }));
+		const preferences = createPreferences(storage);
+		expect(preferences.shapeSettings()).toEqual({ strokeWidth: 100, cornerRadius: 50 });
+		expect(storage.getItem("zodiac.visual-dna")).toBeNull();
 	});
 
 	it("persists only the Zodiac namespace", () => {

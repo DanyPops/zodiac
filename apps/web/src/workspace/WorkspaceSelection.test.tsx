@@ -21,7 +21,7 @@ function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string, onCrea
 			{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
 			{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
 			{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
-			{ id: "appearance.open", title: "Open Visual DNA", description: "", execute: vi.fn() },
+			{ id: "appearance.open", title: "Open Settings", description: "", execute: vi.fn() },
 		],
 		bindings: [{ commandId: "workspace.toggleSelection", keys: "Mod+B", context: "global" }],
 	});

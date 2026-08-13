@@ -3,30 +3,30 @@ import { Command, Keyboard, MoonStar, Settings } from "lucide-react";
 import { DialogCloseButton } from "../commands/DialogCloseButton.js";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
+import { cornerRadiusPx, lineWidthPx, type ShapeSettings } from "../platform/shape-settings.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
-import { cornerRadiusPx, lineWidthPx, type VisualDna } from "../platform/visual-dna.js";
-import { VisualDnaSlider } from "./VisualDnaSlider.js";
+import { ShapeSlider } from "./ShapeSlider.js";
 
-interface VisualDnaDialogProps {
+interface SettingsDialogProps {
 	readonly open: boolean;
 	readonly onClose: () => void;
-	readonly value: VisualDna;
-	readonly onVibeChange: (vibe: number) => void;
-	readonly onCornerSharpnessChange: (cornerSharpness: number) => void;
+	readonly value: ShapeSettings;
+	readonly onStrokeWidthChange: (strokeWidth: number) => void;
+	readonly onCornerRadiusChange: (cornerRadius: number) => void;
 }
 
 /**
  * The umbrella Settings dialog: shell-level actions (Command Palette,
  * Keyboard Shortcuts, Cycle Theme -- folded here from the collapsed
  * Workspace Selection pillar's own separate icons) plus the Appearance
- * section (Vibe, line neatness Cartoon to Professional; Corner Sharpness,
- * Square to Circle). Both sliders apply live -- see visual-dna-hooks.ts --
- * so the shell behind this dialog re-styles as it's dragged, not only on
- * close. The preview swatch mirrors that same live value directly (not by
- * reading the CSS custom property back out of the document) so it can't
- * drift from what the sliders actually say.
+ * section (Stroke Width, line neatness Cartoon to Professional; Corner
+ * Radius, Square to Circle). Both sliders apply live -- see
+ * shape-settings-hooks.ts -- so the shell behind this dialog re-styles as
+ * it's dragged, not only on close. The preview swatch mirrors that same
+ * live value directly (not by reading the CSS custom property back out of
+ * the document) so it can't drift from what the sliders actually say.
  */
-export function VisualDnaDialog({ open, onClose, value, onVibeChange, onCornerSharpnessChange }: VisualDnaDialogProps): React.JSX.Element {
+export function SettingsDialog({ open, onClose, value, onStrokeWidthChange, onCornerRadiusChange }: SettingsDialogProps): React.JSX.Element {
 	return (
 		<Dialog.Root
 			open={open}
@@ -42,7 +42,7 @@ export function VisualDnaDialog({ open, onClose, value, onVibeChange, onCornerSh
 						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Settings</Dialog.Title>
 						<DialogCloseButton label="Close Settings" />
 					</div>
-					<Dialog.Description className="sr-only">Shell actions and the Visual DNA (Vibe and Corner Sharpness) appearance controls. Changes apply immediately and persist across reloads.</Dialog.Description>
+					<Dialog.Description className="sr-only">Shell actions and the Shape (Stroke Width and Corner Radius) appearance controls. Changes apply immediately and persist across reloads.</Dialog.Description>
 
 					<div className="border-b border-gray-200 p-2 dark:border-gray-700">
 						<p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">Shell</p>
@@ -55,14 +55,14 @@ export function VisualDnaDialog({ open, onClose, value, onVibeChange, onCornerSh
 						<p className="pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">Appearance</p>
 						<div className="flex items-center gap-4">
 							<div className="flex flex-1 flex-col gap-5">
-								<VisualDnaSlider id="visual-dna-vibe" label="Vibe" value={value.vibe} onChange={onVibeChange} minLabel="Cartoon" midLabel="Comfy" maxLabel="Professional" />
-								<VisualDnaSlider id="visual-dna-corner" label="Corner Sharpness" value={value.cornerSharpness} onChange={onCornerSharpnessChange} minLabel="Square" maxLabel="Circle" />
+								<ShapeSlider id="shape-stroke-width" label="Stroke Width" value={value.strokeWidth} onChange={onStrokeWidthChange} minLabel="Cartoon" midLabel="Comfy" maxLabel="Professional" />
+								<ShapeSlider id="shape-corner-radius" label="Corner Radius" value={value.cornerRadius} onChange={onCornerRadiusChange} minLabel="Square" maxLabel="Circle" />
 							</div>
 							<div
 								aria-hidden="true"
-								data-testid="visual-dna-preview"
+								data-testid="shape-preview"
 								className="size-16 shrink-0 bg-accent-10 dark:bg-accent-80"
-								style={{ borderWidth: `${lineWidthPx(value.vibe)}px`, borderStyle: "solid", borderColor: "var(--color-accent)", borderRadius: `${cornerRadiusPx(value.cornerSharpness)}px` }}
+								style={{ borderWidth: `${lineWidthPx(value.strokeWidth)}px`, borderStyle: "solid", borderColor: "var(--color-accent)", borderRadius: `${cornerRadiusPx(value.cornerRadius)}px` }}
 							/>
 						</div>
 					</div>

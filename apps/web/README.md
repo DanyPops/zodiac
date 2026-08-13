@@ -61,7 +61,7 @@ Every application action has a command identifier and an inspectable binding. Mo
 | New Window | `Mod+Alt+N` |
 | Toggle Chat | `Mod+.` |
 | Browse Surface Templates | `Mod+Shift+K` |
-| Open Visual DNA | `Mod+Shift+,` |
+| Open Settings | `Mod+Shift+,` |
 | Send message | `Mod+Enter` |
 | Cycle theme | `Mod+Alt+L` |
 
@@ -99,14 +99,14 @@ Semantic status colors (success/danger/warning/info in `graph/observability-grap
 
 `src/palette.test.ts` reads `styles.css` directly and asserts every gray/accent swatch, plus dockview's overridden defaults, is achromatic.
 
-## Visual DNA: Vibe and Corner Sharpness
+## Shape: Stroke Width and Corner Radius
 
-A gear icon in the Workspace Selection footer opens **Visual DNA** (`Mod+Shift+,`): two sliders, inspired by Excalidraw's sloppiness/roundness controls but re-scoped for a real interactive application.
+A gear icon in the Workspace Selection footer opens **Settings** (`Mod+Shift+,`): two sliders, inspired by Excalidraw's sloppiness/roundness controls but re-scoped for a real interactive application, under the same "Shape" terminology Material Design and Fluent use for these two properties.
 
-- **Vibe** (Cartoon to Professional): divider line weight, 3px to 1px. Not a rough.js-style path jitter -- warping a button's rendered position would desync it from its real hit box.
-- **Corner Sharpness** (Square to Circle): corner radius, 0px to 32px -- past half the shortest side of every glyph-sized element, so small elements clamp into true circles. Applies to both pillars, the Window Carousel, the center view, floating Chat, and docked Surfaces (dockview's `--dv-border-radius`/etc., via a live CSS variable reference).
+- **Stroke Width** (Cartoon to Professional): divider line weight, 3px to 1px. Not a rough.js-style path jitter -- warping a button's rendered position would desync it from its real hit box.
+- **Corner Radius** (Square to Circle): corner radius, 0px to 32px -- past half the shortest side of every glyph-sized element, so small elements clamp into true circles. Applies to both pillars, the Window Carousel, the center view, floating Chat, and docked Surfaces (dockview's `--dv-border-radius`/etc., via a live CSS variable reference).
 
-Persisted through the Preferences port (`platform/visual-dna.ts` for formulas, `platform/visual-dna-style.ts` for the one DOM-touching adapter, `visual-dna-hooks.ts` for the React hook). Defaults render pixel-identical to the shell's prior look.
+Persisted through the Preferences port (`platform/shape-settings.ts` for formulas, `platform/shape-settings-style.ts` for the one DOM-touching adapter, `shape-settings-hooks.ts` for the React hook). Defaults render pixel-identical to the shell's prior look.
 
 ## Window Carousel: centered, fading, and an infinite loop
 

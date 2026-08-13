@@ -127,8 +127,8 @@
 		text-rendering: optimizeLegibility;
 
 		/*
-		 * Visual DNA defaults (see platform/visual-dna.ts): overwritten at
-		 * runtime by VisualDnaStyleTarget once the app mounts. The literal
+		 * Shape settings defaults (see platform/shape-settings.ts): overwritten at
+		 * runtime by ShapeSettingsStyleTarget once the app mounts. The literal
 		 * fallbacks here match the values the shell shipped with before this
 		 * feature existed (1px borders, 16px == rounded-2xl), so a page that
 		 * somehow renders before the app's own effect runs looks identical to
@@ -195,7 +195,7 @@
 }
 
 /*
- * Corner Sharpness (platform/visual-dna.ts) extends to docked Surfaces --
+ * Corner Radius (platform/shape-settings.ts) extends to docked Surfaces --
  * same rounded visual language as the pillars and Window Carousel. A
  * variable reference, not a literal, so a slider drag repaints dockview
  * immediately (--app-corner-radius updates on :root, these recompute).
