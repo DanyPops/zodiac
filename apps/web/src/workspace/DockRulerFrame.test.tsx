@@ -45,14 +45,14 @@ describe("DockRulerFrame", () => {
 	it("places a horizontal mark at the page-space X offset, relative to the box's own left edge", () => {
 		render(<DockRulerFrame visible box={BOX} mark={{ axis: "horizontal", position: 200, label: "1/4" }} />);
 		const marks = screen.getAllByTestId("dock-ruler-mark");
-		expect(marks[0]).toHaveStyle({ left: "100px" }); // 200 - box.left(100)
+		expect(marks[0]).toHaveStyle({ transform: "translateX(100px)" }); // 200 - box.left(100)
 	});
 
 	it("places a vertical mark at the page-space Y offset, relative to the box's own top edge", () => {
 		render(<DockRulerFrame visible box={BOX} mark={{ axis: "vertical", position: 200, label: "3/4" }} />);
 		const marks = screen.getAllByTestId("dock-ruler-mark");
 		expect(marks).toHaveLength(2); // the two vertical (side) bars only
-		expect(marks[0]).toHaveStyle({ top: "150px" }); // 200 - box.top(50)
+		expect(marks[0]).toHaveStyle({ transform: "translateY(150px)" }); // 200 - box.top(50)
 	});
 
 	it("is a pure visual overlay -- never intercepts pointer/drag events", () => {

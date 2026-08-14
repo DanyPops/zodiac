@@ -49,12 +49,13 @@ function RulerBar({ orientation, length, guides, markOffset, markLabel, style }:
 					/>
 				);
 			})}
+			{/* transform, not left/top: markOffset moves on every live drag sample -- transform is compositor-only, the same technique wisp-cursor.ts and DockRuler.tsx use for their own per-frame position updates. The label pill already self-centers via a translate Tailwind utility (-translate-x/y-1/2); folded into one calc()'d transform below instead of stacking an inline transform on top of it, which would just overwrite it. */}
 			{markOffset !== undefined && (
 				<>
-					<span data-testid="dock-ruler-mark" className={cn("absolute bg-accent", horizontal ? "top-0 h-full w-0.5" : "left-0 h-0.5 w-full")} style={horizontal ? { left: markOffset } : { top: markOffset }} />
+					<span data-testid="dock-ruler-mark" className={cn("absolute bg-accent", horizontal ? "top-0 h-full w-0.5" : "left-0 h-0.5 w-full")} style={{ transform: horizontal ? `translateX(${markOffset}px)` : `translateY(${markOffset}px)` }} />
 					<span
-						className={cn("absolute whitespace-nowrap rounded-[var(--app-corner-radius,16px)] bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white", horizontal ? "top-full mt-0.5 -translate-x-1/2" : "left-full ml-0.5 -translate-y-1/2")}
-						style={horizontal ? { left: markOffset } : { top: markOffset }}
+						className={cn("absolute whitespace-nowrap rounded-[var(--app-corner-radius,16px)] bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white", horizontal ? "top-full mt-0.5" : "left-full ml-0.5")}
+						style={{ transform: horizontal ? `translateX(calc(${markOffset}px - 50%))` : `translateY(calc(${markOffset}px - 50%))` }}
 					>
 						{markLabel}
 					</span>
