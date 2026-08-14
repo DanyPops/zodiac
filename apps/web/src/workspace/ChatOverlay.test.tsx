@@ -72,7 +72,13 @@ describe("ChatOverlay", () => {
 		expect(screen.getByText("No messages yet.")).toBeInTheDocument();
 	});
 
-	it("clicking the peek area expands to the full transcript, revealing earlier messages", () => {
+	it("peek shows a placeholder for a still-streaming reply (an empty-text message), not a blank, zero-height row", () => {
+		renderOverlay(true, [...MESSAGES, { kind: "message", role: "assistant", text: "", timestamp: 3 }]);
+		const peek = screen.getByRole("button", { name: "Expand chat to the full conversation" });
+		expect(peek.textContent).not.toBe("");
+	});
+
+	it("clicking the peek row expands to the full transcript, revealing earlier messages", () => {
 		renderOverlay(true, MESSAGES);
 		fireEvent.click(screen.getByRole("button", { name: "Expand chat to the full conversation" }));
 
@@ -90,11 +96,21 @@ describe("ChatOverlay", () => {
 		expect(screen.getByText("Most recent reply")).toBeInTheDocument();
 	});
 
-	it("the peek row shares the composer's own horizontal padding, so their edges line up", () => {
+	it("the collapsed peek has no panel chrome around the composer -- the same bare shape as the empty-landing state", () => {
 		renderOverlay(true, MESSAGES);
-		const peekRow = screen.getByRole("button", { name: "Expand chat to the full conversation" });
-		expect(peekRow.className).toContain("p-3");
-		expect(peekRow.className).not.toContain("px-4");
+		const dialog = screen.getByRole("dialog");
+		expect(dialog.querySelector(".shadow-2xl")).toBeNull();
+		expect(dialog.querySelector("h2")).toBeNull();
+		// Composer's own non-bare footer wrapper (border-t/bg-white/95/backdrop-blur) must be absent -- bare must actually be passed, not just visually similar.
+		expect(dialog.querySelector(".backdrop-blur")).toBeNull();
+		expect(screen.getByLabelText("Message Pi").closest("div[class*='border-gray-300']")).not.toBeNull();
+	});
+
+	it("expanded keeps real panel chrome (background, border) -- a scrollable transcript genuinely needs it, unlike the minimal peek", () => {
+		renderOverlay(true, MESSAGES);
+		fireEvent.click(screen.getByRole("button", { name: "Expand chat to the full conversation" }));
+		const dialog = screen.getByRole("dialog");
+		expect(dialog.querySelector("[class*='rounded-']")).not.toBeNull();
 	});
 
 	it("is 3/4 width, centered in its column -- not full width matching the Carousel", () => {
@@ -115,10 +131,10 @@ describe("ChatOverlay", () => {
 			expect(dialog.style.transform).toContain("translateY(-8px)");
 		});
 
-		it("pointer-down on the header (the drag handle) reports the pointer's client coordinates", () => {
+		it("pointer-down on the drag handle reports the pointer's client coordinates", () => {
 			const onDragHandlePointerDown = vi.fn();
 			renderOverlay(true, [], { onDragHandlePointerDown });
-			fireEvent.pointerDown(screen.getByText(/drag to move/i).closest("div")!, { clientX: 100, clientY: 200 });
+			fireEvent.pointerDown(screen.getByRole("button", { name: "Drag to move Chat" }), { clientX: 100, clientY: 200 });
 			expect(onDragHandlePointerDown).toHaveBeenCalledWith(expect.objectContaining({ clientX: 100, clientY: 200 }));
 		});
 
