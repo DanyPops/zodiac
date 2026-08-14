@@ -27,7 +27,8 @@ interface CanvasWellProps {
 export function CanvasWell({ center, children }: CanvasWellProps): React.JSX.Element {
 	return (
 		<div data-canvas-well data-testid="canvas-well" className={cn("relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)]", WELL_BG)}>
-			<div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 p-2">
+			{/* items-start, not items-center: the Carousel's own pill sits above its "Window N" caption, making that slot taller than a bare Notifications/clock pill -- centering would misalign the pills themselves against each other. */}
+			<div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-start gap-2 p-2">
 				<div className="justify-self-start">
 					<NotificationsPill />
 				</div>

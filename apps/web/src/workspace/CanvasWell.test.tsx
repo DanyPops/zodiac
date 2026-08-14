@@ -44,6 +44,17 @@ describe("CanvasWell", () => {
 		expect(screen.getByRole("navigation", { name: "Window Carousel" })).toBeInTheDocument();
 	});
 
+	it("top-aligns the header row's own children, not center -- the Carousel's pill-plus-caption stack is taller than a bare pill, and centering would misalign Notifications/the clock against the Carousel's own pill", () => {
+		const { container } = render(
+			<CanvasWell center={<nav aria-label="Window Carousel" />}>
+				<p>content</p>
+			</CanvasWell>,
+		);
+		const header = container.querySelector("[data-canvas-well] > div") as HTMLElement;
+		expect(header.className).toContain("items-start");
+		expect(header.className).not.toContain("items-center");
+	});
+
 	it("is flush to its own column's top edge -- no separate header row sits above it (WELL_BG covers the whole box, header included)", () => {
 		render(
 			<CanvasWell>
