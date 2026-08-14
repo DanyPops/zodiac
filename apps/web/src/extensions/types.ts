@@ -4,6 +4,7 @@ import type { SurfaceTemplateDefinition } from "../workspace/surface-templates.j
 
 export type WorkspaceLifecycleEvent =
 	| { type: "workspace:selected"; workspaceId: string }
+	| { type: "workspace:removed"; workspaceId: string }
 	| { type: "surface:docked"; workspaceId: string; windowId: string; instance: DockedSurfaceInstance }
 	| { type: "surface:undocked"; workspaceId: string; surfaceInstanceId: string };
 

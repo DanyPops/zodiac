@@ -37,13 +37,14 @@ function renderCollapsed(execute = vi.fn(), toolCallWorkspaceId?: string, onCrea
 				toolCallWorkspaceId={toolCallWorkspaceId}
 				onCreateWorkspace={onCreateWorkspace}
 				onWorkspaceRename={vi.fn()}
+				onWorkspaceRemove={vi.fn()}
 			/>
 		</CommandProvider>,
 	);
 	return { execute, onCreateWorkspace };
 }
 
-function renderExpanded() {
+function renderExpanded(onWorkspaceRemove = vi.fn()) {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "workspace.select", title: "Select Workspace", description: "", execute: vi.fn() },
@@ -56,9 +57,20 @@ function renderExpanded() {
 	});
 	render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={vi.fn()} />
+			<WorkspaceSelection
+				collapsed={false}
+				catalog={WORKSPACE_CATALOG}
+				activeWorkspaceId={WORKSPACE_CATALOG[0]!.id}
+				selectionRef={createRef()}
+				selectedButtonRef={createRef()}
+				onWorkspaceFocus={vi.fn()}
+				onCreateWorkspace={vi.fn()}
+				onWorkspaceRename={vi.fn()}
+				onWorkspaceRemove={onWorkspaceRemove}
+			/>
 		</CommandProvider>,
 	);
+	return { onWorkspaceRemove };
 }
 
 describe("expanded Workspace selection", () => {
@@ -102,7 +114,7 @@ describe("expanded Workspace selection", () => {
 		const onCreateWorkspace = vi.fn();
 		render(
 			<CommandProvider registry={registry} activeContexts={["global"]}>
-				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={onCreateWorkspace} onWorkspaceRename={vi.fn()} />
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={WORKSPACE_CATALOG[0]!.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={onCreateWorkspace} onWorkspaceRename={vi.fn()} onWorkspaceRemove={vi.fn()} />
 			</CommandProvider>,
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Create a new Workspace" }));
@@ -118,7 +130,7 @@ describe("expanded Workspace selection", () => {
 		const first = WORKSPACE_CATALOG[0]!;
 		render(
 			<CommandProvider registry={registry} activeContexts={["global"]}>
-				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} />
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} onWorkspaceRemove={vi.fn()} />
 			</CommandProvider>,
 		);
 
@@ -140,7 +152,7 @@ describe("expanded Workspace selection", () => {
 		const first = WORKSPACE_CATALOG[0]!;
 		render(
 			<CommandProvider registry={registry} activeContexts={["global"]}>
-				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} />
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} onWorkspaceRemove={vi.fn()} />
 			</CommandProvider>,
 		);
 
@@ -162,7 +174,7 @@ describe("expanded Workspace selection", () => {
 		const first = WORKSPACE_CATALOG[0]!;
 		render(
 			<CommandProvider registry={registry} activeContexts={["global"]}>
-				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} />
+				<WorkspaceSelection collapsed={false} catalog={WORKSPACE_CATALOG} activeWorkspaceId={first.id} selectionRef={createRef()} selectedButtonRef={createRef()} onWorkspaceFocus={vi.fn()} onCreateWorkspace={vi.fn()} onWorkspaceRename={onWorkspaceRename} onWorkspaceRemove={vi.fn()} />
 			</CommandProvider>,
 		);
 
@@ -173,6 +185,42 @@ describe("expanded Workspace selection", () => {
 
 		expect(onWorkspaceRename).not.toHaveBeenCalled();
 		expect(screen.getByRole("button", { name: first.title })).toBeInTheDocument();
+	});
+
+	describe("closing a Workspace", () => {
+		it("shows a Close affordance per catalog entry", () => {
+			renderExpanded();
+			for (const entry of WORKSPACE_CATALOG) expect(screen.getByRole("button", { name: `Close ${entry.title}` })).toBeInTheDocument();
+		});
+
+		it("clicking Close opens a confirmation naming that Workspace, without calling onWorkspaceRemove yet", () => {
+			const { onWorkspaceRemove } = renderExpanded();
+			const first = WORKSPACE_CATALOG[0]!;
+			fireEvent.click(screen.getByRole("button", { name: `Close ${first.title}` }));
+
+			expect(screen.getByRole("alertdialog", { name: `Close ${first.title}?` })).toBeInTheDocument();
+			expect(onWorkspaceRemove).not.toHaveBeenCalled();
+		});
+
+		it("confirming calls onWorkspaceRemove with that Workspace's id and closes the prompt", () => {
+			const { onWorkspaceRemove } = renderExpanded();
+			const first = WORKSPACE_CATALOG[0]!;
+			fireEvent.click(screen.getByRole("button", { name: `Close ${first.title}` }));
+			fireEvent.click(screen.getByRole("button", { name: "Close Workspace" }));
+
+			expect(onWorkspaceRemove).toHaveBeenCalledWith(first.id);
+			expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+		});
+
+		it("canceling leaves the Workspace alone", () => {
+			const { onWorkspaceRemove } = renderExpanded();
+			const first = WORKSPACE_CATALOG[0]!;
+			fireEvent.click(screen.getByRole("button", { name: `Close ${first.title}` }));
+			fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+			expect(onWorkspaceRemove).not.toHaveBeenCalled();
+			expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+		});
 	});
 });
 

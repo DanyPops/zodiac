@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ExtensionHost } from "../extensions/extension-host.js";
 import { useWorkspaceRegistry } from "./useWorkspaceRegistry.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
@@ -212,6 +213,63 @@ describe("useWorkspaceRegistry", () => {
 			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 			act(() => result.current.renameWorkspace("does-not-exist", "New title"));
 			expect(result.current.workspace!.title).toBe("Bug");
+		});
+	});
+
+	describe("removeWorkspace", () => {
+		it("drops the Workspace's own in-memory state -- selecting the same id again starts fresh, not with its old docked Surfaces", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.dockSurface("activity", "Activity"));
+			expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
+
+			act(() => result.current.removeWorkspace("bug"));
+			act(() => result.current.selectWorkspace("bug"));
+
+			expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
+		});
+
+		it("removing the active Workspace activates the next remaining catalog entry", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			expect(result.current.activeWorkspaceId).toBe("bug");
+
+			act(() => result.current.removeWorkspace("bug"));
+
+			expect(result.current.activeWorkspaceId).toBe("metrics");
+			expect(result.current.workspace!.id).toBe("metrics");
+		});
+
+		it("removing a background (non-active) Workspace doesn't touch which one is active", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.removeWorkspace("metrics"));
+
+			expect(result.current.activeWorkspaceId).toBe("bug");
+			expect(result.current.workspace!.id).toBe("bug");
+		});
+
+		it("removing the last remaining Workspace leaves the same genuinely-empty state a fresh app starts in", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry([CATALOG[0]!]));
+			act(() => result.current.removeWorkspace("bug"));
+
+			expect(result.current.activeWorkspaceId).toBeUndefined();
+			expect(result.current.workspace).toBeUndefined();
+			expect(result.current.activeWindow).toBeUndefined();
+		});
+
+		it("is a no-op for an unknown id", () => {
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+			act(() => result.current.removeWorkspace("does-not-exist"));
+
+			expect(result.current.activeWorkspaceId).toBe("bug");
+			expect(result.current.workspace!.id).toBe("bug");
+		});
+
+		it("emits workspace:removed for any registered extension's on() handler", () => {
+			const handler = vi.fn();
+			const host: ExtensionHost = { registerExtension: () => {}, emit: handler, surfaceTemplates: () => [], commands: () => [] };
+			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG, undefined, host));
+			act(() => result.current.removeWorkspace("bug"));
+
+			expect(handler).toHaveBeenCalledWith({ type: "workspace:removed", workspaceId: "bug" });
 		});
 	});
 

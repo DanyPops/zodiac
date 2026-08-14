@@ -144,6 +144,13 @@ export function App(): React.JSX.Element {
 		userWorkspaces.renameWorkspace(id, title);
 		workspace.renameWorkspace(id, title);
 	}
+	// Same two-layer split as renameWorkspace above: the persisted catalog
+	// entry (userWorkspaces) and the live in-memory Workspace state
+	// (useWorkspaceRegistry) each own their own half and must drop it together.
+	function removeWorkspace(id: string): void {
+		userWorkspaces.removeWorkspace(id);
+		workspace.removeWorkspace(id);
+	}
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
@@ -308,6 +315,7 @@ export function App(): React.JSX.Element {
 					toolCallWorkspaceId={toolCallWorkspaceId}
 					onCreateWorkspace={() => setCreatingWorkspace(true)}
 					onWorkspaceRename={renameWorkspace}
+					onWorkspaceRemove={removeWorkspace}
 				/>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">

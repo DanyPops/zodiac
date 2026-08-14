@@ -160,4 +160,49 @@ describe("useUserWorkspaces", () => {
 			expect(result.current.entries).toEqual(before);
 		});
 	});
+
+	describe("removeWorkspace", () => {
+		it("removes a persisted entry by id and persists the shrunk list", () => {
+			const storage = memoryStorage();
+			const preferences = createPreferences(storage);
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			let id = "";
+			act(() => {
+				id = result.current.createWorkspace("Deploys", "rocket");
+			});
+			act(() => result.current.removeWorkspace(id));
+
+			expect(result.current.entries).toEqual([]);
+			expect(createPreferences(storage).userWorkspaces()).toEqual([]);
+		});
+
+		it("removes only the targeted entry, leaving the others (and their order) intact", () => {
+			const preferences = createPreferences(memoryStorage());
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			let first = "";
+			let second = "";
+			act(() => {
+				first = result.current.createWorkspace("Deploys", "rocket");
+				second = result.current.createWorkspace("Metrics", "metrics");
+			});
+			act(() => result.current.removeWorkspace(first));
+
+			expect(result.current.entries.map((entry) => entry.id)).toEqual([second]);
+		});
+
+		it("is a no-op for an unknown id", () => {
+			const preferences = createPreferences(memoryStorage());
+			const { result } = renderHook(() => useUserWorkspaces(preferences));
+
+			act(() => {
+				result.current.createWorkspace("Deploys", "rocket");
+			});
+			const before = result.current.entries;
+			act(() => result.current.removeWorkspace("does-not-exist"));
+
+			expect(result.current.entries).toEqual(before);
+		});
+	});
 });

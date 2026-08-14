@@ -1,8 +1,9 @@
-import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Settings } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Settings, X } from "lucide-react";
 import { useState, type RefObject } from "react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
+import { ConfirmDialog } from "./ConfirmDialog.js";
 import { GlyphBadge } from "./GlyphBadge.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { iconButtonClassName } from "./icon-button-style.js";
@@ -24,6 +25,8 @@ interface WorkspaceSelectionProps {
 	readonly onCreateWorkspace: () => void;
 	/** Renames a catalog entry by id -- reachable by double-clicking its label in the expanded pillar (see ExpandedCatalogItem). Not exposed in the collapsed pillar, which shows no text label to double-click. */
 	readonly onWorkspaceRename: (id: string, title: string) => void;
+	/** Permanently drops a catalog entry (and every Window/docked Surface it owns) by id -- reached via each expanded row's own Close button, gated behind a confirmation (see ExpandedCatalogItem/ConfirmDialog below). Not yet exposed in the collapsed pillar -- see its own doc comment. */
+	readonly onWorkspaceRemove: (id: string) => void;
 }
 
 /**
@@ -35,8 +38,12 @@ interface WorkspaceSelectionProps {
  * in this list. Surface docking itself lives in the Window Carousel/center/
  * Surface Templates pillar instead.
  */
-export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace, onWorkspaceRename }: WorkspaceSelectionProps): React.JSX.Element {
+export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace, onWorkspaceRename, onWorkspaceRemove }: WorkspaceSelectionProps): React.JSX.Element {
 	const appearanceShortcut = useCommandShortcut("appearance.open");
+	// The entry a Close click is asking to remove, pending the user's actual
+	// confirmation -- undefined the rest of the time, including right after a
+	// confirm/cancel decides it one way or the other.
+	const [pendingRemoval, setPendingRemoval] = useState<WorkspaceCatalogEntry | undefined>(undefined);
 	return (
 		<>
 			{!collapsed && (
@@ -67,6 +74,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 									selectedButtonRef={selectedButtonRef}
 									onWorkspaceFocus={onWorkspaceFocus}
 									onRename={(title) => onWorkspaceRename(entry.id, title)}
+									onRequestClose={() => setPendingRemoval(entry)}
 								/>
 							))}
 						</ul>
@@ -120,6 +128,17 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					</PillarTooltip>
 				</nav>
 			)}
+			<ConfirmDialog
+				open={pendingRemoval !== undefined}
+				title={`Close ${pendingRemoval?.title ?? ""}?`}
+				description="Every Window and docked Surface in it is discarded. This can't be undone."
+				confirmLabel="Close Workspace"
+				onConfirm={() => {
+					if (pendingRemoval) onWorkspaceRemove(pendingRemoval.id);
+					setPendingRemoval(undefined);
+				}}
+				onCancel={() => setPendingRemoval(undefined)}
+			/>
 		</>
 	);
 }
@@ -161,7 +180,7 @@ interface CatalogItemProps {
 }
 
 /** One Workspace's row in the expanded pillar -- its own component so the expanded/collapsed variants (below) each state their own layout once, instead of an inline ternary className repeated at every map callsite. Double-clicking the label enters an inline rename -- Enter commits, Escape or a blank blur cancels back to the entry's current title (never sends a blank rename -- see useUserWorkspaces/useWorkspaceRegistry's own blank-title guard). */
-function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRef, onWorkspaceFocus, onRename }: CatalogItemProps & { readonly onRename: (title: string) => void }): React.JSX.Element {
+function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRef, onWorkspaceFocus, onRename, onRequestClose }: CatalogItemProps & { readonly onRename: (title: string) => void; readonly onRequestClose: () => void }): React.JSX.Element {
 	const [renaming, setRenaming] = useState(false);
 	const [draft, setDraft] = useState(entry.title);
 
@@ -177,7 +196,7 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 	}
 
 	return (
-		<li>
+		<li className="group relative">
 			<CommandButton
 				ref={selected ? selectedButtonRef : undefined}
 				commandId="workspace.select"
@@ -192,7 +211,7 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 				label={entry.title}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
-					"mb-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe focus-visible:animate-wisp-breathe",
+					"mb-1 flex w-full items-center gap-2.5 rounded-md py-2 pl-2.5 pr-8 text-left focus-visible:outline-2 focus-visible:outline-accent motion-reduce:animate-none hover:animate-wisp-breathe focus-visible:animate-wisp-breathe",
 					selected ? "animate-wisp-breathe bg-white text-gray-950 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:text-white dark:ring-gray-700" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800/70",
 					toolCallTarget && "animate-wisp-breathe ring-2 ring-accent",
 				)}
@@ -219,6 +238,18 @@ function ExpandedCatalogItem({ entry, selected, toolCallTarget, selectedButtonRe
 					<span className="truncate text-xs font-medium">{entry.title}</span>
 				)}
 			</CommandButton>
+			{/* A sibling of CommandButton, not nested inside it -- overlaid on the row's own right edge (pr-8 above reserves the room), revealed on hover/focus so an idle list stays uncluttered. */}
+			<button
+				type="button"
+				onClick={(event) => {
+					event.stopPropagation();
+					onRequestClose();
+				}}
+				aria-label={`Close ${entry.title}`}
+				className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-gray-400 opacity-0 transition-opacity hover:bg-gray-200 hover:text-gray-700 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-accent group-hover:opacity-100 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+			>
+				<X aria-hidden="true" size={13} />
+			</button>
 		</li>
 	);
 }

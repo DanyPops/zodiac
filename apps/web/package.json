@@ -46,6 +46,7 @@
     "@zodiac/server": "*",
     "@danypops/pi-rpc-protocol": "^0.0.1",
     "@icons-pack/react-simple-icons": "^13.11.1",
+    "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-context-menu": "^2.3.7",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-popover": "^1.1.23",

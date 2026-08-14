@@ -9,6 +9,8 @@ export interface UserWorkspacesHandle {
 	createWorkspace: (title: string, glyphId: string) => string;
 	/** Renames a persisted catalog entry by id; a blank (whitespace-only) title is rejected, and an unknown id is a no-op -- same guards as model.ts's renameWorkspace/renameWindow. */
 	renameWorkspace: (id: string, title: string) => void;
+	/** Drops a persisted catalog entry by id; an unknown id is a no-op. Only the saved title/glyph -- see useWorkspaceRegistry's own removeWorkspace for dropping the matching in-memory Workspace state. */
+	removeWorkspace: (id: string) => void;
 }
 
 const ID_PREFIX = "user-workspace";
@@ -57,6 +59,14 @@ export function useUserWorkspaces(preferences: Preferences): UserWorkspacesHandl
 			setSaved((current) => {
 				if (!current.some((workspace) => workspace.id === id)) return current;
 				const next = current.map((workspace) => (workspace.id === id ? { ...workspace, title: trimmed } : workspace));
+				preferences.setUserWorkspaces(next);
+				return next;
+			});
+		},
+		removeWorkspace(id) {
+			setSaved((current) => {
+				if (!current.some((workspace) => workspace.id === id)) return current;
+				const next = current.filter((workspace) => workspace.id !== id);
 				preferences.setUserWorkspaces(next);
 				return next;
 			});

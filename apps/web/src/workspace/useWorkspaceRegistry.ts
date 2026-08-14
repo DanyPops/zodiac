@@ -34,6 +34,8 @@ export interface WorkspaceRegistryHandle {
 	selectWorkspace: (id: string) => void;
 	/** Renames any Workspace by id, not just the active one -- so a sidebar entry can be renamed without first switching to it. A blank (whitespace-only) title is rejected, and an unknown id is a no-op -- same guards as model.ts's renameWorkspace. */
 	renameWorkspace: (id: string, title: string) => void;
+	/** Drops a Workspace's in-memory state (Windows, docked Surfaces, Chat visibility -- everything) by id; an unknown id is a no-op. If it was the active Workspace, activates the next remaining `catalog` entry, or becomes undefined if none remain -- the same genuinely-empty state a fresh app starts in. Only the in-memory half -- see useUserWorkspaces' own removeWorkspace for the persisted catalog entry; a caller (App.tsx) calls both together. */
+	removeWorkspace: (id: string) => void;
 	/** Undefined exactly when activeWorkspaceId is -- a genuinely empty catalog, not a caller defect. A stale/mistyped id against a *non-empty* catalog still throws (see the hook body). */
 	workspace: Workspace | undefined;
 	/** Every Workspace's real, current state keyed by id -- not just the active one. For cross-workspace correlation (e.g. the global-chat visibility cue); most consumers want `workspace` instead. */
@@ -72,7 +74,7 @@ export function useWorkspaceRegistry(
 	catalog: readonly WorkspaceCatalogEntry[],
 	/** Builds each catalog entry's starting Workspace -- defaults to a plain, single-Window `createWorkspace`. A caller (e.g. App.tsx, for the mock catalog's demo Windows) may pass a different factory without this hook itself knowing or caring that the result is demo data. */
 	createInitialWorkspace: (id: string, title: string) => Workspace = (id, title) => createWorkspace({ id, title }),
-	/** Optional -- emits workspace:selected/surface:docked/surface:undocked for any registered extension's on() handlers. */
+	/** Optional -- emits workspace:selected/workspace:removed/surface:docked/surface:undocked for any registered extension's on() handlers. */
 	host?: ExtensionHost,
 ): WorkspaceRegistryHandle {
 	const [workspaces, setWorkspaces] = useState<Record<string, Workspace>>(() => {
@@ -166,6 +168,17 @@ export function useWorkspaceRegistry(
 				if (!target) return current;
 				return { ...current, [id]: renameWorkspaceModel(target, title) };
 			});
+		},
+		removeWorkspace: (id) => {
+			setWorkspaces((current) => {
+				if (!(id in current)) return current;
+				return Object.fromEntries(Object.entries(current).filter(([entryId]) => entryId !== id));
+			});
+			setActiveWorkspaceId((current) => {
+				if (current !== id) return current;
+				return catalog.find((entry) => entry.id !== id)?.id;
+			});
+			host?.emit({ type: "workspace:removed", workspaceId: id });
 		},
 		dockSurface: dock,
 		undockSurface: (surfaceInstanceId) => {
