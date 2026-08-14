@@ -11,7 +11,7 @@ import { createHttpPiClient } from "../pi/client.js";
 import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
-import { PAGE_BG, WELL_BG } from "../platform/surface-style.js";
+import { PAGE_BG } from "../platform/surface-style.js";
 import { createWindowDragTracker } from "../platform/drag-tracker.js";
 import { createWindowPointerTracker } from "../platform/pointer.js";
 import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
@@ -20,6 +20,7 @@ import { useDraggablePosition } from "../workspace/useDraggablePosition.js";
 import { SettingsDialog } from "../settings/SettingsDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useShapeSettings } from "../shape-settings-hooks.js";
+import { CanvasWell } from "../workspace/CanvasWell.js";
 import { ChatOverlay } from "../workspace/ChatOverlay.js";
 import { Composer } from "../conversation/ConversationSurface.js";
 import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, isChatDocked, showChat, type Workspace } from "../workspace/model.js";
@@ -37,11 +38,9 @@ import { useUserWorkspaces } from "../workspace/useUserWorkspaces.js";
 import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
-import { NotificationsPill } from "../workspace/NotificationsPill.js";
 import { DockRulerFrame } from "../workspace/DockRulerFrame.js";
 import type { DockRulerFrameMark } from "../workspace/dock-ruler.js";
 import type { Rect } from "../platform/geometry.js";
-import { WatchPill } from "../workspace/WatchPill.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
@@ -319,26 +318,21 @@ export function App(): React.JSX.Element {
 				/>
 
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
-					{/* Notifications/WatchPill hover above the Window itself (top corners of this column) instead of occupying their own flex columns -- `pointer-events-none` on the spanning wrapper keeps the empty space between them from stealing clicks meant for the Window Carousel underneath; each pill's own wrapper opts back in. */}
-					<div className="pointer-events-none absolute inset-0 z-30">
-						{/* shadow-lg, not a one-off tier: matches the app's other small floating-chrome elements (PillarTooltip, ContextMenu.Content) -- shadow-xl/2xl are reserved for full panels/modals (WorkspaceSelection's floating variant, ChatOverlay, every dialog). */}
-						<div className="pointer-events-auto absolute left-2 top-2 rounded-[var(--app-corner-radius,16px)] shadow-lg">
-							<NotificationsPill />
-						</div>
-						<div className="pointer-events-auto absolute right-2 top-2 rounded-[var(--app-corner-radius,16px)] shadow-lg">
-							<WatchPill />
-						</div>
-					</div>
-					{workspace.workspace && workspace.activeWindow ? (
-						<>
-							<WindowCarousel
-								windowCount={workspace.workspace.windows.length}
-								activeIndex={workspace.workspace.activeWindowIndex}
-								onSelect={workspace.selectWindow}
-								onScroll={workspace.scrollWindow}
-								activeWindowTitle={workspace.activeWindow.title}
-								onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow!.id, title)}
-							/>
+					<CanvasWell
+						center={
+							workspace.workspace && workspace.activeWindow ? (
+								<WindowCarousel
+									windowCount={workspace.workspace.windows.length}
+									activeIndex={workspace.workspace.activeWindowIndex}
+									onSelect={workspace.selectWindow}
+									onScroll={workspace.scrollWindow}
+									activeWindowTitle={workspace.activeWindow.title}
+									onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow!.id, title)}
+								/>
+							) : undefined
+						}
+					>
+						{workspace.workspace && workspace.activeWindow ? (
 							<section
 								ref={canvasRef}
 								tabIndex={-1}
@@ -346,7 +340,7 @@ export function App(): React.JSX.Element {
 									if (event.currentTarget === event.target) contexts.enterCanvas();
 								}}
 								aria-label="Window view"
-								className={cn("min-h-0 flex-1 overflow-hidden rounded-[var(--app-corner-radius,16px)] outline-none", WELL_BG)}
+								className="min-h-0 flex-1 overflow-hidden outline-none"
 							>
 								<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 									<WindowDockview
@@ -376,7 +370,24 @@ export function App(): React.JSX.Element {
 									/>
 								</Suspense>
 							</section>
+						) : (
+							// No Workspace yet -- Zodiac's real starting state. A minimal
+							// landing: the composer only (reused verbatim from
+							// ConversationSurface.tsx, the exact same component/command wiring
+							// as every other composer in the app -- "conversation.send" already
+							// maps to sendMessage()'s own auto-create branch above), no Window
+							// Carousel, no Chat panel.
+							<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+								<p className="text-sm text-gray-500 dark:text-gray-400">Send a message to start a new Workspace.</p>
+								<div className="w-full max-w-xl px-4">
+									<Composer draft={draft} onDraftChange={setDraft} onComposerFocus={contexts.enterTextInput} bare />
+								</div>
+							</div>
+						)}
+					</CanvasWell>
 
+					{workspace.workspace && workspace.activeWindow && (
+						<>
 							<WispCursor visible={chatIsGlobal} target={wispTarget} />
 
 							<ChatOverlay
@@ -397,19 +408,6 @@ export function App(): React.JSX.Element {
 								onDragHandlePointerDown={chatDrag.onDragHandlePointerDown}
 							/>
 						</>
-					) : (
-						// No Workspace yet -- Zodiac's real starting state. A minimal
-						// landing: the composer only (reused verbatim from
-						// ConversationSurface.tsx, the exact same component/command wiring
-						// as every other composer in the app -- "conversation.send" already
-						// maps to sendMessage()'s own auto-create branch above), no Window
-						// Carousel, no Chat panel.
-						<div className={cn("flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-[var(--app-corner-radius,16px)]", WELL_BG)}>
-							<p className="text-sm text-gray-500 dark:text-gray-400">Send a message to start a new Workspace.</p>
-							<div className="w-full max-w-xl px-4">
-								<Composer draft={draft} onDraftChange={setDraft} onComposerFocus={contexts.enterTextInput} bare />
-							</div>
-						</div>
 					)}
 				</div>
 
