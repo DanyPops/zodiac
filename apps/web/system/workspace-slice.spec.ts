@@ -4,19 +4,15 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByRole("heading", { name: "Zodiac", exact: true })).toBeVisible();
-	// A freshly-created Workspace starts with Chat open; reload to land in the
-	// "returning Workspace, Chat hidden" state these tests assume.
+	// Reload switches the active Chat conversation from the live "start" exchange just sent
+	// to the fixture-backed historical one (session-sample.jsonl) these tests read against --
+	// unrelated to Chat's own visibility, which no longer has a hidden state to reload past.
 	await page.getByRole("textbox", { name: "Message Pi" }).fill("start");
 	await page.getByRole("button", { name: "Send message" }).click();
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 	await page.reload();
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 });
-
-async function revealChat(page: Page): Promise<void> {
-	await page.keyboard.press("Control+.");
-	await expect(page.getByRole("dialog", { name: "Chat" })).toBeVisible();
-}
 
 /** Mock Workspaces start pre-seeded with several demo Windows (workspace-catalog.ts's createDemoWorkspace) -- tests read the real starting count/active index off the DOM rather than assuming "one Window at index 0". */
 function windowButtons(carousel: Locator): Locator {
@@ -38,27 +34,19 @@ function expectBreathingOpacity(value: number): void {
 	expect(value).toBeLessThanOrEqual(1);
 }
 
-test("Chat is a hidden-by-default floating overlay, summoned by keymap or the bottom edge", async ({ page }) => {
-	// Hidden by default: inert removes it from the accessibility tree entirely.
-	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0);
-
-	await revealChat(page);
+test("Chat is always visible -- a permanent part of the shell, not a pop-up summoned by keymap or hover", async ({ page }) => {
+	const chat = page.getByRole("complementary", { name: "Chat" });
+	await expect(chat).toBeVisible();
 	// Starts collapsed (peek): only the last reply, not the full transcript.
 	await expect(page.getByText("You're welcome!")).toBeVisible();
 	await expect(page.getByText("Please read the readme")).toHaveCount(0);
 
-	// The keymap toggles: pressing it again hides Chat.
-	await page.keyboard.press("Control+.");
-	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0);
-
-	// Bottom-edge hover reveals it without the keymap.
-	const viewport = page.viewportSize();
-	await page.mouse.move(viewport!.width / 2, viewport!.height - 2);
-	await expect(page.getByRole("dialog", { name: "Chat" })).toBeVisible();
+	// No keymap toggles it away, and it stays put regardless of where the pointer is.
+	await page.mouse.move(400, 200);
+	await expect(chat).toBeVisible();
 });
 
 test("clicking the Chat peek area expands to the full transcript", async ({ page }) => {
-	await revealChat(page);
 	await page.getByRole("button", { name: "Expand chat to the full conversation" }).click();
 	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("Please read the readme");
 	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("You're welcome!");
@@ -68,32 +56,24 @@ test("clicking the Chat peek area expands to the full transcript", async ({ page
 	await expect(page.getByText("You're welcome!")).toBeVisible();
 });
 
-test("Chat auto-hides after inactivity once unfocused and un-hovered", async ({ page }) => {
-	await revealChat(page);
-	await page.mouse.move(400, 200); // away from the panel and the bottom edge
-	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0, { timeout: 4000 });
-});
-
-test("Chat is dockable: docking it hides the floating overlay, and it becomes aware of its sibling docked Surfaces", async ({ page }) => {
+test("Chat is dockable: docking it moves Chat into the Window, and it becomes aware of its sibling docked Surfaces", async ({ page }) => {
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 
-	await revealChat(page);
 	await page.getByRole("button", { name: "Dock Chat into the active Window" }).click();
 
-	// The floating overlay is gone -- Chat now lives in the Window as a docked panel.
-	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0);
+	// The always-visible panel is gone -- Chat now lives in the Window as a docked panel.
+	await expect(page.getByRole("complementary", { name: "Chat" })).toHaveCount(0);
 	await expect(page.getByText("Aware of: Activity")).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "Message Pi" })).toBeVisible();
 });
 
-test("undocking Chat (the Float control) returns it to the floating overlay", async ({ page }) => {
-	await revealChat(page);
+test("undocking Chat returns it to the always-visible panel", async ({ page }) => {
 	await page.getByRole("button", { name: "Dock Chat into the active Window" }).click();
 	await expect(page.getByText("Aware of: nothing else docked here")).toBeVisible();
 
-	await page.getByRole("button", { name: "Undock Chat back to the floating overlay" }).click();
-	await expect(page.getByRole("dialog", { name: "Chat" })).toBeVisible();
+	await page.getByRole("button", { name: "Undock Chat from this Window" }).click();
+	await expect(page.getByRole("complementary", { name: "Chat" })).toBeVisible();
 	await expect(page.getByText("Aware of:")).toHaveCount(0);
 });
 
@@ -589,7 +569,6 @@ test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and sh
 	await page.keyboard.press("Control+2");
 	await expect(page.getByRole("region", { name: "Window view" })).toBeFocused();
 
-	await revealChat(page);
 	await page.getByRole("textbox", { name: "Message Pi" }).fill("Run the first slice");
 	await page.keyboard.press("Control+Enter");
 	await expect(page.getByText("Run the first slice")).toBeVisible(); // now the peek's own last-reply preview
@@ -629,7 +608,6 @@ test("a user can rebind a command and the override survives reload", async ({ pa
 });
 
 test("printable global shortcuts do not steal text input", async ({ page }) => {
-	await revealChat(page);
 	const composer = page.getByRole("textbox", { name: "Message Pi" });
 	await composer.fill("b k / [ ]");
 	await page.keyboard.type(" ordinary typing");
@@ -637,7 +615,6 @@ test("printable global shortcuts do not steal text input", async ({ page }) => {
 });
 
 test("the first slice has no serious or critical automated accessibility violations", async ({ page }) => {
-	await revealChat(page);
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	const results = await new AxeBuilder({ page }).analyze();
 	const blocking = results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");

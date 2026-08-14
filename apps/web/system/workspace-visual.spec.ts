@@ -9,8 +9,9 @@ async function waitForShell(page: import("@playwright/test").Page): Promise<void
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 }
 
-// Zodiac starts with zero Workspaces -- bootstrap one, then reload once so
-// Chat settles to hidden (a freshly auto-created Workspace starts with it open).
+// Zodiac starts with zero Workspaces -- bootstrap one, then reload once so the
+// baselines capture the fixture-backed historical conversation (session-sample.jsonl),
+// not the live "start" exchange this bootstrap itself just sent.
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
 	await page.getByRole("textbox", { name: "Message Pi" }).fill("start");

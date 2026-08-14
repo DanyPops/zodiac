@@ -8,7 +8,6 @@ import {
 	dockSurface,
 	findDockedSurfaceForToolName,
 	findWorkspaceIdForToolName,
-	hideChat,
 	isChatDocked,
 	nextWindow,
 	pinChat,
@@ -17,11 +16,9 @@ import {
 	renameWorkspace,
 	scrollWindow,
 	selectWindow,
-	showChat,
 	surfaceBindingKindForToolName,
-	toggleChat,
 	unpinChat,
-	undockChatToFloating,
+	undockChatToGlobal,
 	undockSurface,
 	type Workspace,
 } from "./model.js";
@@ -32,12 +29,11 @@ function fixtureWorkspace(): Workspace {
 }
 
 describe("Workspace window and Surface docking", () => {
-	it("creates one empty Window, active by index 0, Chat hidden by default", () => {
+	it("creates one empty Window, active by index 0", () => {
 		const workspace = fixtureWorkspace();
 
 		expect(workspace.windows).toHaveLength(1);
 		expect(workspace.activeWindowIndex).toBe(0);
-		expect(workspace.chatVisible).toBe(false);
 		expect(activeWindow(workspace).dockedSurfaces).toEqual([]);
 	});
 
@@ -188,12 +184,11 @@ describe("Workspace window and Surface docking", () => {
 	});
 
 	describe("Chat Surface docking", () => {
-		it("dockChat docks into the active Window as a singleton, hiding the floating overlay", () => {
-			let workspace = showChat(fixtureWorkspace());
+		it("dockChat docks into the active Window as a singleton", () => {
+			let workspace = fixtureWorkspace();
 			const docked = dockChat(workspace, "Chat");
 			workspace = docked.workspace;
 
-			expect(workspace.chatVisible).toBe(false);
 			expect(isChatDocked(workspace)).toBe(true);
 			expect(activeWindow(workspace).dockedSurfaces).toEqual([docked.instance]);
 			expect(docked.instance.templateId).toBe(CHAT_TEMPLATE_ID);
@@ -208,15 +203,14 @@ describe("Workspace window and Surface docking", () => {
 			expect(activeWindow(redocked.workspace).dockedSurfaces).toEqual([redocked.instance]);
 		});
 
-		it("undockChatToFloating removes it from wherever it's docked and shows the floating overlay", () => {
-			const workspace = undockChatToFloating(dockChat(fixtureWorkspace(), "Chat").workspace);
+		it("undockChatToGlobal removes it from wherever it's docked", () => {
+			const workspace = undockChatToGlobal(dockChat(fixtureWorkspace(), "Chat").workspace);
 			expect(isChatDocked(workspace)).toBe(false);
-			expect(workspace.chatVisible).toBe(true);
 		});
 
-		it("undockChatToFloating is a safe no-op-shaped call when Chat isn't docked", () => {
+		it("undockChatToGlobal is a safe no-op-shaped call when Chat isn't docked", () => {
 			const workspace = fixtureWorkspace();
-			expect(isChatDocked(undockChatToFloating(workspace))).toBe(false);
+			expect(isChatDocked(undockChatToGlobal(workspace))).toBe(false);
 		});
 
 		it("dockChat always starts unpinned, even if a stale pinned flag was somehow set", () => {
@@ -224,9 +218,9 @@ describe("Workspace window and Surface docking", () => {
 			expect(dockChat(workspace, "Chat").workspace.chatPinned).toBe(false);
 		});
 
-		it("undockChatToFloating resets pin state", () => {
+		it("undockChatToGlobal resets pin state", () => {
 			const pinned = pinChat(dockChat(fixtureWorkspace(), "Chat").workspace);
-			expect(undockChatToFloating(pinned).chatPinned).toBe(false);
+			expect(undockChatToGlobal(pinned).chatPinned).toBe(false);
 		});
 
 		describe("pinChat / unpinChat", () => {
@@ -393,21 +387,6 @@ describe("Workspace window and Surface docking", () => {
 		const second = dockSurface(first.workspace, "activity", "Activity");
 		expect(second.instance.id).not.toBe(first.instance.id);
 		expect(activeWindow(second.workspace).dockedSurfaces.map((surface) => surface.id)).toEqual([first.instance.id, second.instance.id]);
-	});
-
-	describe("Chat Surface visibility", () => {
-		it("showChat/hideChat/toggleChat are pure and idempotent at their own boundary", () => {
-			const hidden = fixtureWorkspace();
-			const shown = showChat(hidden);
-			expect(shown.chatVisible).toBe(true);
-			expect(hidden.chatVisible).toBe(false); // original untouched
-			expect(showChat(shown)).toBe(shown); // already shown: same reference back
-			expect(hideChat(shown).chatVisible).toBe(false);
-			expect(hideChat(hidden)).toBe(hidden); // already hidden: same reference back
-
-			expect(toggleChat(hidden).chatVisible).toBe(true);
-			expect(toggleChat(shown).chatVisible).toBe(false);
-		});
 	});
 
 	it("createWorkspace builds the requested id/title with one empty Window, independent of any Conversation", () => {

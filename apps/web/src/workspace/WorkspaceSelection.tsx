@@ -32,11 +32,10 @@ interface WorkspaceSelectionProps {
 /**
  * The only shell sidebar, for choosing which Workspace is active -- nothing
  * else. A Workspace is its own independent Canvas (Windows, docked
- * Surfaces, Chat visibility), never a Conversation: a Conversation is a
- * Surface that may float globally, float inside a Workspace, or dock into
- * one (see ChatOverlay/workspace/model.ts's dockChat) -- it never appears
- * in this list. Surface docking itself lives in the Window Carousel/center/
- * Surface Templates pillar instead.
+ * Surfaces), never a Conversation: a Conversation is a Surface that may be
+ * global (always visible) or dock into one (see ChatPanel/workspace/model.ts's
+ * dockChat) -- it never appears in this list. Surface docking itself lives
+ * in the Window Carousel/center/Surface Templates pillar instead.
  */
 export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace, onWorkspaceRename, onWorkspaceRemove }: WorkspaceSelectionProps): React.JSX.Element {
 	const appearanceShortcut = useCommandShortcut("appearance.open");

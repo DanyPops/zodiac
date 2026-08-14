@@ -41,7 +41,6 @@ function fullCommandSet() {
 		nextWindow: noop,
 		previousWindow: noop,
 		newWindow: noop,
-		toggleChat: noop,
 		openTemplatesPicker: noop,
 		openTemplatesGallery: noop,
 		dockDefaultTemplate: noop,

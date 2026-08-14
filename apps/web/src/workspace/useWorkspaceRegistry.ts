@@ -5,7 +5,6 @@ import {
 	createWorkspace,
 	dockChat,
 	dockSurface,
-	hideChat,
 	isChatDocked,
 	nextWindow,
 	pinChat,
@@ -14,10 +13,8 @@ import {
 	renameWorkspace as renameWorkspaceModel,
 	scrollWindow,
 	selectWindow,
-	showChat,
-	toggleChat,
 	unpinChat,
-	undockChatToFloating,
+	undockChatToGlobal,
 	undockSurface,
 	type DockedSurfaceInstance,
 	type Workspace,
@@ -34,11 +31,11 @@ export interface WorkspaceRegistryHandle {
 	selectWorkspace: (id: string) => void;
 	/** Renames any Workspace by id, not just the active one -- so a sidebar entry can be renamed without first switching to it. A blank (whitespace-only) title is rejected, and an unknown id is a no-op -- same guards as model.ts's renameWorkspace. */
 	renameWorkspace: (id: string, title: string) => void;
-	/** Drops a Workspace's in-memory state (Windows, docked Surfaces, Chat visibility -- everything) by id; an unknown id is a no-op. If it was the active Workspace, activates the next remaining `catalog` entry, or becomes undefined if none remain -- the same genuinely-empty state a fresh app starts in. Only the in-memory half -- see useUserWorkspaces' own removeWorkspace for the persisted catalog entry; a caller (App.tsx) calls both together. */
+	/** Drops a Workspace's in-memory state (Windows, docked Surfaces -- everything) by id; an unknown id is a no-op. If it was the active Workspace, activates the next remaining `catalog` entry, or becomes undefined if none remain -- the same genuinely-empty state a fresh app starts in. Only the in-memory half -- see useUserWorkspaces' own removeWorkspace for the persisted catalog entry; a caller (App.tsx) calls both together. */
 	removeWorkspace: (id: string) => void;
 	/** Undefined exactly when activeWorkspaceId is -- a genuinely empty catalog, not a caller defect. A stale/mistyped id against a *non-empty* catalog still throws (see the hook body). */
 	workspace: Workspace | undefined;
-	/** Every Workspace's real, current state keyed by id -- not just the active one. For cross-workspace correlation (e.g. the global-chat visibility cue); most consumers want `workspace` instead. */
+	/** Every Workspace's real, current state keyed by id -- not just the active one. For cross-workspace correlation (e.g. which Workspace a background tool call belongs to); most consumers want `workspace` instead. */
 	workspaces: Readonly<Record<string, Workspace>>;
 	activeWindow: WorkspaceWindow | undefined;
 	nextWindow: () => void;
@@ -49,12 +46,9 @@ export interface WorkspaceRegistryHandle {
 	renameWindow: (windowId: string, title: string) => void;
 	dockSurface: (templateId: string, title: string) => DockedSurfaceInstance | undefined;
 	undockSurface: (surfaceInstanceId: string) => void;
-	showChat: () => void;
-	hideChat: () => void;
-	toggleChat: () => void;
 	isChatDocked: boolean;
 	dockChat: (title: string) => DockedSurfaceInstance | undefined;
-	undockChatToFloating: () => void;
+	undockChatToGlobal: () => void;
 	chatPinned: boolean;
 	pinChat: () => void;
 	unpinChat: () => void;
@@ -187,12 +181,9 @@ export function useWorkspaceRegistry(
 			update((current) => undockSurface(current, surfaceInstanceId));
 			host?.emit({ type: "surface:undocked", workspaceId: id, surfaceInstanceId });
 		},
-		showChat: () => update(showChat),
-		hideChat: () => update(hideChat),
-		toggleChat: () => update(toggleChat),
 		isChatDocked: workspace ? isChatDocked(workspace) : false,
 		dockChat: dockChatSurface,
-		undockChatToFloating: () => update(undockChatToFloating),
+		undockChatToGlobal: () => update(undockChatToGlobal),
 		chatPinned: workspace?.chatPinned ?? false,
 		pinChat: () => update(pinChat),
 		unpinChat: () => update(unpinChat),

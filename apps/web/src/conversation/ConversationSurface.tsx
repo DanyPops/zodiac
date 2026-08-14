@@ -38,33 +38,14 @@ interface ComposerProps {
 	/**
 	 * Skips the outer edge-to-edge toolbar chrome (top divider, own white
 	 * backdrop, p-3 inset) and renders just the rounded input row itself.
-	 * The docked usages (ConversationSurface's own bottom bar, ChatOverlay's
+	 * The docked usages (ConversationSurface's own bottom bar, ChatPanel's
 	 * collapsed peek) sit flush against a surface's own edges, where that
 	 * chrome reads as a toolbar; the landing empty-state centers the Composer
 	 * as a standalone floating card, where the same chrome instead read as a
 	 * stray sharp-cornered white square around the already-rounded input.
 	 */
 	readonly bare?: boolean;
-	/**
-	 * ChatOverlay's own peek-state instance sets this: since that panel is
-	 * mounted exactly once for an app session's whole lifetime (no Workspace
-	 * is ever deleted, so `workspace.workspace` only ever goes
-	 * undefined -> defined once) and its own `visible`/`inert` props are
-	 * already correct at that one insertion, the HTML autofocus behavior
-	 * this enables fires (or, correctly, doesn't -- see below) exactly once,
-	 * exactly when the first real Workspace is created. That's precisely the
-	 * moment sendMessage()'s auto-create branch (App.tsx) starts the new
-	 * Workspace's Chat already visible, continuing the empty-state landing's
-	 * own composer without a hiccup -- carrying real focus into the new
-	 * Composer both lets the user keep typing immediately, and (a second,
-	 * load-bearing effect) satisfies useChatVisibility's own `active` check,
-	 * so its unattended-inactivity auto-hide timer never fires before the
-	 * user's first reply has a chance to render. autofocus is a no-op on an
-	 * `inert` ancestor per spec, so this is silently harmless the other time
-	 * a Workspace's first-ever ChatOverlay mount coincides with *not* having
-	 * just sent a message (e.g. the "+ New Workspace" dialog): Chat starts
-	 * hidden there, so nothing steals focus.
-	 */
+	/** ChatPanel's own peek-state instance sets this -- see its own doc comment for why. */
 	readonly autoFocus?: boolean;
 }
 
@@ -73,7 +54,7 @@ interface ComposerProps {
  * (last reply + composer, no full transcript) can reuse it without
  * duplicating markup. Edge-to-edge within its own `p-3` -- no separate
  * `mx-auto max-w-3xl` inset, which used to insert it relative to the wider
- * Chat pillar and desync its left/right edges from ChatOverlay's collapsed
+ * Chat pillar and desync its left/right edges from ChatPanel's collapsed
  * "Last reply" row above it (that row's own padding is matched to this
  * one's p-3, not centered independently).
  */

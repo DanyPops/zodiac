@@ -22,7 +22,6 @@ function noopActions(): ZodiacCommandActions {
 		nextWindow: vi.fn(),
 		previousWindow: vi.fn(),
 		newWindow: vi.fn(),
-		toggleChat: vi.fn(),
 		openTemplatesPicker: vi.fn(),
 		openTemplatesGallery: vi.fn(),
 		dockDefaultTemplate: vi.fn(),

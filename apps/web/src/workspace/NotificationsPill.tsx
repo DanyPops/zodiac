@@ -11,7 +11,7 @@ import { UTILITY_PILL_CLASSES } from "./utility-pill-style.js";
  * Icon Button (icon-button-style.ts), the same elements every other pill
  * and action in the shell already uses. A plain local toggle (Radix
  * Popover's own uncontrolled open state), not a global command -- the same
- * precedent ChatOverlay's own expand/collapse already sets for ephemeral
+ * precedent ChatPanel's own expand/collapse already sets for ephemeral
  * peek UI that isn't a Workspace/Window-level action.
  */
 export function NotificationsPill(): React.JSX.Element {

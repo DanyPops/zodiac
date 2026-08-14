@@ -1,14 +1,14 @@
 # Zodiac application
 
-The React 19 client for Zodiac. A **Workspace** is its own independent Canvas -- never the same thing as a Conversation (see below): a numbered, wrap-around **Window Carousel** (top) holds that Workspace's docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a floating overlay hidden by default -- summoned by the bottom screen edge or a keymap, not a docked tab.
+The React 19 client for Zodiac. A **Workspace** is its own independent Canvas -- never the same thing as a Conversation (see below): a numbered, wrap-around **Window Carousel** (top) holds that Workspace's docking arrangements, the center is the active Window's docked Surfaces, a **Surface Templates pillar** (right) holds predefined and user-saved templates to pull into the center, and the **Conversation Chat Surface** is a permanent, always-visible panel below the canvas -- not a pop-up, not a docked tab.
 
 ## Workspace vs. Conversation
 
-A Workspace is not a Conversation. The left **Workspace Selection** pillar lists Workspaces, not Conversations. A Conversation is a Surface (the Chat Surface) that can be **global** (floating, independent of any Workspace -- the default), **scoped inside a specific Workspace** while still floating, or **docked** into one of that Workspace's Windows (`dockChat`/`undockChatToFloating`/`isChatDocked` in `workspace/model.ts`).
+A Workspace is not a Conversation. The left **Workspace Selection** pillar lists Workspaces, not Conversations. A Conversation is a Surface (the Chat Surface) that can be **global** (always visible, independent of any Workspace -- the default) or **docked** into one of that Workspace's Windows (`dockChat`/`undockChatToGlobal`/`isChatDocked` in `workspace/model.ts`).
 
-`workspace/workspace-catalog.tsx` is a **mock** Workspace registry -- four entries (Bug, Metrics, Chat, PRs), each backed by its own independent `Workspace` (own Windows, own docking, own Chat visibility) via `useWorkspaceRegistry`. Switching the active one never resets another's state (`useWorkspaceRegistry.test.ts`). A real, persisted, user-creatable registry is future work. "Chat" here is a Workspace whose own docked content happens to be conversational -- distinct from the global floating Conversation Chat Surface, which can dock into any of the four.
+`workspace/workspace-catalog.tsx` is a **mock** Workspace registry -- four entries (Bug, Metrics, Chat, PRs), each backed by its own independent `Workspace` (own Windows, own docking) via `useWorkspaceRegistry`. Switching the active one never resets another's state (`useWorkspaceRegistry.test.ts`). A real, persisted, user-creatable registry is future work. "Chat" here is a Workspace whose own docked content happens to be conversational -- distinct from the global, always-visible Conversation Chat Surface, which can dock into any of the four.
 
-Known gap: there is no dedicated UI to choose which Conversation the global floating Chat shows besides the app's own auto-selected default. `conversation.open` still exists as a command (Command Palette only) but has no bound key or picker surface.
+Known gap: there is no dedicated UI to choose which Conversation the global Chat shows besides the app's own auto-selected default. `conversation.open` still exists as a command (Command Palette only) but has no bound key or picker surface.
 
 ## Development
 
@@ -59,7 +59,6 @@ Every application action has a command identifier and an inspectable binding. Mo
 | Focus Window view | `Mod+2` |
 | Next/previous Window | `Mod+PageDown` / `Mod+PageUp` |
 | New Window | `Mod+Alt+N` |
-| Toggle Chat | `Mod+.` |
 | Browse Surface Templates | `Mod+Shift+K` |
 | Open Settings | `Mod+Shift+,` |
 | Send message | `Mod+Enter` |
@@ -83,11 +82,11 @@ Docked Surfaces, both pillars, and the Window Carousel render with rounded corne
 
 ## Chat: peek, expand, and dockable
 
-The floating Chat Surface starts collapsed ("peek") each time it's summoned: only the composer and the most recent reply. Clicking the peek area expands to the full transcript; a header control collapses back.
+Chat is a permanent, always-visible part of the shell -- never hidden, never summoned, never draggable. It starts collapsed ("peek") by default: only the composer and the most recent reply. Clicking the peek area expands to the full transcript; a corner control collapses back.
 
-Chat can also be docked into the active Window (a header control on the floating overlay). Once docked it renders an "Aware of: ..." line naming sibling docked Surfaces, kept live via `dockview`'s `updateParameters`. Closing its docked panel (or its "Float" control) returns it to the floating overlay.
+Chat can also be docked into the active Window (a corner control on the panel). Once docked it renders an "Aware of: ..." line naming sibling docked Surfaces, kept live via `dockview`'s `updateParameters`. Closing its docked panel (or its "Undock" control) returns it to the always-visible panel.
 
-Positioned `absolute` inside the same `relative` center column as the Window Carousel, not `fixed` to the viewport -- its width matches the Carousel's exactly, tracking both pillars' collapsed/expanded state.
+A plain flex sibling below the canvas (`ChatPanel.tsx`), not `absolute`/floating -- it takes its own real space instead of overlaying content, so nothing ever needs repositioning to avoid covering it.
 
 ## Black & white only, for now
 
@@ -104,7 +103,7 @@ Semantic status colors (success/danger/warning/info in `graph/observability-grap
 A gear icon in the Workspace Selection footer opens **Settings** (`Mod+Shift+,`): two sliders, inspired by Excalidraw's sloppiness/roundness controls but re-scoped for a real interactive application, under the same "Shape" terminology Material Design and Fluent use for these two properties.
 
 - **Stroke Width** (Cartoon to Professional): divider line weight, 3px to 1px. Not a rough.js-style path jitter -- warping a button's rendered position would desync it from its real hit box.
-- **Corner Radius** (Square to Circle): corner radius, 0px to 32px -- past half the shortest side of every glyph-sized element, so small elements clamp into true circles. Applies to both pillars, the Window Carousel, the center view, floating Chat, and docked Surfaces (dockview's `--dv-border-radius`/etc., via a live CSS variable reference).
+- **Corner Radius** (Square to Circle): corner radius, 0px to 32px -- past half the shortest side of every glyph-sized element, so small elements clamp into true circles. Applies to both pillars, the Window Carousel, the center view, the Chat panel, and docked Surfaces (dockview's `--dv-border-radius`/etc., via a live CSS variable reference).
 
 Persisted through the Preferences port (`platform/shape-settings.ts` for formulas, `platform/shape-settings-style.ts` for the one DOM-touching adapter, `shape-settings-hooks.ts` for the React hook). Defaults render pixel-identical to the shell's prior look.
 

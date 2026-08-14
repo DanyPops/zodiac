@@ -20,7 +20,6 @@ export interface ZodiacCommandActions {
 	nextWindow: () => void;
 	previousWindow: () => void;
 	newWindow: () => void;
-	toggleChat: () => void;
 	openTemplatesPicker: () => void;
 	openTemplatesGallery: () => void;
 	dockDefaultTemplate: (templateId?: string) => void;
@@ -44,7 +43,6 @@ export const DEFAULT_BINDINGS: readonly KeybindingDefinition[] = [
 	{ commandId: "window.next", keys: "Mod+PageDown", context: "global" },
 	{ commandId: "window.previous", keys: "Mod+PageUp", context: "global" },
 	{ commandId: "window.new", keys: "Mod+Alt+N", context: "global" },
-	{ commandId: "chat.toggle", keys: "Mod+.", context: "global" },
 	{ commandId: "templates.open", keys: "Mod+Shift+K", context: "global" },
 	{ commandId: "templates.openGallery", keys: "Mod+Shift+G", context: "global" },
 	{ commandId: "appearance.open", keys: "Mod+Shift+,", context: "global" },
@@ -64,12 +62,11 @@ export function createZodiacCommandRegistry(actions: ZodiacCommandActions, userB
 		define("palette.open", "Open command palette", "Find and execute a Zodiac command.", actions.openPalette),
 		define("shortcuts.open", "Open keyboard shortcuts", "Inspect active keyboard bindings.", actions.openShortcuts),
 		define("dialog.close", "Close dialog", "Close the active dialog and restore Workspace focus.", actions.closeDialog),
-		define("conversation.open", "Open selected conversation", "Load the selected Conversation into the floating Chat Surface.", (...args) => actions.openConversation(typeof args[0] === "string" ? args[0] : undefined)),
+		define("conversation.open", "Open selected conversation", "Load the selected Conversation into the Chat Surface.", (...args) => actions.openConversation(typeof args[0] === "string" ? args[0] : undefined)),
 		define("workspace.select", "Select Workspace", "Switch the active Workspace.", (...args) => actions.selectWorkspace(typeof args[0] === "string" ? args[0] : undefined)),
 		define("window.next", "Next Window", "Move to the next Window in the Window Carousel, wrapping past the last.", actions.nextWindow),
 		define("window.previous", "Previous Window", "Move to the previous Window in the Window Carousel, wrapping before the first.", actions.previousWindow),
 		define("window.new", "New Window", "Create a new empty Window at the end of the Window Carousel.", actions.newWindow),
-		define("chat.toggle", "Toggle Chat", "Show or hide the floating Conversation Chat Surface.", actions.toggleChat),
 		define("templates.open", "Browse Surface Templates", "Filter Surface Templates by keyboard and choose where to dock one.", actions.openTemplatesPicker),
 		define("templates.openGallery", "Browse the Surface Templates gallery", "Browse Surface Template categories by their brand logos and previews.", actions.openTemplatesGallery),
 		define("appearance.open", "Open Settings", "Shell actions and the Shape (Stroke Width, Corner Radius) appearance controls.", actions.openAppearance),

@@ -1,5 +1,5 @@
 import type { Position } from "dockview-react";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CommandDialog } from "../commands/CommandDialog.js";
 import { createZodiacCommandRegistry } from "../commands/defaults.js";
 import { CommandProvider } from "../commands/react.js";
@@ -12,18 +12,15 @@ import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
 import { PAGE_BG } from "../platform/surface-style.js";
-import { createWindowDragTracker } from "../platform/drag-tracker.js";
-import { createWindowPointerTracker } from "../platform/pointer.js";
 import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
 import { createExtensionHost } from "../extensions/extension-host.js";
-import { useDraggablePosition } from "../workspace/useDraggablePosition.js";
 import { SettingsDialog } from "../settings/SettingsDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useShapeSettings } from "../shape-settings-hooks.js";
 import { CanvasWell } from "../workspace/CanvasWell.js";
-import { ChatOverlay } from "../workspace/ChatOverlay.js";
+import { ChatPanel } from "../workspace/ChatPanel.js";
 import { Composer } from "../conversation/ConversationSurface.js";
-import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, isChatDocked, showChat, type Workspace } from "../workspace/model.js";
+import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, isChatDocked } from "../workspace/model.js";
 import { useWispCursorTarget } from "../workspace/useWispCursorTarget.js";
 import { WispCursor } from "../workspace/WispCursor.js";
 import { latestToolCallName, resolveWispWindowIndex } from "../workspace/wisp-cursor.js";
@@ -31,7 +28,6 @@ import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
 import { SurfaceTemplatesGallery } from "../workspace/SurfaceTemplatesGallery.js";
-import { useChatVisibility } from "../workspace/useChatVisibility.js";
 import { useSurfaceTemplates } from "../workspace/useSurfaceTemplates.js";
 import { useWorkspaceListNavigation } from "../workspace/useWorkspaceListNavigation.js";
 import { useUserWorkspaces } from "../workspace/useUserWorkspaces.js";
@@ -58,7 +54,6 @@ const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then(
 
 export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
-	const pointerTracker = useMemo(() => createWindowPointerTracker(), []);
 	const wispTargetMeasurer = useMemo(() => createDomWispTargetMeasurer(), []);
 	// One host for the whole app's lifetime: extensions register once at
 	// startup (no live discovery/reloading yet -- see the Native Extension
@@ -85,36 +80,7 @@ export function App(): React.JSX.Element {
 	// one is created automatically the moment the user sends a first prompt
 	// with none active -- see sendMessage() below.
 	const catalog = useMemo(() => userWorkspaces.entries, [userWorkspaces.entries]);
-	// A restored, persisted Workspace (every reload after the first) starts
-	// with Chat hidden -- useWorkspaceRegistry's own default (a plain
-	// createWorkspace), matching the "hidden by default, summoned by keymap
-	// or the bottom edge" design (see workspace-slice.spec.ts). The one
-	// deliberate exception is a Workspace this session just auto-created from
-	// sendMessage()'s own auto-create branch below: the user was already
-	// looking at what reads as "the chat" (the empty-state landing's own
-	// composer), so Chat must still be visible the instant a real Workspace
-	// takes that landing's place -- previously it silently vanished behind
-	// the same hidden-by-default rule a *returning* Workspace correctly gets,
-	// landing on a blank "Pull a Surface Template..." canvas with no visible
-	// trace of the message just sent. freshlyCreatedWorkspaceIds is a plain
-	// ref (not state), read via `.has`, never `.delete`d here even though a
-	// single id only ever needs to read as "fresh" once: useWorkspaceRegistry
-	// can call this factory for the *same* id twice for one creation --
-	// once as its synchronous render-time fallback for the one-tick window
-	// before its own effect has run, then again from that effect, which is
-	// the call whose result actually lands in its persisted `workspaces`
-	// state. Deleting on the first (fallback) call left the second, the one
-	// that matters, with the flag already gone -- verified live, not assumed.
-	// Left in place indefinitely instead (a plain small string per
-	// user-created Workspace for the App's whole lifetime) -- the same
-	// unpruned-per-id-cache tradeoff usePiChatSessions' own
-	// controllers/unsubscribes Maps already make.
-	const freshlyCreatedWorkspaceIds = useRef<Set<string>>(new Set());
-	const createUserWorkspace = useCallback((id: string, title: string): Workspace => {
-		const created = createWorkspace({ id, title });
-		return freshlyCreatedWorkspaceIds.current.has(id) ? showChat(created) : created;
-	}, []);
-	const workspace = useWorkspaceRegistry(catalog, createUserWorkspace, extensionHost);
+	const workspace = useWorkspaceRegistry(catalog, (id, title) => createWorkspace({ id, title }), extensionHost);
 	// The one production LLM-naming adapter: a short-lived Pi session used
 	// purely to answer the naming prompt (see workspace-title.ts). Stable
 	// across renders -- piClient itself is a module-level singleton.
@@ -164,9 +130,6 @@ export function App(): React.JSX.Element {
 	const [dockRulerMark, setDockRulerMark] = useState<DockRulerFrameMark | undefined>(undefined);
 	const [dockCanvasBox, setDockCanvasBox] = useState<Rect | undefined>(undefined);
 
-	const chatVisibility = useChatVisibility({ visible: workspace.workspace?.chatVisible ?? false, show: workspace.showChat, hide: workspace.hideChat, pointerTracker });
-	const dragTracker = useMemo(() => createWindowDragTracker(), []);
-	const chatDrag = useDraggablePosition({ x: 0, y: 0 }, dragTracker);
 	const latestToolName = latestToolCallName(activeConversationItems);
 	const wispWindowIndex = workspace.workspace ? resolveWispWindowIndex(workspace.workspace, latestToolName) : undefined;
 	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
@@ -212,7 +175,7 @@ export function App(): React.JSX.Element {
 	function handlePanelClosed(instanceId: string): void {
 		const closed = workspace.activeWindow?.dockedSurfaces.find((surface) => surface.id === instanceId);
 		if (closed?.templateId === CHAT_TEMPLATE_ID) {
-			workspace.undockChatToFloating();
+			workspace.undockChatToGlobal();
 			return;
 		}
 		workspace.undockSurface(instanceId);
@@ -265,10 +228,6 @@ export function App(): React.JSX.Element {
 				const heuristicTitle = provisionalTitleFromText(text) ?? "New Workspace";
 				const id = userWorkspaces.createWorkspace(heuristicTitle, DEFAULT_WORKSPACE_GLYPH_ID);
 				if (!id) return;
-				// Recorded before selectWorkspace: createUserWorkspace (this Workspace's
-				// factory, above) reads this the moment useWorkspaceRegistry first
-				// materializes id, so Chat starts visible instead of hidden-by-default.
-				freshlyCreatedWorkspaceIds.current.add(id);
 				workspace.selectWorkspace(id);
 				piChatSessions.chatFor(id).sendMessage(text);
 				setDraft("");
@@ -286,7 +245,6 @@ export function App(): React.JSX.Element {
 			nextWindow: workspace.nextWindow,
 			previousWindow: workspace.previousWindow,
 			newWindow: workspace.addWindow,
-			toggleChat: workspace.toggleChat,
 			openTemplatesPicker: () => contexts.openDialog("templates"),
 			openTemplatesGallery: () => contexts.openDialog("templatesGallery"),
 			dockDefaultTemplate(templateId) {
@@ -362,7 +320,7 @@ export function App(): React.JSX.Element {
 										draft={draft}
 										onDraftChange={setDraft}
 										onComposerFocus={contexts.enterTextInput}
-										onUndockChat={workspace.undockChatToFloating}
+										onUndockChat={workspace.undockChatToGlobal}
 										chatPinned={workspace.chatPinned}
 										onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
 										onDockRulerHintChange={setDockRulerMark}
@@ -386,28 +344,19 @@ export function App(): React.JSX.Element {
 						)}
 					</CanvasWell>
 
-					{workspace.workspace && workspace.activeWindow && (
-						<>
-							<WispCursor visible={chatIsGlobal} target={wispTarget} />
+					{workspace.workspace && workspace.activeWindow && <WispCursor visible={chatIsGlobal} target={wispTarget} />}
 
-							<ChatOverlay
-								visible={workspace.workspace.chatVisible}
-								onPointerEnter={chatVisibility.onPointerEnter}
-								onPointerLeave={chatVisibility.onPointerLeave}
-								onFocusCapture={chatVisibility.onFocusCapture}
-								onBlurCapture={chatVisibility.onBlurCapture}
-								conversationItems={activeConversationItems}
-								conversationLoading={activeConversationLoading}
-								conversationError={activeConversationError}
-								draft={draft}
-								onDraftChange={setDraft}
-								onComposerFocus={contexts.enterTextInput}
-								onDock={dockChatSurface}
-								position={chatDrag.position}
-								dragging={chatDrag.dragging}
-								onDragHandlePointerDown={chatDrag.onDragHandlePointerDown}
-							/>
-						</>
+					{/* Always visible, never a pop-up: a real flex sibling below the canvas, taking its own space -- mounted only while Chat isn't docked into a Window (chatIsGlobal), which is the one way it ever leaves view. */}
+					{workspace.workspace && workspace.activeWindow && chatIsGlobal && (
+						<ChatPanel
+							conversationItems={activeConversationItems}
+							conversationLoading={activeConversationLoading}
+							conversationError={activeConversationError}
+							draft={draft}
+							onDraftChange={setDraft}
+							onComposerFocus={contexts.enterTextInput}
+							onDock={dockChatSurface}
+						/>
 					)}
 				</div>
 

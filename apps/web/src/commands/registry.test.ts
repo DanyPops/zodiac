@@ -27,7 +27,6 @@ function fixtureActions(): ZodiacCommandActions {
 		nextWindow: action,
 		previousWindow: action,
 		newWindow: action,
-		toggleChat: action,
 		openTemplatesPicker: action,
 		openTemplatesGallery: action,
 		dockDefaultTemplate: action,
@@ -36,7 +35,7 @@ function fixtureActions(): ZodiacCommandActions {
 }
 
 describe("Zodiac command catalog", () => {
-	it("gives every core navigation/dialog/window/chat command an inspectable default binding", () => {
+	it("gives every core navigation/dialog/window command an inspectable default binding", () => {
 		const registry = createZodiacCommandRegistry(fixtureActions());
 		const mustBeBound = [
 			"workspace.toggleSelection",
@@ -48,7 +47,6 @@ describe("Zodiac command catalog", () => {
 			"window.next",
 			"window.previous",
 			"window.new",
-			"chat.toggle",
 			"templates.open",
 			"appearance.open",
 		];

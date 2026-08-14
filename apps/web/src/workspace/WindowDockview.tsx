@@ -159,9 +159,9 @@ function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JS
 		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", !pinned && "animate-chat-follow-bounce", panelOpacityClassName(closing, focused))}>
 			<div className="flex h-8 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
 				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
-				<button type="button" onClick={onUndock} aria-label="Undock Chat back to the floating overlay" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
+				<button type="button" onClick={onUndock} aria-label="Undock Chat from this Window" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
 					<PanelLeftOpen aria-hidden="true" size={12} />
-					Float
+					Undock
 				</button>
 			</div>
 			<div className="min-h-0 flex-1">

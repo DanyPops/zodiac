@@ -21,35 +21,28 @@ const CATALOG: readonly WorkspaceCatalogEntry[] = [
 // of the fixture, not suppressing a genuine possibility.
 
 describe("useWorkspaceRegistry", () => {
-	it("creates one Workspace per catalog entry, active on the first, one empty Window each, Chat hidden", () => {
+	it("creates one Workspace per catalog entry, active on the first, one empty Window each", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		expect(result.current.activeWorkspaceId).toBe("bug");
 		expect(result.current.workspace!.id).toBe("bug");
 		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
-		expect(result.current.workspace!.chatVisible).toBe(false);
 	});
 
 	it("selectWorkspace switches which Workspace's state the rest of the handle reads, without resetting it", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 
-		act(() => {
-			result.current.dockSurface("activity", "Activity");
-			result.current.showChat();
-		});
+		act(() => result.current.dockSurface("activity", "Activity"));
 		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
-		expect(result.current.workspace!.chatVisible).toBe(true);
 
 		act(() => result.current.selectWorkspace("metrics"));
 		expect(result.current.activeWorkspaceId).toBe("metrics");
 		expect(result.current.workspace!.id).toBe("metrics");
 		// A different Workspace: its own independent, untouched state.
 		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
-		expect(result.current.workspace!.chatVisible).toBe(false);
 
 		act(() => result.current.selectWorkspace("bug"));
 		// Switching back: "bug"'s own earlier state survived the switch away, not reset.
 		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
-		expect(result.current.workspace!.chatVisible).toBe(true);
 	});
 
 	it("nextWindow/previousWindow/addWindow drive the active Workspace's active Window forward, backward, and to a fresh one", () => {
@@ -89,19 +82,6 @@ describe("useWorkspaceRegistry", () => {
 
 		act(() => result.current.undockSurface(instanceId));
 		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
-	});
-
-	it("showChat/hideChat/toggleChat drive Chat Surface visibility", () => {
-		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
-
-		act(() => result.current.showChat());
-		expect(result.current.workspace!.chatVisible).toBe(true);
-
-		act(() => result.current.hideChat());
-		expect(result.current.workspace!.chatVisible).toBe(false);
-
-		act(() => result.current.toggleChat());
-		expect(result.current.workspace!.chatVisible).toBe(true);
 	});
 
 	it("scrollWindow drives the Window Carousel's own scroll policy -- creates an ephemeral Window past the single Window's end", () => {
@@ -149,7 +129,7 @@ describe("useWorkspaceRegistry", () => {
 		expect(() => act(() => result.current.selectWorkspace("does-not-exist"))).toThrow(/no Workspace registered/i);
 	});
 
-	it("dockChat/isChatDocked/undockChatToFloating drive Chat between floating and docked", () => {
+	it("dockChat/isChatDocked/undockChatToGlobal drive Chat between global and docked", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		expect(result.current.isChatDocked).toBe(false);
 
@@ -158,12 +138,10 @@ describe("useWorkspaceRegistry", () => {
 			instanceId = result.current.dockChat("Chat")!.id;
 		});
 		expect(result.current.isChatDocked).toBe(true);
-		expect(result.current.workspace!.chatVisible).toBe(false);
 		expect(result.current.activeWindow!.dockedSurfaces.map((surface) => surface.id)).toEqual([instanceId]);
 
-		act(() => result.current.undockChatToFloating());
+		act(() => result.current.undockChatToGlobal());
 		expect(result.current.isChatDocked).toBe(false);
-		expect(result.current.workspace!.chatVisible).toBe(true);
 	});
 
 	it("pinChat/unpinChat toggle chatPinned, and docked Chat only follows the active Window while unpinned", () => {
@@ -289,8 +267,6 @@ describe("useWorkspaceRegistry", () => {
 					result.current.nextWindow();
 					result.current.previousWindow();
 					result.current.addWindow();
-					result.current.showChat();
-					result.current.toggleChat();
 					result.current.undockSurface("whatever");
 				});
 			}).not.toThrow();

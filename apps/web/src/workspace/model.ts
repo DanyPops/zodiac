@@ -45,12 +45,6 @@ export interface Workspace {
 	/** Index into `windows`, always in bounds -- see nextWindow/previousWindow for the wrap-around policy. */
 	activeWindowIndex: number;
 	/**
-	 * The Conversation Chat Surface's visibility. It is a floating overlay,
-	 * not a docked Surface -- hidden by default, summoned by an edge-hover or
-	 * a keymap, never part of any Window's dockedSurfaces.
-	 */
-	chatVisible: boolean;
-	/**
 	 * Only meaningful while Chat is docked. Unpinned (the default the moment
 	 * it docks) means Chat travels with whichever Window becomes active --
 	 * see the window-navigation functions below. Pinned locks it to whatever
@@ -83,7 +77,6 @@ export function createWorkspace(definition: WorkspaceDefinition): Workspace {
 		title: definition.title,
 		windows: [createWindow(0)],
 		activeWindowIndex: 0,
-		chatVisible: false,
 		chatPinned: false,
 	};
 }
@@ -245,7 +238,7 @@ export function undockSurface(workspace: Workspace, surfaceInstanceId: string): 
 	return { ...workspace, windows };
 }
 
-/** The Conversation Chat Surface's reserved templateId when docked -- see dockChat/undockChatToFloating. */
+/** The Conversation Chat Surface's reserved templateId when docked -- see dockChat/undockChatToGlobal. */
 export const CHAT_TEMPLATE_ID = "chat";
 
 export function isChatDocked(workspace: Workspace): boolean {
@@ -253,21 +246,21 @@ export function isChatDocked(workspace: Workspace): boolean {
 }
 
 /**
- * Docks the Chat Surface into the active Window, turning off its floating
- * overlay. Chat is a singleton -- docking it again (from a different Window,
- * or the same one) moves it rather than creating a second instance. Always
- * starts unpinned ("following") -- pinning is a separate, explicit step.
+ * Docks the Chat Surface into the active Window. Chat is a singleton --
+ * docking it again (from a different Window, or the same one) moves it
+ * rather than creating a second instance. Always starts unpinned
+ * ("following") -- pinning is a separate, explicit step.
  */
 export function dockChat(workspace: Workspace, title: string): { workspace: Workspace; instance: DockedSurfaceInstance } {
 	const withoutExistingChat = { ...workspace, windows: workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) })) };
 	const { workspace: docked, instance } = dockSurface(withoutExistingChat, CHAT_TEMPLATE_ID, title);
-	return { workspace: { ...docked, chatVisible: false, chatPinned: false }, instance };
+	return { workspace: { ...docked, chatPinned: false }, instance };
 }
 
-/** Removes Chat from wherever it's docked (a no-op if it isn't) and returns it to the floating overlay, visible. Pin state resets -- it's only meaningful while docked. */
-export function undockChatToFloating(workspace: Workspace): Workspace {
+/** Removes Chat from wherever it's docked (a no-op if it isn't), returning it to the always-visible global panel. Pin state resets -- it's only meaningful while docked. */
+export function undockChatToGlobal(workspace: Workspace): Workspace {
 	const windows = workspace.windows.map((window) => ({ ...window, dockedSurfaces: window.dockedSurfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID) }));
-	return { ...workspace, windows, chatVisible: true, chatPinned: false };
+	return { ...workspace, windows, chatPinned: false };
 }
 
 /** Locks docked Chat to whichever Window it's currently in, stopping it from traveling with the active Window. A no-op (same reference back) if already pinned. */
@@ -280,16 +273,5 @@ export function unpinChat(workspace: Workspace): Workspace {
 	return workspace.chatPinned ? { ...workspace, chatPinned: false } : workspace;
 }
 
-export function showChat(workspace: Workspace): Workspace {
-	return workspace.chatVisible ? workspace : { ...workspace, chatVisible: true };
-}
-
-export function hideChat(workspace: Workspace): Workspace {
-	return workspace.chatVisible ? { ...workspace, chatVisible: false } : workspace;
-}
-
-export function toggleChat(workspace: Workspace): Workspace {
-	return { ...workspace, chatVisible: !workspace.chatVisible };
-}
 
 
