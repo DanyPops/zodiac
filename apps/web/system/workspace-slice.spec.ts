@@ -4,6 +4,12 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByRole("heading", { name: "Zodiac", exact: true })).toBeVisible();
+	// A freshly-created Workspace starts with Chat open; reload to land in the
+	// "returning Workspace, Chat hidden" state these tests assume.
+	await page.getByRole("textbox", { name: "Message Pi" }).fill("start");
+	await page.getByRole("button", { name: "Send message" }).click();
+	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
+	await page.reload();
 	await expect(page.getByRole("navigation", { name: "Window Carousel" })).toBeVisible();
 });
 
@@ -20,6 +26,16 @@ function windowButtons(carousel: Locator): Locator {
 async function activeWindowIndex(carousel: Locator): Promise<number> {
 	const label = await carousel.locator('[aria-current="true"]').innerText();
 	return Number(label);
+}
+
+/** The active glyph breathes continuously (opacity 0.85-1, animate-wisp-breathe) -- never reliably exactly "1". */
+async function readOpacity(locator: Locator): Promise<number> {
+	return Number(await locator.evaluate((element) => getComputedStyle(element).opacity));
+}
+
+function expectBreathingOpacity(value: number): void {
+	expect(value).toBeGreaterThanOrEqual(0.85);
+	expect(value).toBeLessThanOrEqual(1);
 }
 
 test("Chat is a hidden-by-default floating overlay, summoned by keymap or the bottom edge", async ({ page }) => {
@@ -68,7 +84,7 @@ test("Chat is dockable: docking it hides the floating overlay, and it becomes aw
 	// The floating overlay is gone -- Chat now lives in the Window as a docked panel.
 	await expect(page.getByRole("dialog", { name: "Chat" })).toHaveCount(0);
 	await expect(page.getByText("Aware of: Activity")).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "Message Alef" })).toBeVisible();
+	await expect(page.getByRole("textbox", { name: "Message Pi" })).toBeVisible();
 });
 
 test("undocking Chat (the Float control) returns it to the floating overlay", async ({ page }) => {
@@ -81,15 +97,25 @@ test("undocking Chat (the Float control) returns it to the floating overlay", as
 	await expect(page.getByText("Aware of:")).toHaveCount(0);
 });
 
-test("the Window Carousel starts with several mock Windows, centered and fading with distance, and an empty docking watermark", async ({ page }) => {
+/** Zodiac starts with one Window -- add more via the "+" control for tests needing several. */
+async function addWindows(page: Page, count: number): Promise<void> {
+	for (let i = 0; i < count; i++) await page.getByRole("button", { name: "New Window" }).click();
+}
+
+test("several Windows in the Carousel center the active one and fade by distance, with an empty docking watermark", async ({ page }) => {
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
 	const buttons = windowButtons(carousel);
+	await addWindows(page, 6); // 7 total -- enough either side of center to see the fade falloff clamp
 	const count = await buttons.count();
-	expect(count).toBeGreaterThan(4); // enough mock Windows either side of center to see the fade
+	expect(count).toBe(7);
 
-	const activeIndex = await activeWindowIndex(carousel);
-	expect(activeIndex).toBe(Math.floor(count / 2)); // the active Window starts centered, not first
-	await expect(buttons.nth(activeIndex)).toHaveCSS("opacity", "1");
+	// "New Window" activates the newest one; select the middle index instead.
+	const middleIndex = Math.floor(count / 2);
+	await carousel.getByRole("button", { name: String(middleIndex) }).click();
+	await expect(carousel.getByRole("button", { name: String(middleIndex) })).toHaveAttribute("aria-current", "true");
+	// The click reflowed every button's position; the cursor may now coincidentally hover a different (faded) button.
+	await page.mouse.move(0, 0);
+	expectBreathingOpacity(await readOpacity(buttons.nth(middleIndex)));
 	// Far enough from center that window-carousel-fade.ts's falloff clamps to fully invisible.
 	await expect(buttons.first()).toHaveCSS("opacity", "0");
 	await expect(buttons.last()).toHaveCSS("opacity", "0");
@@ -100,12 +126,15 @@ test("the Window Carousel starts with several mock Windows, centered and fading 
 test("the Window Carousel is an infinite loop: the Window right before the first is the last one, not maximally far away", async ({ page }) => {
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
 	const buttons = windowButtons(carousel);
+	await addWindows(page, 4); // 5 total
 	const count = await buttons.count();
 	const lastIndex = count - 1;
 
 	await buttons.nth(0).click();
 	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
-	await expect(buttons.nth(0)).toHaveCSS("opacity", "1");
+	await page.mouse.move(0, 0); // avoid a coincidental hover on a reflowed button
+
+	expectBreathingOpacity(await readOpacity(buttons.nth(0)));
 	const lastOpacity = Number(await buttons.nth(lastIndex).evaluate((element) => getComputedStyle(element).opacity));
 	const secondOpacity = Number(await buttons.nth(1).evaluate((element) => getComputedStyle(element).opacity));
 	expect(lastOpacity).toBeGreaterThan(0); // visible, not faded into nothing
@@ -118,6 +147,8 @@ test("the Window Carousel is an infinite loop: the Window right before the first
 
 test("a real mouse wheel scroll over the Window Carousel moves exactly one Window, without disturbing the others", async ({ page }) => {
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
+	await addWindows(page, 3); // 4 total
+	await carousel.getByRole("button", { name: "1" }).click(); // a real "next", not the wrap-around edge case
 	const originalCount = await windowButtons(carousel).count();
 	const startIndex = await activeWindowIndex(carousel);
 
@@ -167,22 +198,24 @@ test("Window Carousel: clicking a Window index switches to an independent dockin
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 });
 
-test("wheel-scrolling forward past the last Window wraps to the first, without creating or pruning any Window", async ({ page }) => {
+// Wheel-scrolling is its own policy (see WindowCarousel.tsx), not the same
+// wrapping ring nextWindow/previousWindow use: past the last Window it
+// creates a fresh ephemeral one instead of wrapping.
+test("wheel-scrolling forward past the last real Window creates a fresh ephemeral one; scrolling back away from it (still undocked) prunes it", async ({ page }) => {
 	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
 	const originalCount = await windowButtons(carousel).count();
-	const lastMockIndex = originalCount - 1;
-	await carousel.getByRole("button", { name: String(lastMockIndex) }).click();
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 
 	await carousel.hover();
-	await page.mouse.wheel(0, 100); // forward, past the last Window -- wraps to the first, nothing created or pruned
+	await page.mouse.wheel(0, 100); // forward, past the last real Window -- creates a fresh ephemeral one, doesn't wrap
+	await expect(windowButtons(carousel)).toHaveCount(originalCount + 1);
+	await expect(carousel.getByRole("button", { name: String(originalCount) })).toHaveAttribute("aria-current", "true");
+	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toBeVisible();
+
+	await page.mouse.wheel(0, -100); // backward, away from the still-empty ephemeral Window -- pruned, not kept
 	await expect(windowButtons(carousel)).toHaveCount(originalCount);
 	await expect(carousel.getByRole("button", { name: "0" })).toHaveAttribute("aria-current", "true");
-
-	await page.mouse.wheel(0, -100); // backward from the first -- wraps back to the last (still docked) Window
-	await expect(windowButtons(carousel)).toHaveCount(originalCount);
-	await expect(carousel.getByRole("button", { name: String(lastMockIndex) })).toHaveAttribute("aria-current", "true");
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 });
 
@@ -203,8 +236,10 @@ test("saving the active docked Surface as a template adds it to the pillar", asy
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 
-	await page.getByRole("button", { name: "Save the active docked Surface as a new template" }).click();
-	await page.getByLabel("New template title").fill("My Activity View");
+	// Reached via the tab's own context menu now, not a toolbar button.
+	await page.locator(".dv-default-tab").filter({ hasText: "Activity" }).click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Save as template…" }).click();
+	await page.getByLabel("Template title").fill("My Activity View");
 	await page.getByRole("button", { name: "Save" }).click();
 
 	await expect(page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock My Activity View" })).toBeVisible();
@@ -529,22 +564,36 @@ test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and sh
 	await page.evaluate(() => localStorage.setItem("zodiac.theme", "light"));
 	await page.reload();
 
+	// Zodiac starts with zero Workspaces and no fixed demo catalog -- create two real ones.
+	await page.getByRole("button", { name: "Create a new Workspace" }).click();
+	await page.getByLabel("Workspace title").fill("Second Workspace");
+	await page.getByRole("button", { name: "Create" }).click();
+
+	const selection = page.getByRole("navigation", { name: "Workspace selection" });
+	// [data-workspace-catalog-id]: excludes each row's own "Close" button sibling.
+	const catalogButtons = selection.getByRole("list", { name: "Workspaces" }).locator("[data-workspace-catalog-id]");
+	const firstTitle = (await catalogButtons.first().textContent())!.trim();
+	const secondTitle = (await catalogButtons.nth(1).textContent())!.trim();
+
+	// Control+1 focuses the currently-active entry, not index 0 -- creating
+	// "Second Workspace" selected it, so re-select the first one first.
+	await catalogButtons.first().click();
 	await page.keyboard.press("Control+1");
-	await expect(page.getByRole("navigation", { name: "Workspace selection" })).toContainText("Bug");
-	await expect(page.getByRole("button", { name: "Bug" })).toBeFocused();
+	await expect(selection).toContainText(firstTitle);
+	await expect(catalogButtons.filter({ hasText: firstTitle })).toBeFocused();
 	await page.keyboard.press("ArrowDown");
-	await expect(page.getByRole("button", { name: "Metrics" })).toBeFocused();
+	await expect(catalogButtons.filter({ hasText: secondTitle })).toBeFocused();
 	await page.keyboard.press("ArrowUp");
-	await expect(page.getByRole("button", { name: "Bug" })).toBeFocused();
+	await expect(catalogButtons.filter({ hasText: firstTitle })).toBeFocused();
 
 	await page.keyboard.press("Control+2");
 	await expect(page.getByRole("region", { name: "Window view" })).toBeFocused();
 
 	await revealChat(page);
-	await page.getByRole("textbox", { name: "Message Alef" }).fill("Run the first slice");
+	await page.getByRole("textbox", { name: "Message Pi" }).fill("Run the first slice");
 	await page.keyboard.press("Control+Enter");
 	await expect(page.getByText("Run the first slice")).toBeVisible(); // now the peek's own last-reply preview
-	await expect(page.getByRole("textbox", { name: "Message Alef" })).toHaveValue("");
+	await expect(page.getByRole("textbox", { name: "Message Pi" })).toHaveValue("");
 
 	await expect(page.getByRole("button", { name: "Cycle color theme" })).toHaveAttribute("aria-keyshortcuts", "Control+Alt+L");
 	await page.keyboard.press("Control+Alt+L");
@@ -581,7 +630,7 @@ test("a user can rebind a command and the override survives reload", async ({ pa
 
 test("printable global shortcuts do not steal text input", async ({ page }) => {
 	await revealChat(page);
-	const composer = page.getByRole("textbox", { name: "Message Alef" });
+	const composer = page.getByRole("textbox", { name: "Message Pi" });
 	await composer.fill("b k / [ ]");
 	await page.keyboard.type(" ordinary typing");
 	await expect(composer).toHaveValue("b k / [ ] ordinary typing");
