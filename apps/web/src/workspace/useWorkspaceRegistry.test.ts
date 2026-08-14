@@ -21,28 +21,28 @@ const CATALOG: readonly WorkspaceCatalogEntry[] = [
 // of the fixture, not suppressing a genuine possibility.
 
 describe("useWorkspaceRegistry", () => {
-	it("creates one Workspace per catalog entry, active on the first, one empty Window each", () => {
+	it("creates one Workspace per catalog entry, active on the first, one Window each with Chat pre-docked", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 		expect(result.current.activeWorkspaceId).toBe("bug");
 		expect(result.current.workspace!.id).toBe("bug");
-		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
+		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
 	});
 
 	it("selectWorkspace switches which Workspace's state the rest of the handle reads, without resetting it", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 
 		act(() => result.current.dockSurface("activity", "Activity"));
-		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
+		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(2); // Chat + Activity
 
 		act(() => result.current.selectWorkspace("metrics"));
 		expect(result.current.activeWorkspaceId).toBe("metrics");
 		expect(result.current.workspace!.id).toBe("metrics");
-		// A different Workspace: its own independent, untouched state.
-		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
+		// A different Workspace: its own independent, untouched state (Chat only).
+		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
 
 		act(() => result.current.selectWorkspace("bug"));
 		// Switching back: "bug"'s own earlier state survived the switch away, not reset.
-		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
+		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(2);
 	});
 
 	it("nextWindow/previousWindow/addWindow drive the active Workspace's active Window forward, backward, and to a fresh one", () => {
@@ -73,15 +73,16 @@ describe("useWorkspaceRegistry", () => {
 
 	it("dockSurface adds to the active Window and returns the created instance; undockSurface removes it", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+		const chatId = result.current.activeWindow!.dockedSurfaces[0]!.id;
 
 		let instanceId = "";
 		act(() => {
 			instanceId = result.current.dockSurface("activity", "Activity")!.id;
 		});
-		expect(result.current.activeWindow!.dockedSurfaces.map((surface) => surface.id)).toEqual([instanceId]);
+		expect(result.current.activeWindow!.dockedSurfaces.map((surface) => surface.id)).toEqual([chatId, instanceId]);
 
 		act(() => result.current.undockSurface(instanceId));
-		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
+		expect(result.current.activeWindow!.dockedSurfaces.map((surface) => surface.id)).toEqual([chatId]);
 	});
 
 	it("scrollWindow drives the Window Carousel's own scroll policy -- creates an ephemeral Window past the single Window's end", () => {
@@ -108,7 +109,7 @@ describe("useWorkspaceRegistry", () => {
 
 		act(() => result.current.selectWorkspace("deploys"));
 		expect(result.current.workspace!.id).toBe("deploys");
-		expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
+		expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1); // Chat, pre-docked
 	});
 
 	it("selecting a brand-new catalog entry in the same render pass it first appears in (before the reactive effect has materialized it) never throws", () => {
@@ -129,8 +130,12 @@ describe("useWorkspaceRegistry", () => {
 		expect(() => act(() => result.current.selectWorkspace("does-not-exist"))).toThrow(/no Workspace registered/i);
 	});
 
-	it("dockChat/isChatDocked/undockChatToGlobal drive Chat between global and docked", () => {
+	it("Chat starts already docked (isChatDocked true); dockChat re-docks it if closed, otherwise is a no-op", () => {
 		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
+		expect(result.current.isChatDocked).toBe(true);
+		const originalId = result.current.activeWindow!.dockedSurfaces[0]!.id;
+
+		act(() => result.current.undockSurface(originalId));
 		expect(result.current.isChatDocked).toBe(false);
 
 		let instanceId = "";
@@ -139,28 +144,6 @@ describe("useWorkspaceRegistry", () => {
 		});
 		expect(result.current.isChatDocked).toBe(true);
 		expect(result.current.activeWindow!.dockedSurfaces.map((surface) => surface.id)).toEqual([instanceId]);
-
-		act(() => result.current.undockChatToGlobal());
-		expect(result.current.isChatDocked).toBe(false);
-	});
-
-	it("pinChat/unpinChat toggle chatPinned, and docked Chat only follows the active Window while unpinned", () => {
-		const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
-		act(() => result.current.dockChat("Chat"));
-		expect(result.current.chatPinned).toBe(false);
-
-		act(() => result.current.addWindow()); // window 1, active; Chat still in window 0
-		act(() => result.current.pinChat());
-		expect(result.current.chatPinned).toBe(true);
-
-		act(() => result.current.previousWindow()); // -> window 0
-		expect(result.current.chatPinned).toBe(true);
-
-		act(() => result.current.unpinChat());
-		expect(result.current.chatPinned).toBe(false);
-
-		act(() => result.current.nextWindow()); // -> window 1: Chat follows now that it's unpinned
-		expect(result.current.activeWindow!.dockedSurfaces.some((surface) => surface.templateId === "chat")).toBe(true);
 	});
 
 	describe("renameWorkspace", () => {
@@ -198,12 +181,12 @@ describe("useWorkspaceRegistry", () => {
 		it("drops the Workspace's own in-memory state -- selecting the same id again starts fresh, not with its old docked Surfaces", () => {
 			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG));
 			act(() => result.current.dockSurface("activity", "Activity"));
-			expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1);
+			expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(2); // Chat + Activity
 
 			act(() => result.current.removeWorkspace("bug"));
 			act(() => result.current.selectWorkspace("bug"));
 
-			expect(result.current.activeWindow!.dockedSurfaces).toEqual([]);
+			expect(result.current.activeWindow!.dockedSurfaces).toHaveLength(1); // fresh: Chat only, Activity gone
 		});
 
 		it("removing the active Workspace activates the next remaining catalog entry", () => {
@@ -273,7 +256,6 @@ describe("useWorkspaceRegistry", () => {
 			expect(result.current.dockSurface("activity", "Activity")).toBeUndefined();
 			expect(result.current.dockChat("Chat")).toBeUndefined();
 			expect(result.current.isChatDocked).toBe(false);
-			expect(result.current.chatPinned).toBe(false);
 		});
 
 		it("a Workspace appearing later in `catalog` (e.g. the auto-create-on-first-prompt flow) is picked up once selected, exactly like the non-empty case", () => {

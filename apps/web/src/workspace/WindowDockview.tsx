@@ -1,10 +1,10 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { DockviewDefaultTab, DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewDidDropEvent, type DockviewReadyEvent, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type Position } from "dockview-react";
+import { DockviewDefaultTab, DockviewReact, positionToDirection, themeAbyssSpaced, themeLightSpaced, type DockviewDidDropEvent, type DockviewReadyEvent, type IDockviewPanel, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type Position } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
-import { Feather, PanelLeftOpen, Pin } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
+import { chatOrientation, CHAT_SIZE_RATIO, type ChatOrientation, type ChatPlacement } from "../platform/chat-placement.js";
 import { cn } from "../platform/cn.js";
 import { toLocalRect, type Rect } from "../platform/geometry.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
@@ -49,6 +49,30 @@ function noop(): void {}
 // reference, not recreated per render, avoids it entirely.
 function DockWatermark(): React.JSX.Element {
 	return <div className="grid h-full place-items-center p-6 text-center text-sm text-gray-500 dark:text-gray-400">Pull a Surface Template from the right pillar to dock it here.</div>;
+}
+
+/** No close button: the anchor isn't in the domain model, so nothing would re-add it if closed via its own tab. */
+function CanvasAnchorTab(): React.JSX.Element {
+	return <div className="flex h-full items-center px-3 text-xs text-gray-500 dark:text-gray-400">Canvas</div>;
+}
+
+const CANVAS_ANCHOR_ID = "canvas-anchor";
+
+function realSurfaces(surfaces: readonly DockedSurfaceInstance[]): DockedSurfaceInstance[] {
+	return surfaces.filter((surface) => surface.templateId !== CHAT_TEMPLATE_ID);
+}
+
+function oppositeChatPlacement(placement: ChatPlacement): ChatPlacement {
+	switch (placement) {
+		case "top":
+			return "bottom";
+		case "bottom":
+			return "top";
+		case "left":
+			return "right";
+		case "right":
+			return "left";
+	}
 }
 
 /** The same hint computation the Dock Ruler renders, run fresh against a real drag event and its target group's own DOM box -- shared between the live overlay (onWillShowOverlay) and the actual drop (onDidDrop) so what the ruler showed and what the drop does can never disagree. */
@@ -138,10 +162,8 @@ export interface DockedChatParams {
 	readonly onDraftChange: (value: string) => void;
 	readonly onComposerFocus: () => void;
 	readonly siblingTitles: readonly string[];
-	readonly onUndock: () => void;
-	/** Unpinned (false) means Chat travels with the active Window -- see model.ts's withChatFollowing. */
-	readonly pinned: boolean;
-	readonly onTogglePin: () => void;
+	/** Derived from the Window's own chatPlacement -- see ConversationSurface's own doc comment. */
+	readonly orientation: ChatOrientation;
 	/** True while fading out, just before the panel is actually removed -- see requestClose. */
 	readonly closing: boolean;
 	/** False while a sibling Surface (in a split, not a hidden tab) is the Window's active panel -- see surface-focus.ts. */
@@ -150,51 +172,17 @@ export interface DockedChatParams {
 
 // eslint-disable-next-line sonarjs/prefer-read-only-props -- see SurfaceTemplatePanel above
 function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JSX.Element {
-	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, onUndock, pinned, closing, focused } = props.params;
+	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, orientation, closing, focused } = props.params;
 	return (
-		// animate-chat-follow-bounce and animate-surface-spawn both play once on
-		// mount (a fresh mount happens naturally every time Chat relocates to a
-		// new active Window, each Window its own DockviewReact instance) -- the
-		// opacity transition activates later, on close or defocus.
-		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", !pinned && "animate-chat-follow-bounce", panelOpacityClassName(closing, focused))}>
+		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", panelOpacityClassName(closing, focused))}>
 			<div className="flex h-8 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
 				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
-				<button type="button" onClick={onUndock} aria-label="Undock Chat from this Window" className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent dark:hover:bg-gray-800">
-					<PanelLeftOpen aria-hidden="true" size={12} />
-					Undock
-				</button>
 			</div>
 			<div className="min-h-0 flex-1">
-				<ConversationSurface items={conversationItems} loading={conversationLoading} error={conversationError} draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} />
+				<ConversationSurface items={conversationItems} loading={conversationLoading} error={conversationError} draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} orientation={orientation} />
 			</div>
 		</div>
 	);
-}
-
-/** Chat's own tab: a feather (following/unpinned) or pin (pinned) toggle, hovering the icon while unpinned previews the pin -- an affordance for "click to pin". */
-function makeChatTab(onRequestClose: (instanceId: string) => void) {
-	return function ChatTab(props: IDockviewPanelHeaderProps<DockedChatParams>): React.JSX.Element {
-		const [hovering, setHovering] = useState(false);
-		const { pinned, onTogglePin } = props.params;
-		const showPinGlyph = pinned || hovering;
-		return (
-			<div className="relative flex items-center">
-				<DockviewDefaultTab {...props} closeActionOverride={() => onRequestClose(props.api.id)} />
-				<button
-					type="button"
-					onPointerDown={(event) => event.stopPropagation()}
-					onClick={onTogglePin}
-					onMouseEnter={() => setHovering(true)}
-					onMouseLeave={() => setHovering(false)}
-					aria-label={pinned ? "Unpin Chat from this Window" : "Pin Chat to this Window"}
-					aria-pressed={pinned}
-					className="absolute right-7 grid size-5 place-items-center rounded text-gray-400 hover:bg-gray-500/10 hover:text-gray-700 dark:hover:text-gray-200"
-				>
-					{showPinGlyph ? <Pin aria-hidden="true" size={11} /> : <Feather aria-hidden="true" size={11} />}
-				</button>
-			</div>
-		);
-	};
 }
 
 /** A domain-docked instance still awaiting placement in the docking engine -- carries the split direction (or `undefined` for the engine's own default) a keyboard or drag placement chose. */
@@ -212,7 +200,7 @@ interface WindowDockviewProps {
 	readonly dockedSurfaces: readonly DockedSurfaceInstance[];
 	readonly pendingDock?: PendingDock;
 	readonly onPendingDockConsumed: () => void;
-	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too (or float it, for Chat). */
+	/** The user closed a tab via the docking engine's own UI -- undock it from the domain model too. */
 	readonly onPanelClosed: (instanceId: string) => void;
 	readonly onExternalTemplateDrop: (templateId: string, position: Position, referenceGroupId: string | undefined, newGroupSizeRatio: number | undefined) => void;
 	/** The Dock Ruler's outer frame (DockRulerFrame, rendered outside this Window's own overflow-hidden canvas by a parent) needs the live hint too, converted into an absolute page-space mark -- undefined outside a drag, or once the pointer leaves the target. */
@@ -229,9 +217,8 @@ interface WindowDockviewProps {
 	readonly draft: string;
 	readonly onDraftChange: (value: string) => void;
 	readonly onComposerFocus: () => void;
-	readonly onUndockChat: () => void;
-	readonly chatPinned: boolean;
-	readonly onTogglePinChat: () => void;
+	/** Which edge Chat is always docked to in this Window -- see chat-placement.ts. */
+	readonly chatPlacement: ChatPlacement;
 	/** Extension-registered Surface Templates (e.g. an ExtensionHost's), resolved alongside the built-in registry when rendering a docked panel. */
 	readonly extensionTemplates?: readonly SurfaceTemplateDefinition[];
 	/** Saves a new Surface Template from a docked Surface's own tab context menu (see makeDockedSurfaceTab/SaveAsTemplateDialog). */
@@ -255,14 +242,22 @@ export function WindowDockview({
 	draft,
 	onDraftChange,
 	onComposerFocus,
-	onUndockChat,
-	chatPinned,
-	onTogglePinChat,
+	chatPlacement,
 	extensionTemplates = [],
 	onSaveAsTemplate,
 }: WindowDockviewProps): React.JSX.Element {
 	const apiRef = useRef<DockviewReadyEvent["api"]>(undefined);
 	const mountedIdsRef = useRef<Set<string>>(new Set());
+	/** Whether the synthetic canvas anchor (mountAnchor) is currently mounted -- see its own doc comment. */
+	const anchorMountedRef = useRef<boolean>(false);
+	/** The anchor's own group id while mounted -- lets a later click-to-dock target it directly instead of dockview's own "active" guess. */
+	const anchorGroupIdRef = useRef<string | undefined>(undefined);
+	/** Set by resolveMountReferenceGroupId when it had to guess a placement -- see the anchor/reassert effect below for why that (and not an explicit one) needs Chat's ratio reasserted afterwards. */
+	const usedMountFallbackRef = useRef<boolean>(false);
+	/** The real-Surface count as of the last time the anchor/reassert effect ran -- lets it tell a removal (always reassert) apart from an addition (only if it used the fallback). */
+	const previousRealCountRef = useRef<number>(0);
+	/** See the live-reposition effect below for why this starts equal to the current value rather than undefined. */
+	const previousChatPlacementRef = useRef<ChatPlacement>(chatPlacement);
 	const wrapperRef = useRef<HTMLDivElement>(null);
 	const lastMoveRef = useRef<{ x: number; y: number; t: number } | null>(null);
 	// Own idle-velocity sample, independent of lastMoveRef above -- the ambient
@@ -347,10 +342,18 @@ export function WindowDockview({
 			if (!wrapper || !api) return;
 			const wrapperBox = wrapper.getBoundingClientRect();
 			const canvasRect = { left: 0, top: 0, width: wrapperBox.width, height: wrapperBox.height };
-			const groups = api.groups.map((group) => {
-				const box = group.element.getBoundingClientRect();
-				return { id: group.id, rect: toLocalRect(box, wrapperBox) };
-			});
+			// Chat's own group and the canvas anchor are never a real docking target
+			// for another Surface -- exclude both so "nothing docked yet" still reads
+			// as just the 4 root edges, not phantom per-group zones for UI chrome.
+			const chatInstance = dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+			const chatGroupId = chatInstance ? api.getPanel(chatInstance.id)?.group.id : undefined;
+			const anchorGroupId = anchorMountedRef.current ? api.getPanel(CANVAS_ANCHOR_ID)?.group.id : undefined;
+			const groups = api.groups
+				.filter((group) => group.id !== chatGroupId && group.id !== anchorGroupId)
+				.map((group) => {
+					const box = group.element.getBoundingClientRect();
+					return { id: group.id, rect: toLocalRect(box, wrapperBox) };
+				});
 			const zones = computeDropZones(groups, canvasRect);
 			const pointer = { x: nativeEvent.clientX - wrapperBox.left, y: nativeEvent.clientY - wrapperBox.top };
 			const radius = proximityInfluenceRadius(canvasRect);
@@ -385,7 +388,7 @@ export function WindowDockview({
 		}
 		wrapper.addEventListener("dragover", onDragOver);
 		return () => wrapper.removeEventListener("dragover", onDragOver);
-	}, [dragActive]);
+	}, [dragActive, dockedSurfaces]);
 
 	function requestClose(instanceId: string): void {
 		setClosingIds((current) => new Set(current).add(instanceId));
@@ -401,12 +404,10 @@ export function WindowDockview({
 	}
 
 	// eslint-disable-next-line react-hooks/exhaustive-deps -- extensionTemplates is expected to be a caller-memoized, effectively-static reference (see App.tsx); re-keying every panel component on each new array identity would be wrong here, not a missing dependency. requestClose is a stable closure over refs/setState, not reactive state.
-	const panelComponents = useMemo(() => ({ surfaceTemplate: makeSurfaceTemplatePanel(extensionTemplates), chatSurface: DockedChatPanel }), []);
+	const panelComponents = useMemo(() => ({ surfaceTemplate: makeSurfaceTemplatePanel(extensionTemplates), chatSurface: DockedChatPanel, canvasAnchor: DockWatermark }), []);
 	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
 	const defaultTabComponent = useMemo(() => makeDockedSurfaceTab(extensionTemplates, (templateId, defaultTitle) => setSaveAsTemplateRequest({ templateId, defaultTitle }), requestClose), []);
-	const chatTabComponent = useMemo(() => makeChatTab(requestClose), []);
-	// eslint-disable-next-line react-hooks/exhaustive-deps -- same rationale as panelComponents above.
-	const tabComponents = useMemo(() => ({ chatSurface: chatTabComponent }), []);
+	const tabComponents = useMemo(() => ({ canvasAnchor: CanvasAnchorTab }), []);
 
 	function chatParams(instance: DockedSurfaceInstance): DockedChatParams {
 		return {
@@ -417,9 +418,7 @@ export function WindowDockview({
 			onDraftChange,
 			onComposerFocus,
 			siblingTitles: dockedSurfaces.filter((surface) => surface.id !== instance.id).map((surface) => surface.title),
-			onUndock: onUndockChat,
-			pinned: chatPinned,
-			onTogglePin: onTogglePinChat,
+			orientation: chatOrientation(chatPlacement),
 			closing: closingIds.has(instance.id),
 			focused: isSurfaceFocused(instance.id, activePanelId, dockedSurfaces.length),
 		};
@@ -429,34 +428,72 @@ export function WindowDockview({
 		return { templateId: instance.templateId, closing: closingIds.has(instance.id), focused: isSurfaceFocused(instance.id, activePanelId, dockedSurfaces.length) };
 	}
 
-	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string, newGroupSizeRatio?: number): void {
+	/** Shared addPanel + Dock Ruler/chat-placement ratio math, for both a real DockedSurfaceInstance (mountPanel) and the synthetic canvas anchor (mountAnchor) below -- see the Dock Ruler's own comment on why the ratio is measured off the reference group's own current size, not a drag-time snapshot. */
+	function addPanelWithRatio(id: string, component: string, title: string | undefined, params: object | undefined, position?: Position, referenceGroupId?: string, newGroupSizeRatio?: number, tabComponent?: string): IDockviewPanel | undefined {
 		const api = apiRef.current;
-		if (!api) return;
-		const isChat = instance.templateId === CHAT_TEMPLATE_ID;
-		// The Dock Ruler's chosen fraction, converted into dockview's own
-		// initialWidth/initialHeight (its real, documented addPanel option for
-		// sizing the newly-created group) -- measured off the reference group's
-		// own current size, not the ruler's drag-time snapshot, since a real
-		// resize could happen between drop and this mount effect running.
+		if (!api) return undefined;
 		const referenceGroup = referenceGroupId ? api.getGroup(referenceGroupId) : undefined;
 		const initialWidth = newGroupSizeRatio !== undefined && referenceGroup && (position === "left" || position === "right") ? referenceGroup.width * newGroupSizeRatio : undefined;
 		const initialHeight = newGroupSizeRatio !== undefined && referenceGroup && (position === "top" || position === "bottom") ? referenceGroup.height * newGroupSizeRatio : undefined;
-		api.addPanel({
-			id: instance.id,
-			component: isChat ? "chatSurface" : "surfaceTemplate",
-			title: instance.title,
-			params: isChat ? chatParams(instance) : surfaceTemplateParams(instance),
-			position: position ? { direction: positionToDirection(position), referenceGroup: referenceGroupId } : undefined,
-			initialWidth,
-			initialHeight,
-		});
-		mountedIdsRef.current.add(instance.id);
+		// position/referenceGroupId are independently optional -- four distinct
+		// placements: neither (dockview's own default), direction only (absolute
+		// root split), referenceGroupId only (tab-insert into that group), both
+		// (edge split against that group).
+		if (position !== undefined && referenceGroupId !== undefined) {
+			return api.addPanel({ id, component, tabComponent, title, params, position: { direction: positionToDirection(position), referenceGroup: referenceGroupId }, initialWidth, initialHeight });
+		}
+		if (position !== undefined) {
+			return api.addPanel({ id, component, tabComponent, title, params, position: { direction: positionToDirection(position) }, initialWidth, initialHeight });
+		}
+		if (referenceGroupId !== undefined) {
+			return api.addPanel({ id, component, tabComponent, title, params, position: { referenceGroup: referenceGroupId }, initialWidth, initialHeight });
+		}
+		return api.addPanel({ id, component, tabComponent, title, params, initialWidth, initialHeight });
+	}
+
+	function mountPanel(instance: DockedSurfaceInstance, position?: Position, referenceGroupId?: string, newGroupSizeRatio?: number): void {
+		const isChat = instance.templateId === CHAT_TEMPLATE_ID;
+		const panel = addPanelWithRatio(instance.id, isChat ? "chatSurface" : "surfaceTemplate", instance.title, isChat ? chatParams(instance) : surfaceTemplateParams(instance), position, referenceGroupId, newGroupSizeRatio);
+		if (panel) mountedIdsRef.current.add(instance.id);
+	}
+
+	/** A real panel standing in for "drop a Surface Template here" instead of dockview's own zero-panels watermark, so Chat's split always has a partner to size against. Not in the domain model -- added/removed here as real Surfaces come and go. */
+	function mountAnchor(position?: Position, referenceGroupId?: string, newGroupSizeRatio?: number): string | undefined {
+		// title, not just the tab component's own rendered text: dockview derives the group's accessible name from it.
+		const panel = addPanelWithRatio(CANVAS_ANCHOR_ID, "canvasAnchor", "Canvas", undefined, position, referenceGroupId, newGroupSizeRatio, "canvasAnchor");
+		anchorMountedRef.current = panel !== undefined;
+		anchorGroupIdRef.current = panel?.group.id;
+		return panel?.group.id;
+	}
+
+	/** A flat split's insert/remove redistributes every sibling evenly, discarding Chat's own ratio -- reapply it once here, not continuously (that would fight a deliberate gutter resize). */
+	function reassertChatRatio(api: DockviewReadyEvent["api"]): void {
+		const chatInstance = dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+		const chatPanel = chatInstance ? api.getPanel(chatInstance.id) : undefined;
+		if (!chatPanel) return;
+		const isVertical = chatPlacement === "left" || chatPlacement === "right";
+		const total = isVertical ? api.width : api.height;
+		chatPanel.group.api.setSize(isVertical ? { width: total * CHAT_SIZE_RATIO } : { height: total * CHAT_SIZE_RATIO });
 	}
 
 	function onReady(event: DockviewReadyEvent): void {
 		apiRef.current = event.api;
 		mountedIdsRef.current = new Set();
-		for (const instance of dockedSurfaces) mountPanel(instance);
+
+		// Chat is always docked (see model.ts's createWindow), sized/positioned
+		// relative to whichever real Surface (or, absent one, the synthetic
+		// anchor) becomes the base group -- see mountAnchor's own doc comment.
+		const chatInstance = dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+		const [firstOther, ...restOthers] = realSurfaces(dockedSurfaces);
+		let baseGroupId: string | undefined;
+		if (firstOther) {
+			mountPanel(firstOther);
+			baseGroupId = event.api.getPanel(firstOther.id)?.group.id;
+		} else {
+			baseGroupId = mountAnchor();
+		}
+		if (chatInstance) mountPanel(chatInstance, chatPlacement, baseGroupId, CHAT_SIZE_RATIO);
+		for (const instance of restOthers) mountPanel(instance);
 
 		event.api.onDidRemovePanel((panel) => {
 			mountedIdsRef.current.delete(panel.id);
@@ -520,13 +557,34 @@ export function WindowDockview({
 		});
 	}
 
+	/**
+	 * No explicit placement (plain click-to-dock) targets the canvas anchor's
+	 * own group, or -- once a real Surface has already replaced it -- that
+	 * Surface's own group. Never dockview's own "active" guess, which can be
+	 * Chat's. Also records whether this fallback fired at all: a Dock-Ruler or
+	 * other explicitly-targeted split never disturbs Chat's own group, so
+	 * reasserting its ratio afterwards would only fight the split just chosen
+	 * (verified live: resizing Chat's group resets an unrelated sibling split).
+	 */
+	function resolveMountReferenceGroupId(instance: DockedSurfaceInstance, isPending: boolean): string | undefined {
+		const explicitReferenceGroupId = isPending ? pendingDock?.referenceGroupId : undefined;
+		if (explicitReferenceGroupId !== undefined) return explicitReferenceGroupId;
+		if (instance.templateId === CHAT_TEMPLATE_ID) return undefined;
+		usedMountFallbackRef.current = true;
+		if (anchorMountedRef.current) return anchorGroupIdRef.current;
+		const api = apiRef.current;
+		const existingReal = realSurfaces(dockedSurfaces).find((surface) => surface.id !== instance.id && mountedIdsRef.current.has(surface.id));
+		return existingReal && api ? api.getPanel(existingReal.id)?.group.id : undefined;
+	}
+
 	// Mount newly-docked instances / unmount removed ones.
 	useEffect(() => {
 		if (!apiRef.current) return;
 		for (const instance of dockedSurfaces) {
 			if (mountedIdsRef.current.has(instance.id)) continue;
 			const isPending = pendingDock?.instanceId === instance.id;
-			mountPanel(instance, isPending ? pendingDock.position : undefined, isPending ? pendingDock.referenceGroupId : undefined, isPending ? pendingDock.newGroupSizeRatio : undefined);
+			const referenceGroupId = resolveMountReferenceGroupId(instance, isPending);
+			mountPanel(instance, isPending ? pendingDock.position : undefined, referenceGroupId, isPending ? pendingDock.newGroupSizeRatio : undefined);
 			if (isPending) onPendingDockConsumed();
 		}
 
@@ -538,6 +596,59 @@ export function WindowDockview({
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- mountPanel is a stable closure over apiRef/mountedIdsRef, not reactive state
 	}, [dockedSurfaces, pendingDock, onPendingDockConsumed]);
+
+	// The anchor fills Chat's split partner whenever no real Surface is docked, and steps aside once one is. Runs after the mount effect above, so it sees this render's settled state.
+	useEffect(() => {
+		const api = apiRef.current;
+		if (!api) return;
+		const realCount = realSurfaces(dockedSurfaces).length;
+		const hasReal = realCount > 0;
+		if (hasReal) {
+			if (anchorMountedRef.current) {
+				api.getPanel(CANVAS_ANCHOR_ID)?.api.close();
+				anchorMountedRef.current = false;
+				anchorGroupIdRef.current = undefined;
+			}
+			// Reassert only for a structural change that could actually disturb
+			// Chat's own split: something closing (any removal redistributes the
+			// remaining flat siblings, chat included), or a mount that used the
+			// fallback above (uncertain placement, landed as a flat sibling of
+			// Chat). A mount with its own explicit target (a Dock-Ruler split
+			// nested inside an existing real Surface) never touches Chat's group,
+			// so reasserting would only undo the ratio that split just chose.
+			const removed = realCount < previousRealCountRef.current;
+			if (removed || usedMountFallbackRef.current) reassertChatRatio(api);
+			usedMountFallbackRef.current = false;
+			previousRealCountRef.current = realCount;
+			return;
+		}
+		previousRealCountRef.current = realCount;
+		if (anchorMountedRef.current) return;
+		const chatInstance = dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+		const chatGroupId = chatInstance ? api.getPanel(chatInstance.id)?.group.id : undefined;
+		if (chatGroupId) mountAnchor(oppositeChatPlacement(chatPlacement), chatGroupId, 1 - CHAT_SIZE_RATIO);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- mountAnchor is a stable closure over apiRef/anchorMountedRef; chatPlacement is already listed.
+	}, [dockedSurfaces, chatPlacement]);
+
+	// Moves Chat's split live when the placement setting changes -- otherwise
+	// only a new Window picks it up. previousChatPlacementRef starts at the
+	// current value so the first run (onReady already placed Chat) is a no-op.
+	useEffect(() => {
+		const api = apiRef.current;
+		if (!api || previousChatPlacementRef.current === chatPlacement) return;
+		previousChatPlacementRef.current = chatPlacement;
+
+		const chatInstance = dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+		const chatPanel = chatInstance ? api.getPanel(chatInstance.id) : undefined;
+		const otherGroup = chatPanel ? api.groups.find((group) => group.id !== chatPanel.group.id) : undefined;
+		if (!chatPanel || !otherGroup) return;
+		chatPanel.api.moveTo({ group: otherGroup, position: chatPlacement });
+		// moveTo defaults to 50/50 -- reapply the real ratio from the total the two groups now share, not otherGroup's own already-halved size.
+		const isVertical = chatPlacement === "left" || chatPlacement === "right";
+		const total = isVertical ? otherGroup.width + chatPanel.group.width : otherGroup.height + chatPanel.group.height;
+		chatPanel.group.api.setSize(isVertical ? { width: total * CHAT_SIZE_RATIO } : { height: total * CHAT_SIZE_RATIO });
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- dockedSurfaces is read fresh via closure; this effect intentionally fires only on a genuine chatPlacement change, not every dockedSurfaces update.
+	}, [chatPlacement]);
 
 	// A docked Chat panel's awareness of its siblings, and the live
 	// conversation data it renders, can change independently of the
@@ -551,7 +662,7 @@ export function WindowDockview({
 		if (!chatInstance || !mountedIdsRef.current.has(chatInstance.id)) return;
 		api.getPanel(chatInstance.id)?.api.updateParameters(chatParams(chatInstance));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- chatParams is a stable closure over the same props already listed
-	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, onUndockChat, chatPinned, onTogglePinChat, closingIds, activePanelId]);
+	}, [dockedSurfaces, conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, chatPlacement, closingIds, activePanelId]);
 
 	// Pushes the fading-out `closing` flag live into every currently-mounted
 	// panel's params (chat's own effect above already covers chat's case via

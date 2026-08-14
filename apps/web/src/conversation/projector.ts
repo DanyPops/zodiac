@@ -190,3 +190,12 @@ export function buildConversationItems(graph: Graph): ConversationItem[] {
 	return items;
 }
 
+/** The most recent tool-call item's tool name, or undefined if none has happened yet -- correlates a live conversation to whichever docked Surface (if any) that tool call is about (see model.ts's findWorkspaceIdForToolName). */
+export function latestToolCallName(items: readonly ConversationItem[]): string | undefined {
+	for (let i = items.length - 1; i >= 0; i -= 1) {
+		const item = items[i];
+		if (item?.kind === "tool-call") return item.toolName;
+	}
+	return undefined;
+}
+

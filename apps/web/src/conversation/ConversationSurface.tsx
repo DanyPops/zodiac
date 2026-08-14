@@ -1,6 +1,7 @@
 import { Send, Wrench } from "lucide-react";
 import type { ConversationItem } from "./projector.js";
 import { CommandButton } from "../commands/react.js";
+import type { ChatOrientation } from "../platform/chat-placement.js";
 import { cn } from "../platform/cn.js";
 import { SURFACE_BG } from "../platform/surface-style.js";
 
@@ -11,11 +12,13 @@ interface ConversationSurfaceProps {
 	readonly draft: string;
 	readonly onDraftChange: (value: string) => void;
 	readonly onComposerFocus: () => void;
+	/** left/right (tall, narrow) stacks the composer below the transcript; top/bottom (short, wide) puts it beside instead. */
+	readonly orientation: ChatOrientation;
 }
 
-export function ConversationSurface({ items, loading, error, draft, onDraftChange, onComposerFocus }: ConversationSurfaceProps): React.JSX.Element {
+export function ConversationSurface({ items, loading, error, draft, onDraftChange, onComposerFocus, orientation }: ConversationSurfaceProps): React.JSX.Element {
 	return (
-		<div className={cn("flex h-full min-h-0 flex-col", SURFACE_BG)}>
+		<div className={cn("flex h-full min-h-0", orientation === "horizontal" ? "flex-row" : "flex-col", SURFACE_BG)}>
 			<div role="log" aria-label="AI conversation" aria-live="polite" className="min-h-0 flex-1 overflow-auto px-5 py-4">
 				{loading && <p className="text-sm text-gray-600 dark:text-gray-300">Loading conversation…</p>}
 				{error && <p className="rounded-lg border border-danger-50 bg-danger-10 px-3 py-2 text-sm text-danger-80">{error}</p>}
@@ -26,7 +29,7 @@ export function ConversationSurface({ items, loading, error, draft, onDraftChang
 					))}
 				</div>
 			</div>
-			<Composer draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} />
+			<Composer draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} orientation={orientation} />
 		</div>
 	);
 }
@@ -38,34 +41,30 @@ interface ComposerProps {
 	/**
 	 * Skips the outer edge-to-edge toolbar chrome (top divider, own white
 	 * backdrop, p-3 inset) and renders just the rounded input row itself.
-	 * The docked usages (ConversationSurface's own bottom bar, ChatPanel's
-	 * collapsed peek) sit flush against a surface's own edges, where that
-	 * chrome reads as a toolbar; the landing empty-state centers the Composer
-	 * as a standalone floating card, where the same chrome instead read as a
-	 * stray sharp-cornered white square around the already-rounded input.
+	 * The docked Chat Surface sits flush against its own split's edges, where
+	 * that chrome reads as a toolbar; the landing empty-state centers the
+	 * Composer as a standalone floating card, where the same chrome instead
+	 * read as a stray sharp-cornered white square around the already-rounded
+	 * input.
 	 */
 	readonly bare?: boolean;
-	/** ChatPanel's own peek-state instance sets this -- see its own doc comment for why. */
-	readonly autoFocus?: boolean;
+	/** Ignored when `bare` -- the landing composer has no orientation of its own. */
+	readonly orientation?: ChatOrientation;
 }
 
 /**
- * The prompt box, extracted so the Chat Surface's collapsed "peek" state
- * (last reply + composer, no full transcript) can reuse it without
- * duplicating markup. Edge-to-edge within its own `p-3` -- no separate
- * `mx-auto max-w-3xl` inset, which used to insert it relative to the wider
- * Chat pillar and desync its left/right edges from ChatPanel's collapsed
- * "Last reply" row above it (that row's own padding is matched to this
- * one's p-3, not centered independently).
+ * The prompt box, extracted so it can be reused bare (the empty-landing
+ * state) without duplicating markup. Edge-to-edge within its own `p-3` --
+ * no separate `mx-auto max-w-3xl` inset, which used to desync its edges
+ * from the wider Chat pillar.
  */
-export function Composer({ draft, onDraftChange, onComposerFocus, bare = false, autoFocus = false }: ComposerProps): React.JSX.Element {
+export function Composer({ draft, onDraftChange, onComposerFocus, bare = false, orientation = "vertical" }: ComposerProps): React.JSX.Element {
 	const input = (
 		<div className="flex items-stretch gap-2 rounded-xl border border-gray-300 bg-white p-2 shadow-sm focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:ring-accent-70">
 			<textarea
 				aria-label="Message Pi"
 				rows={2}
 				value={draft}
-				autoFocus={autoFocus}
 				onFocus={onComposerFocus}
 				onChange={(event) => onDraftChange(event.target.value)}
 				placeholder="Message Pi"
@@ -83,7 +82,8 @@ export function Composer({ draft, onDraftChange, onComposerFocus, bare = false, 
 		</div>
 	);
 	if (bare) return input;
-	return <div className="shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">{input}</div>;
+	// horizontal (a short, wide Chat strip): a fixed-width side column, border-l -- vertical: a full-width footer, border-t.
+	return <div className={cn("shrink-0 bg-white/95 p-3 backdrop-blur dark:bg-gray-800/95", orientation === "horizontal" ? "w-72 border-l border-gray-200 dark:border-gray-700" : "border-t border-gray-200 dark:border-gray-700")}>{input}</div>;
 }
 
 export function ConversationRow({ item }: { readonly item: ConversationItem }): React.JSX.Element {

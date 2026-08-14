@@ -7,14 +7,11 @@ import {
 	dockSurface,
 	isChatDocked,
 	nextWindow,
-	pinChat,
 	previousWindow,
 	renameWindow,
 	renameWorkspace as renameWorkspaceModel,
 	scrollWindow,
 	selectWindow,
-	unpinChat,
-	undockChatToGlobal,
 	undockSurface,
 	type DockedSurfaceInstance,
 	type Workspace,
@@ -48,10 +45,6 @@ export interface WorkspaceRegistryHandle {
 	undockSurface: (surfaceInstanceId: string) => void;
 	isChatDocked: boolean;
 	dockChat: (title: string) => DockedSurfaceInstance | undefined;
-	undockChatToGlobal: () => void;
-	chatPinned: boolean;
-	pinChat: () => void;
-	unpinChat: () => void;
 }
 
 /**
@@ -183,9 +176,5 @@ export function useWorkspaceRegistry(
 		},
 		isChatDocked: workspace ? isChatDocked(workspace) : false,
 		dockChat: dockChatSurface,
-		undockChatToGlobal: () => update(undockChatToGlobal),
-		chatPinned: workspace?.chatPinned ?? false,
-		pinChat: () => update(pinChat),
-		unpinChat: () => update(unpinChat),
 	};
 }

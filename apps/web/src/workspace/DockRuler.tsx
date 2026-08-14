@@ -25,11 +25,10 @@ interface DockRulerProps {
  * would land -- this is the only rectangle shown for that position.
  *
  * Position via `transform`, not `left`/`top`: `hint` is recomputed on every
- * live drag sample, and `transform` is compositor-only (no layout/paint),
- * the same technique wisp-cursor.ts already uses for its own per-frame
- * position updates. `width`/`height` stay real properties -- they change
- * per hint too, and this box's border + corner-radius can't be faithfully
- * reproduced by scaling.
+ * live drag sample, and `transform` is compositor-only (no layout/paint).
+ * `width`/`height` stay real properties -- they change per hint too, and
+ * this box's border + corner-radius can't be faithfully reproduced by
+ * scaling.
  */
 export function DockRuler({ width, height, hint }: DockRulerProps): React.JSX.Element {
 	const rect = dockRulerHintRect(hint, width, height);

@@ -1,4 +1,5 @@
 import type { CommandContext, KeybindingDefinition } from "../commands/registry.js";
+import { DEFAULT_CHAT_PLACEMENT, isChatPlacement, type ChatPlacement } from "./chat-placement.js";
 import { clampShapeSettings, DEFAULT_SHAPE_SETTINGS, isShapeSettings, type ShapeSettings } from "./shape-settings.js";
 
 const WORKSPACE_SELECTION_KEY = "zodiac.workspace-selection-collapsed";
@@ -6,6 +7,7 @@ const KEYBINDINGS_KEY = "zodiac.keybindings";
 const SAVED_SURFACE_TEMPLATES_KEY = "zodiac.saved-surface-templates";
 const USER_WORKSPACES_KEY = "zodiac.user-workspaces";
 const SHAPE_KEY = "zodiac.shape";
+const CHAT_PLACEMENT_KEY = "zodiac.chat-placement";
 const MAX_USER_WORKSPACES = 50;
 // Two product names ago (agent-deck) and one product name ago (Alignment) --
 // each a real, no-longer-current localStorage namespace an existing user's
@@ -58,6 +60,8 @@ export interface Preferences {
 	setUserWorkspaces: (workspaces: readonly SavedWorkspace[]) => void;
 	shapeSettings: () => ShapeSettings;
 	setShapeSettings: (value: ShapeSettings) => void;
+	chatPlacement: () => ChatPlacement;
+	setChatPlacement: (value: ChatPlacement) => void;
 }
 
 export function createPreferences(storage: Storage): Preferences {
@@ -156,6 +160,21 @@ export function createPreferences(storage: Storage): Preferences {
 				storage.setItem(SHAPE_KEY, JSON.stringify(clampShapeSettings(value)));
 			} catch {
 				// The active in-memory Shape settings remain usable when storage is unavailable.
+			}
+		},
+		chatPlacement() {
+			try {
+				const value: unknown = JSON.parse(storage.getItem(CHAT_PLACEMENT_KEY) ?? "null");
+				return isChatPlacement(value) ? value : DEFAULT_CHAT_PLACEMENT;
+			} catch {
+				return DEFAULT_CHAT_PLACEMENT;
+			}
+		},
+		setChatPlacement(value) {
+			try {
+				storage.setItem(CHAT_PLACEMENT_KEY, JSON.stringify(value));
+			} catch {
+				// The active in-memory Chat placement remains usable when storage is unavailable.
 			}
 		},
 	};

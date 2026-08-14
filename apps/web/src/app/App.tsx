@@ -12,18 +12,15 @@ import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
 import { PAGE_BG } from "../platform/surface-style.js";
-import { createDomWispTargetMeasurer } from "../platform/wisp-target-measurer.js";
 import { createExtensionHost } from "../extensions/extension-host.js";
+import { useChatPlacement } from "../chat-placement-hooks.js";
 import { SettingsDialog } from "../settings/SettingsDialog.js";
 import { useTheme } from "../theme-hooks.js";
 import { useShapeSettings } from "../shape-settings-hooks.js";
 import { CanvasWell } from "../workspace/CanvasWell.js";
-import { ChatPanel } from "../workspace/ChatPanel.js";
 import { Composer } from "../conversation/ConversationSurface.js";
-import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, isChatDocked } from "../workspace/model.js";
-import { useWispCursorTarget } from "../workspace/useWispCursorTarget.js";
-import { WispCursor } from "../workspace/WispCursor.js";
-import { latestToolCallName, resolveWispWindowIndex } from "../workspace/wisp-cursor.js";
+import { latestToolCallName } from "../conversation/projector.js";
+import { createWorkspace, findWorkspaceIdForToolName } from "../workspace/model.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -54,7 +51,6 @@ const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then(
 
 export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
-	const wispTargetMeasurer = useMemo(() => createDomWispTargetMeasurer(), []);
 	// One host for the whole app's lifetime: extensions register once at
 	// startup (no live discovery/reloading yet -- see the Native Extension
 	// System task), so its contributed lists stay stable across renders.
@@ -63,6 +59,7 @@ export function App(): React.JSX.Element {
 	const extensionCommands = useMemo(() => extensionHost.commands(), [extensionHost]);
 	const theme = useTheme();
 	const shapeSettings = useShapeSettings(preferences);
+	const chatPlacement = useChatPlacement(preferences);
 	const selection = useWorkspaceSelectionCollapse(preferences);
 	const contexts = useCommandContextStack();
 	const keybindings = useKeybindingOverrides(preferences);
@@ -131,10 +128,7 @@ export function App(): React.JSX.Element {
 	const [dockCanvasBox, setDockCanvasBox] = useState<Rect | undefined>(undefined);
 
 	const latestToolName = latestToolCallName(activeConversationItems);
-	const wispWindowIndex = workspace.workspace ? resolveWispWindowIndex(workspace.workspace, latestToolName) : undefined;
-	const wispTarget = useWispCursorTarget(wispWindowIndex, wispTargetMeasurer);
-	const chatIsGlobal = workspace.workspace ? !isChatDocked(workspace.workspace) : true;
-	const toolCallWorkspaceId = chatIsGlobal && latestToolName ? findWorkspaceIdForToolName(workspace.workspaces, latestToolName) : undefined;
+	const toolCallWorkspaceId = latestToolName ? findWorkspaceIdForToolName(workspace.workspaces, latestToolName) : undefined;
 
 	const selectedButtonRef = useRef<HTMLButtonElement>(null);
 	const selectionRef = useRef<HTMLElement>(null);
@@ -166,18 +160,7 @@ export function App(): React.JSX.Element {
 		setPendingDock({ instanceId: instance.id, position, referenceGroupId, newGroupSizeRatio });
 	}
 
-	function dockChatSurface(): void {
-		const instance = workspace.dockChat("Chat");
-		if (!instance) return;
-		setPendingDock({ instanceId: instance.id, position: undefined });
-	}
-
 	function handlePanelClosed(instanceId: string): void {
-		const closed = workspace.activeWindow?.dockedSurfaces.find((surface) => surface.id === instanceId);
-		if (closed?.templateId === CHAT_TEMPLATE_ID) {
-			workspace.undockChatToGlobal();
-			return;
-		}
 		workspace.undockSurface(instanceId);
 	}
 
@@ -320,9 +303,7 @@ export function App(): React.JSX.Element {
 										draft={draft}
 										onDraftChange={setDraft}
 										onComposerFocus={contexts.enterTextInput}
-										onUndockChat={workspace.undockChatToGlobal}
-										chatPinned={workspace.chatPinned}
-										onTogglePinChat={() => (workspace.chatPinned ? workspace.unpinChat() : workspace.pinChat())}
+										chatPlacement={chatPlacement.value}
 										onDockRulerHintChange={setDockRulerMark}
 										dragActive={templateDragging}
 									/>
@@ -343,21 +324,6 @@ export function App(): React.JSX.Element {
 							</div>
 						)}
 					</CanvasWell>
-
-					{workspace.workspace && workspace.activeWindow && <WispCursor visible={chatIsGlobal} target={wispTarget} />}
-
-					{/* Always visible, never a pop-up: a real flex sibling below the canvas, taking its own space -- mounted only while Chat isn't docked into a Window (chatIsGlobal), which is the one way it ever leaves view. */}
-					{workspace.workspace && workspace.activeWindow && chatIsGlobal && (
-						<ChatPanel
-							conversationItems={activeConversationItems}
-							conversationLoading={activeConversationLoading}
-							conversationError={activeConversationError}
-							draft={draft}
-							onDraftChange={setDraft}
-							onComposerFocus={contexts.enterTextInput}
-							onDock={dockChatSurface}
-						/>
-					)}
 				</div>
 
 				<SurfaceTemplatesPillar
@@ -401,6 +367,8 @@ export function App(): React.JSX.Element {
 					value={shapeSettings.value}
 					onStrokeWidthChange={shapeSettings.setStrokeWidth}
 					onCornerRadiusChange={shapeSettings.setCornerRadius}
+					chatPlacement={chatPlacement.value}
+					onChatPlacementChange={chatPlacement.setPlacement}
 				/>
 				<CreateWorkspaceDialog
 					open={creatingWorkspace}

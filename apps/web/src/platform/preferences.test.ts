@@ -124,6 +124,18 @@ describe("Zodiac preferences", () => {
 		expect(createPreferences(storage).shapeSettings()).toEqual({ strokeWidth: 100, cornerRadius: 50 });
 	});
 
+	it("round-trips Chat placement and falls back to the default on malformed/unknown storage", () => {
+		const storage = memoryStorage();
+		const preferences = createPreferences(storage);
+		expect(preferences.chatPlacement()).toBe("right");
+
+		preferences.setChatPlacement("bottom");
+		expect(createPreferences(storage).chatPlacement()).toBe("bottom");
+
+		storage.setItem("zodiac.chat-placement", JSON.stringify("diagonal"));
+		expect(createPreferences(storage).chatPlacement()).toBe("right");
+	});
+
 	it("migrates a zodiac.visual-dna-era Shape settings value once, translating its old { vibe, cornerSharpness } field names", () => {
 		const storage = memoryStorage();
 		storage.setItem("zodiac.visual-dna", JSON.stringify({ vibe: 30, cornerSharpness: 40 }));

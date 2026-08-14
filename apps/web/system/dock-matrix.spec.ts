@@ -79,12 +79,13 @@ async function dockViaDrag(page: Page, target: Locator, offsetXRatio: number, of
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 }
 
+/** Excludes Chat's own group -- every Window always has one now, distinct from the Surface Template docking geometry each scenario in this file actually exercises. */
 function groups(page: Page): Locator {
-	return page.locator(".dv-groupview");
+	return page.locator(".dv-groupview").filter({ hasNotText: "Aware of:" });
 }
 
 function tabs(page: Page): Locator {
-	return page.locator(".dv-tab");
+	return groups(page).locator(".dv-tab");
 }
 
 function dockCanvas(page: Page): Locator {
@@ -167,8 +168,13 @@ test("1. Empty -> Dock One, via click", async ({ page }) => {
 });
 
 test("2. Empty -> Dock One, via drag onto the empty watermark", async ({ page }) => {
-	await expect(groups(page)).toHaveCount(0);
-	await dockViaDrag(page, page.locator(".dv-dockview"), 0.5, 0.5);
+	// The canvas anchor (showing this same watermark) is what's really there to
+	// receive the drop -- dispatchEvent targets its own element directly, no
+	// real hit-testing, so it must go to the anchor's own content, not the
+	// outer .dv-dockview root (which only has a listener for this once no
+	// group at all exists yet, a startup instant too fleeting to target).
+	await expect(groups(page)).toHaveCount(1);
+	await dockViaDrag(page, groupContent(page, 0), 0.5, 0.5);
 	await expect(groups(page)).toHaveCount(1);
 	await expect(tabs(page)).toHaveCount(1);
 	await expectNoStrayRulerArtifacts(page);
@@ -322,18 +328,20 @@ test("12. Two (left|right split) -> Three, drag onto one pane's dead center -> t
 	await expectNoStrayRulerArtifacts(page);
 });
 
-test("13. Two (side by side) -> close one -> the remaining pane alone fills the whole canvas", async ({ page }) => {
+test("13. Two (side by side) -> close one -> the remaining pane alone fills their shared area", async ({ page }) => {
 	await dockViaClick(page);
+	// Activity alone, before any split -- the baseline non-Chat area (Chat keeps
+	// its own separate reserved split throughout, untouched by either pane closing).
+	const soloWidth = (await groupContent(page, 0).boundingBox())!.width;
 	await dockViaDrag(page, groupContent(page, 0), 0.9, 0.5); // -> two side by side
 	await expect(groups(page)).toHaveCount(2);
-	const canvasBox = (await dockCanvas(page).boundingBox())!;
 
-	await page.locator(".dv-default-tab-action").first().click();
+	await groups(page).first().locator(".dv-default-tab-action").click();
 
 	await expect(groups(page)).toHaveCount(1);
 	await expect(tabs(page)).toHaveCount(1);
 	const remaining = (await groupBoxes(page))[0]!;
-	expect(Math.abs(remaining.width - (canvasBox.width - 2 * SPACED_THEME_GUTTER_PX))).toBeLessThan(4); // fills the canvas (minus the Spaced theme's own outer margin), no stale leftover slice
+	expect(Math.abs(remaining.width - soloWidth)).toBeLessThan(4); // back to occupying the whole non-Chat area, no stale leftover slice
 	await expectNoStrayRulerArtifacts(page);
 });
 
@@ -458,7 +466,7 @@ test("18. Three (mixed L-shaped layout) has no duplicate DOM: exactly as many ta
 
 	await expect(groups(page)).toHaveCount(3);
 	await expect(tabs(page)).toHaveCount(3);
-	await expect(page.locator(".dv-content-container")).toHaveCount(3);
+	await expect(page.locator(".dv-content-container")).toHaveCount(4); // 3 real Surfaces + Chat's own, always-present container
 	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toHaveCount(0); // no leftover watermark once every pane is occupied
 	await expectNoStrayRulerArtifacts(page);
 });
@@ -467,9 +475,9 @@ test("20. Docking into a second Window works the same as the first -- each Windo
 	await dockViaClick(page); // Window 0 gets its first Surface
 	await page.getByRole("button", { name: "New Window" }).click(); // Window 1, empty, now active
 
-	await expect(groups(page)).toHaveCount(0); // Window 1's own canvas, not Window 0's leftover group
-	await dockViaDrag(page, page.locator(".dv-dockview"), 0.5, 0.5);
-	await expect(groups(page)).toHaveCount(1);
+	await expect(groups(page)).toHaveCount(1); // Window 1's own canvas anchor, not Window 0's leftover group
+	await dockViaDrag(page, groupContent(page, 0), 0.5, 0.5); // the anchor's own content -- see test 2's own comment on why not .dv-dockview
+	await expect(groups(page)).toHaveCount(1); // the anchor, replaced, not added to
 	await expect(tabs(page)).toHaveCount(1);
 
 	await dockViaDrag(page, groupContent(page, 0), 0.9, 0.5); // a second dock, by drag, onto Window 1's own now-existing pane
@@ -821,7 +829,7 @@ test("32. Real fix for a reported bug: dragging onto a pane's own header/tab-str
 	await expect(groups(page)).toHaveCount(1);
 	await expect(tabs(page)).toHaveCount(1);
 
-	const header = page.locator(".dv-tabs-and-actions-container");
+	const header = groups(page).first().locator(".dv-tabs-and-actions-container"); // Chat's own header strip also matches the bare class -- scope to the Activity pane's
 	await realMouseDrag(page, activityGlyph(page), header);
 
 	await expect(groups(page)).toHaveCount(1); // still one pane -- a tab, not a new split

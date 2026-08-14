@@ -5,7 +5,8 @@ import Graph from "graphology";
 import { SessionGraph } from "../graph/session-graph.js";
 import { createSessionJsonlSource } from "../ingest/session-jsonl-source.js";
 import type { NormalizedEvent } from "../ingest/types.js";
-import { buildConversationItems } from "./projector.js";
+import type { ConversationItem } from "./projector.js";
+import { buildConversationItems, latestToolCallName } from "./projector.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(HERE, "../../test/fixtures/session-sample.jsonl");
@@ -194,5 +195,23 @@ describe("buildConversationItems — unrecognized event types", () => {
 			bus: "signal",
 			type: "some.unrecognized.thing",
 		});
+	});
+});
+
+describe("latestToolCallName", () => {
+	function toolCall(toolName: string): ConversationItem {
+		return { kind: "tool-call", toolCallId: "1", toolName, request: undefined, response: undefined, timestamp: 0 };
+	}
+	function message(): ConversationItem {
+		return { kind: "message", role: "user", text: "hi", timestamp: 0 };
+	}
+
+	it("is undefined for an empty or tool-call-free item list", () => {
+		expect(latestToolCallName([])).toBeUndefined();
+		expect(latestToolCallName([message()])).toBeUndefined();
+	});
+
+	it("returns the most recent tool call's name, not the first", () => {
+		expect(latestToolCallName([toolCall("read"), message(), toolCall("bash")])).toBe("bash");
 	});
 });

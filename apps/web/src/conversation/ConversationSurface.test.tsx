@@ -30,14 +30,14 @@ const FIXTURES = {
 	fallback: { items: [{ kind: "fallback", bus: "internal", type: "session.name", payload: {}, timestamp: 5 }] as ConversationItem[], loading: false, error: undefined },
 } satisfies Record<string, { items: ConversationItem[]; loading: boolean; error?: string }>;
 
-function renderSurface(fixture: (typeof FIXTURES)[keyof typeof FIXTURES]) {
+function renderSurface(fixture: (typeof FIXTURES)[keyof typeof FIXTURES], orientation: "vertical" | "horizontal" = "vertical") {
 	const registry = createCommandRegistry({
 		commands: [{ id: "conversation.send", title: "Send message", description: "Sends the drafted message.", execute: vi.fn() }],
 		bindings: [],
 	});
 	return render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<ConversationSurface items={fixture.items} loading={fixture.loading} error={fixture.error} draft="" onDraftChange={vi.fn()} onComposerFocus={vi.fn()} />
+			<ConversationSurface items={fixture.items} loading={fixture.loading} error={fixture.error} draft="" onDraftChange={vi.fn()} onComposerFocus={vi.fn()} orientation={orientation} />
 		</CommandProvider>,
 	);
 }
@@ -101,6 +101,29 @@ describe("ConversationSurface", () => {
 			const button = screen.getByRole("button", { name: "Send message" });
 			expect(button.className).not.toContain("size-9");
 			expect(button.className).toContain("self-stretch");
+		});
+	});
+
+	describe("orientation", () => {
+		it("vertical (left/right placement): log area stacked above a full-width composer footer", () => {
+			renderSurface(FIXTURES.empty, "vertical");
+			const surface = screen.getByRole("log", { name: "AI conversation" }).parentElement as HTMLElement;
+			expect(surface.className).toContain("flex-col");
+			expect(surface.className).not.toContain("flex-row");
+			const composerWrapper = screen.getByLabelText("Message Pi").closest("div[class*='shrink-0']") as HTMLElement;
+			expect(composerWrapper.className).toContain("border-t");
+			expect(composerWrapper.className).not.toContain("border-l");
+		});
+
+		it("horizontal (top/bottom placement): log area beside a fixed-width composer column, sized differently from the vertical footer", () => {
+			renderSurface(FIXTURES.empty, "horizontal");
+			const surface = screen.getByRole("log", { name: "AI conversation" }).parentElement as HTMLElement;
+			expect(surface.className).toContain("flex-row");
+			expect(surface.className).not.toContain("flex-col");
+			const composerWrapper = screen.getByLabelText("Message Pi").closest("div[class*='shrink-0']") as HTMLElement;
+			expect(composerWrapper.className).toContain("border-l");
+			expect(composerWrapper.className).not.toContain("border-t");
+			expect(composerWrapper.className).toContain("w-72");
 		});
 	});
 });

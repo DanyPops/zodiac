@@ -4,6 +4,7 @@ import { getHotkeyManager } from "@tanstack/react-hotkeys";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommandProvider } from "../commands/react.js";
 import { createCommandRegistry } from "../commands/registry.js";
+import type { ChatPlacement } from "../platform/chat-placement.js";
 import type { ShapeSettings } from "../platform/shape-settings.js";
 import { SettingsDialog } from "./SettingsDialog.js";
 
@@ -12,7 +13,7 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderDialog(value: ShapeSettings = { strokeWidth: 100, cornerRadius: 50 }) {
+function renderDialog(value: ShapeSettings = { strokeWidth: 100, cornerRadius: 50 }, chatPlacement: ChatPlacement = "right") {
 	const registry = createCommandRegistry({
 		commands: [
 			{ id: "dialog.close", title: "Close dialog", description: "Closes the open dialog.", execute: vi.fn() },
@@ -24,13 +25,14 @@ function renderDialog(value: ShapeSettings = { strokeWidth: 100, cornerRadius: 5
 	});
 	const onStrokeWidthChange = vi.fn();
 	const onCornerRadiusChange = vi.fn();
+	const onChatPlacementChange = vi.fn();
 	const onClose = vi.fn();
 	render(
 		<CommandProvider registry={registry} activeContexts={["dialog"]}>
-			<SettingsDialog open onClose={onClose} value={value} onStrokeWidthChange={onStrokeWidthChange} onCornerRadiusChange={onCornerRadiusChange} />
+			<SettingsDialog open onClose={onClose} value={value} onStrokeWidthChange={onStrokeWidthChange} onCornerRadiusChange={onCornerRadiusChange} chatPlacement={chatPlacement} onChatPlacementChange={onChatPlacementChange} />
 		</CommandProvider>,
 	);
-	return { onStrokeWidthChange, onCornerRadiusChange, onClose };
+	return { onStrokeWidthChange, onCornerRadiusChange, onChatPlacementChange, onClose };
 }
 
 describe("SettingsDialog", () => {
@@ -81,5 +83,20 @@ describe("SettingsDialog", () => {
 		expect(screen.getByRole("button", { name: "Command Palette" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Keyboard Shortcuts" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Cycle Theme" })).toBeInTheDocument();
+	});
+
+	describe("Chat placement", () => {
+		it("shows all four edges, with the current one pressed", () => {
+			renderDialog(undefined, "left");
+			for (const label of ["Top", "Bottom", "Left", "Right"]) expect(screen.getByRole("button", { name: `Dock Chat to the ${label}` })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "Dock Chat to the Left", pressed: true })).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "Dock Chat to the Right", pressed: false })).toBeInTheDocument();
+		});
+
+		it("clicking an edge reports the new placement", () => {
+			const { onChatPlacementChange } = renderDialog(undefined, "right");
+			fireEvent.click(screen.getByRole("button", { name: "Dock Chat to the Bottom" }));
+			expect(onChatPlacementChange).toHaveBeenCalledWith("bottom");
+		});
 	});
 });

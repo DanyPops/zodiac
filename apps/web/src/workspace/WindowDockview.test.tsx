@@ -60,9 +60,7 @@ function windowDockviewElement(dragActive: boolean, onDockRulerHintChange: () =>
 			draft=""
 			onDraftChange={() => {}}
 			onComposerFocus={() => {}}
-			onUndockChat={() => {}}
-			chatPinned={false}
-			onTogglePinChat={() => {}}
+			chatPlacement="right"
 			onSaveAsTemplate={() => {}}
 		/>
 	);

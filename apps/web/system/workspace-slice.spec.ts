@@ -19,6 +19,11 @@ function windowButtons(carousel: Locator): Locator {
 	return carousel.getByRole("button", { name: /^\d+$/ });
 }
 
+/** Excludes Chat's own group -- every Window always has one now, so a split test's own two panes are never the only two `.dv-groupview` elements. */
+function nonChatGroups(page: Page): Locator {
+	return page.locator(".dv-groupview").filter({ hasNotText: "Aware of:" });
+}
+
 async function activeWindowIndex(carousel: Locator): Promise<number> {
 	const label = await carousel.locator('[aria-current="true"]').innerText();
 	return Number(label);
@@ -34,47 +39,69 @@ function expectBreathingOpacity(value: number): void {
 	expect(value).toBeLessThanOrEqual(1);
 }
 
-test("Chat is always visible -- a permanent part of the shell, not a pop-up summoned by keymap or hover", async ({ page }) => {
-	const chat = page.getByRole("complementary", { name: "Chat" });
+test("Chat is always docked as its own real split with a gutter -- never a pop-up, never toggled", async ({ page }) => {
+	const chat = page.getByRole("region", { name: "Chat" });
 	await expect(chat).toBeVisible();
-	// Starts collapsed (peek): only the last reply, not the full transcript.
-	await expect(page.getByText("You're welcome!")).toBeVisible();
-	await expect(page.getByText("Please read the readme")).toHaveCount(0);
-
-	// No keymap toggles it away, and it stays put regardless of where the pointer is.
-	await page.mouse.move(400, 200);
-	await expect(chat).toBeVisible();
-});
-
-test("clicking the Chat peek area expands to the full transcript", async ({ page }) => {
-	await page.getByRole("button", { name: "Expand chat to the full conversation" }).click();
+	// The full transcript, immediately -- no peek/collapsed state exists once Chat is a real split.
 	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("Please read the readme");
 	await expect(page.getByRole("log", { name: "AI conversation" })).toContainText("You're welcome!");
 
-	await page.getByRole("button", { name: "Collapse to the last reply" }).click();
-	await expect(page.getByRole("log", { name: "AI conversation" })).toHaveCount(0);
-	await expect(page.getByText("You're welcome!")).toBeVisible();
+	// Nothing hides it, regardless of pointer position -- there's no hidden state to reveal.
+	await page.mouse.move(400, 200);
+	await expect(chat).toBeVisible();
+
+	// A real dockview split, alongside the canvas anchor reserving the rest of the space.
+	await expect(page.getByRole("region", { name: "Canvas" })).toBeVisible();
+	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toBeVisible();
 });
 
-test("Chat is dockable: docking it moves Chat into the Window, and it becomes aware of its sibling docked Surfaces", async ({ page }) => {
+test("docking a Surface Template takes over the canvas anchor's spot, and Chat becomes aware of it", async ({ page }) => {
+	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
+
+	await expect(page.getByText("Workspace activity")).toBeVisible();
+	await expect(page.getByRole("region", { name: "Canvas" })).toHaveCount(0); // the anchor stepped aside
+	await expect(page.getByText("Aware of: Activity")).toBeVisible();
+	await expect(page.getByRole("region", { name: "Chat" })).toBeVisible(); // Chat keeps its own reserved split
+});
+
+test("closing the only real docked Surface brings the canvas anchor back, still reserving Chat's split", async ({ page }) => {
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 
-	await page.getByRole("button", { name: "Dock Chat into the active Window" }).click();
+	await page.locator(".dv-tab", { hasText: "Activity" }).locator(".dv-default-tab-action").click();
 
-	// The always-visible panel is gone -- Chat now lives in the Window as a docked panel.
-	await expect(page.getByRole("complementary", { name: "Chat" })).toHaveCount(0);
-	await expect(page.getByText("Aware of: Activity")).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "Message Pi" })).toBeVisible();
+	await expect(page.getByRole("region", { name: "Canvas" })).toBeVisible();
+	await expect(page.getByText("Pull a Surface Template from the right pillar to dock it here.")).toBeVisible();
+	await expect(page.getByText("Aware of: nothing else docked here")).toBeVisible();
 });
 
-test("undocking Chat returns it to the always-visible panel", async ({ page }) => {
-	await page.getByRole("button", { name: "Dock Chat into the active Window" }).click();
-	await expect(page.getByText("Aware of: nothing else docked here")).toBeVisible();
+test("Chat placement in Settings live-repositions an already-open Window's Chat, switching its orientation too", async ({ page }) => {
+	const chat = page.getByRole("region", { name: "Chat" });
+	const canvas = page.getByRole("region", { name: "Canvas" });
 
-	await page.getByRole("button", { name: "Undock Chat from this Window" }).click();
-	await expect(page.getByRole("complementary", { name: "Chat" })).toBeVisible();
-	await expect(page.getByText("Aware of:")).toHaveCount(0);
+	await page.getByRole("button", { name: "Settings" }).click();
+	await page.getByRole("button", { name: "Dock Chat to the Bottom" }).click();
+	await page.getByRole("button", { name: "Close Settings" }).click();
+
+	const chatBoxBottom = await chat.boundingBox();
+	const canvasBoxBottom = await canvas.boundingBox();
+	expect(chatBoxBottom!.y).toBeGreaterThan(canvasBoxBottom!.y); // below the canvas now
+	// bottom placement is horizontal: the log sits beside the composer, not stacked above it.
+	const logBoxBottom = (await page.getByRole("log", { name: "AI conversation" }).boundingBox())!;
+	const composerBoxBottom = (await page.getByRole("textbox", { name: "Message Pi" }).boundingBox())!;
+	expect(Math.abs(logBoxBottom.y - composerBoxBottom.y)).toBeLessThan(30);
+
+	await page.getByRole("button", { name: "Settings" }).click();
+	await page.getByRole("button", { name: "Dock Chat to the Left" }).click();
+	await page.getByRole("button", { name: "Close Settings" }).click();
+
+	const chatBoxLeft = await chat.boundingBox();
+	const canvasBoxLeft = await canvas.boundingBox();
+	expect(chatBoxLeft!.x).toBeLessThan(canvasBoxLeft!.x); // left of the canvas now
+	// left placement is vertical: the log sits above the composer.
+	const logBoxLeft = (await page.getByRole("log", { name: "AI conversation" }).boundingBox())!;
+	const composerBoxLeft = (await page.getByRole("textbox", { name: "Message Pi" }).boundingBox())!;
+	expect(composerBoxLeft.y).toBeGreaterThan(logBoxLeft.y + logBoxLeft.height - 20);
 });
 
 /** Zodiac starts with one Window -- add more via the "+" control for tests needing several. */
@@ -285,7 +312,7 @@ test("dragging a Surface Template from the pillar onto the empty Window docks it
 test("dragging a template onto the left edge of an already-docked Surface splits the Window", async ({ page }) => {
 	await page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" }).click();
 	await expect(page.getByText("Workspace activity")).toBeVisible();
-	await expect(page.locator(".dv-groupview")).toHaveCount(1);
+	await expect(page.locator(".dv-groupview")).toHaveCount(2); // Chat's own reserved split + Activity, which replaced the canvas anchor
 
 	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
 	const target = page.locator(".dv-dockview");
@@ -310,9 +337,10 @@ test("dragging a template onto the left edge of an already-docked Surface splits
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 
 	const groups = page.locator(".dv-groupview");
-	await expect(groups).toHaveCount(2);
-	const [leftBox, rightBox] = await Promise.all([groups.nth(0).boundingBox(), groups.nth(1).boundingBox()]);
-	expect(leftBox!.x).toBeLessThan(rightBox!.x); // genuinely a left/right split, not two stacked or tabbed panels
+	await expect(groups).toHaveCount(3); // the new split, Activity's own, and Chat's own
+	const boxes = await Promise.all((await groups.all()).map((group) => group.boundingBox()));
+	const xs = boxes.map((box) => box!.x).sort((a, b) => a - b);
+	expect(xs[0]).toBeLessThan(xs[1]!); // a genuine new leftmost group exists, not two stacked or tabbed panels
 });
 
 test("Dock Ruler: the frame appears the moment a Surface Template drag starts and wraps the dock area, not just while hovering a drop target", async ({ page }) => {
@@ -385,7 +413,7 @@ test("Dock Ruler: dragging well inside an already-docked Surface (not the thin r
 	// a descendant of .dv-dockview -- native drag events only bubble upward from
 	// their real dispatch target, so dispatching on the outer .dv-dockview (as
 	// the coarse root-edge test above does) never reaches it.
-	const content = page.locator(".dv-content-container");
+	const content = page.getByRole("tabpanel", { name: "Activity" });
 	const box = (await content.boundingBox())!;
 	// A quarter of the way across -- comfortably inside the group's own
 	// content area, past the thin (10px) root-edge band that rootDropTargetService
@@ -414,8 +442,8 @@ test("Dock Ruler: dragging well inside an already-docked Surface (not the thin r
 	await content.dispatchEvent("drop", { dataTransfer, clientX: quarterX, clientY: midY });
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 
-	const groups = page.locator(".dv-groupview");
-	await expect(groups).toHaveCount(2);
+	await expect(page.locator(".dv-groupview")).toHaveCount(3); // the new split, Activity's own, and Chat's own
+	const groups = nonChatGroups(page);
 	const [leftBox, rightBox] = await Promise.all([groups.nth(0).boundingBox(), groups.nth(1).boundingBox()]);
 	expect(leftBox!.x).toBeLessThan(rightBox!.x);
 	// The chosen fraction actually sized the split -- not dockview's usual 50/50 default.
@@ -428,7 +456,7 @@ test("Dock Ruler: dragging past the midpoint docks to the right, sized from the 
 	await expect(page.getByText("Workspace activity")).toBeVisible();
 
 	const glyph = page.getByRole("navigation", { name: "Surface Templates" }).getByRole("button", { name: "Dock Activity" });
-	const content = page.locator(".dv-content-container");
+	const content = page.getByRole("tabpanel", { name: "Activity" });
 	const box = (await content.boundingBox())!;
 	const threeQuarterX = box.x + (box.width * 3) / 4;
 	const midY = box.y + box.height / 2;
@@ -444,8 +472,8 @@ test("Dock Ruler: dragging past the midpoint docks to the right, sized from the 
 	await content.dispatchEvent("drop", { dataTransfer, clientX: threeQuarterX, clientY: midY });
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 
-	const groups = page.locator(".dv-groupview");
-	await expect(groups).toHaveCount(2);
+	await expect(page.locator(".dv-groupview")).toHaveCount(3); // the new split, Activity's own, and Chat's own
+	const groups = nonChatGroups(page);
 	const [leftBox, rightBox] = await Promise.all([groups.nth(0).boundingBox(), groups.nth(1).boundingBox()]);
 	expect(leftBox!.x).toBeLessThan(rightBox!.x);
 	// Docked right at 3/4 -> the new (right) group takes the remaining 1/4, not half.
@@ -473,8 +501,8 @@ test("a split's non-active pane dims (defocus); clicking the other pane flips wh
 	await target.dispatchEvent("drop", { dataTransfer, clientX: edgeX, clientY: midY });
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 
-	const groups = page.locator(".dv-groupview");
-	await expect(groups).toHaveCount(2);
+	await expect(page.locator(".dv-groupview")).toHaveCount(3); // the new split, Activity's own, and Chat's own
+	const groups = nonChatGroups(page);
 	const leftPanel = groups.nth(0).locator(".animate-surface-spawn");
 	const rightPanel = groups.nth(1).locator(".animate-surface-spawn");
 
@@ -501,16 +529,22 @@ test("the split/tab preview overlay is debounced: a fast pass over several posit
 
 	// A fast pass across several x positions with no real time between them --
 	// each hop's implied velocity is far past DRAG_HINT_IDLE_VELOCITY_PX_PER_MS,
-	// so every one of these frames must suppress its own overlay.
+	// so every one of these frames must suppress its own overlay. Deep into the
+	// canvas, most of these now land inside the anchor's own content (a real
+	// panel, not a watermark) -- content-kind hovers get a different class
+	// (dv-drop-target-content), which this selector doesn't match anyway.
 	for (const dx of [50, 400, 100, 600, 200, 700]) {
 		await target.dispatchEvent("dragover", { dataTransfer, clientX: box.x + dx, clientY: box.y + box.height / 2 });
 	}
 	await expect(overlay).toHaveCount(0);
 
-	// Once the pointer is idle (a real pause, then a dragover at the same
-	// position -- zero implied velocity), the preview is allowed to show.
+	// Settling at the root edge specifically (not deep content, now covered by
+	// the Dock Ruler instead -- see its own tests). Two samples at the same
+	// position, same as above: the first is still a jump from the fast pass's
+	// last position, only the second reads as genuinely idle.
 	await page.waitForTimeout(200);
-	await target.dispatchEvent("dragover", { dataTransfer, clientX: box.x + 700, clientY: box.y + box.height / 2 });
+	await target.dispatchEvent("dragover", { dataTransfer, clientX: box.x + 5, clientY: box.y + box.height / 2 });
+	await target.dispatchEvent("dragover", { dataTransfer, clientX: box.x + 5, clientY: box.y + box.height / 2 });
 	await expect(overlay.first()).toBeVisible();
 
 	await glyph.dispatchEvent("dragend", { dataTransfer });
@@ -610,7 +644,11 @@ test("a user can rebind a command and the override survives reload", async ({ pa
 test("printable global shortcuts do not steal text input", async ({ page }) => {
 	const composer = page.getByRole("textbox", { name: "Message Pi" });
 	await composer.fill("b k / [ ]");
-	await page.keyboard.type(" ordinary typing");
+	// Chat's composer is a real docked panel now, re-rendering via
+	// updateParameters on every keystroke -- zero-delay type() outruns that
+	// and drops characters. 30ms is still far faster than real typing, and
+	// unrelated to what this test actually checks (keybindings don't steal focus).
+	await page.keyboard.type(" ordinary typing", { delay: 30 });
 	await expect(composer).toHaveValue("b k / [ ] ordinary typing");
 });
 
