@@ -1,7 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import Graph from "graphology";
+import { TraceGraph } from "../graph/trace-graph.js";
 import { SessionGraph } from "../graph/session-graph.js";
 import { createSessionJsonlSource } from "../ingest/session-jsonl-source.js";
 import type { NormalizedEvent } from "../ingest/types.js";
@@ -11,7 +11,7 @@ import { buildConversationItems, latestToolCallName } from "./projector.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(HERE, "../../test/fixtures/session-sample.jsonl");
 
-async function loadFixtureGraph(): Promise<Graph> {
+async function loadFixtureGraph(): Promise<TraceGraph> {
 	const events: NormalizedEvent[] = [];
 	const source = createSessionJsonlSource({ filePath: FIXTURE, sessionId: "test-session" });
 	const handle = source.ingest((event) => events.push(event));
@@ -60,7 +60,7 @@ describe("buildConversationItems — against the real fixture", () => {
 });
 
 
-function addBusEvent(graph: Graph, id: string, bus: string, type: string, payload: unknown, timestamp: number, toolCallId?: string): void {
+function addBusEvent(graph: TraceGraph, id: string, bus: string, type: string, payload: unknown, timestamp: number, toolCallId?: string): void {
 	if (!graph.hasNode("session:s1")) graph.addNode("session:s1", { kind: "Session", label: "s1" });
 	if (!graph.hasNode("turn:s1:c1")) {
 		graph.addNode("turn:s1:c1", { kind: "Turn", label: "c1" });
@@ -76,7 +76,7 @@ function addBusEvent(graph: Graph, id: string, bus: string, type: string, payloa
 // (not motor -- the old vocabulary's bus) carries intermediate tool-calling rounds.
 describe("buildConversationItems — real Alef event vocabulary (sense/llm.input, motor/llm.response, signal/llm.result)", () => {
 	it("renders sense/llm.input as a user message", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "sense", "llm.input", { text: "hello", sender: "human" }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(1);
@@ -84,7 +84,7 @@ describe("buildConversationItems — real Alef event vocabulary (sense/llm.input
 	});
 
 	it("renders motor/llm.response as an assistant message", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "motor", "llm.response", { text: "hi there" }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(1);
@@ -92,7 +92,7 @@ describe("buildConversationItems — real Alef event vocabulary (sense/llm.input
 	});
 
 	it("renders signal/llm.result with a non-empty toolCalls array as a collapsed turn-marker", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "signal", "llm.result", { toolCalls: [{ name: "fs.read" }, { name: "fs.grep" }] }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(1);
@@ -100,14 +100,14 @@ describe("buildConversationItems — real Alef event vocabulary (sense/llm.input
 	});
 
 	it("renders nothing for signal/llm.result with no tool calls -- its text duplicates the eventual llm.response", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "signal", "llm.result", { response: { content: [{ type: "text", text: "partial" }] } }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(0);
 	});
 
 	it("still recognizes the legacy motor/llm.result vocabulary (bus fix widens, does not replace)", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "motor", "llm.result", { toolCalls: [{ name: "fs.read" }] }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(1);
@@ -115,7 +115,7 @@ describe("buildConversationItems — real Alef event vocabulary (sense/llm.input
 	});
 
 	it("a real multi-round turn: user input, an intermediate tool round, a paired tool call, then the final response", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "sense", "llm.input", { text: "read the readme", sender: "human" }, 1000);
 		addBusEvent(graph, "event:2", "signal", "llm.result", { toolCalls: [{ name: "fs.read" }] }, 1001);
 		addBusEvent(graph, "event:3", "motor", "fs.read", { path: "readme.md" }, 1002, "tc-1");
@@ -155,14 +155,14 @@ describe("buildConversationItems — suppresses high-volume non-conversational n
 		["sense", "organ.loaded"],
 		["signal", "plan.tree"],
 	])("produces no item for %s/%s", (bus, type) => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", bus, type, { anything: "here" }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(0);
 	});
 
 	it("still falls back (does not suppress) a genuinely unrecognized, non-noise type", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		addBusEvent(graph, "event:1", "signal", "some.unrecognized.thing", { anything: "goes here" }, 1000);
 		const items = buildConversationItems(graph);
 		expect(items).toHaveLength(1);
@@ -172,7 +172,7 @@ describe("buildConversationItems — suppresses high-volume non-conversational n
 
 describe("buildConversationItems — unrecognized event types", () => {
 	it("falls back to a generic item instead of crashing on an unknown bus/type", () => {
-		const graph = new Graph({ type: "directed" });
+		const graph = new TraceGraph();
 		graph.addNode("session:s1", { kind: "Session", label: "s1" });
 		graph.addNode("turn:s1:c1", { kind: "Turn", label: "c1" });
 		graph.addDirectedEdge("session:s1", "turn:s1:c1", { relation: "contains" });

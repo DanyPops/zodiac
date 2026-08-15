@@ -1,4 +1,4 @@
-import type Graph from "graphology";
+import type { TraceGraph } from "../graph/trace-graph.js";
 
 export type ConversationItem =
 	| { kind: "message"; role: "user" | "assistant"; text: string; timestamp: number }
@@ -17,12 +17,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-function getNumberAttr(graph: Graph, node: string, key: string): number {
+function getNumberAttr(graph: TraceGraph, node: string, key: string): number {
 	const value: unknown = graph.getNodeAttribute(node, key);
 	return typeof value === "number" ? value : 0;
 }
 
-function getStringAttr(graph: Graph, node: string, key: string): string {
+function getStringAttr(graph: TraceGraph, node: string, key: string): string {
 	const value: unknown = graph.getNodeAttribute(node, key);
 	return typeof value === "string" ? value : "";
 }
@@ -35,19 +35,19 @@ interface EventAttrs {
 	toolCallId: string | undefined;
 }
 
-function readEventAttrs(graph: Graph, eventId: string): EventAttrs {
+function readEventAttrs(graph: TraceGraph, eventId: string): EventAttrs {
 	const toolCallIdAttr: unknown = graph.getNodeAttribute(eventId, "toolCallId");
 	return {
 		bus: getStringAttr(graph, eventId, "bus"),
 		type: getStringAttr(graph, eventId, "type"),
 		timestamp: getNumberAttr(graph, eventId, "timestamp"),
-		payload: graph.getNodeAttribute(eventId, "payload") as unknown,
+		payload: graph.getNodeAttribute(eventId, "payload"),
 		toolCallId: typeof toolCallIdAttr === "string" ? toolCallIdAttr : undefined,
 	};
 }
 
 /** One turn's BusEvent ids, sorted by timestamp. */
-function sortedTurnEventIds(graph: Graph): string[][] {
+function sortedTurnEventIds(graph: TraceGraph): string[][] {
 	const turnIds = graph.filterNodes((_node, attrs) => attrs.kind === "Turn");
 	return turnIds
 		.map((turnId) => {
@@ -169,7 +169,7 @@ function projectEvent(toolCallItems: Map<string, ToolCallItem>, items: Conversat
 }
 
 /**
- * Builds a readable conversation from the graphology trace graph — not raw
+ * Builds a readable conversation from the trace graph — not raw
  * events — so ordering (Turn -> BusEvent) and tool-call pairing (shared
  * toolCallId) come from the graph structure the model task already built,
  * rather than being re-derived here. Per-event-type projection (tool-call
@@ -177,7 +177,7 @@ function projectEvent(toolCallItems: Map<string, ToolCallItem>, items: Conversat
  * a real session's actual shapes, not assumed; anything unrecognized falls
  * back to a generic item instead of being dropped or crashing.
  */
-export function buildConversationItems(graph: Graph): ConversationItem[] {
+export function buildConversationItems(graph: TraceGraph): ConversationItem[] {
 	const items: ConversationItem[] = [];
 
 	for (const sortedEventIds of sortedTurnEventIds(graph)) {

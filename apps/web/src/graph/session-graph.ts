@@ -1,4 +1,4 @@
-import Graph from "graphology";
+import { TraceGraph } from "./trace-graph.js";
 import type { NormalizedEvent } from "../ingest/types.js";
 
 /**
@@ -54,18 +54,14 @@ function busEventNodeId(event: NormalizedEvent): string {
 }
 
 /**
- * Maintains a graphology graph of Session/Turn/BusEvent/ToolCall nodes built
- * from a stream of NormalizedEvents. Idempotent: ingesting the same event
- * twice (from any combination of sources) adds no new nodes or edges.
+ * Maintains a TraceGraph of Session/Turn/BusEvent/ToolCall nodes built from
+ * a stream of NormalizedEvents. Idempotent: ingesting the same event twice
+ * (from any combination of sources) adds no new nodes or edges.
  */
 export class SessionGraph {
-	readonly graph: Graph;
+	readonly graph = new TraceGraph();
 	/** Tracks the most recent BusEvent node per Turn, to chain `precedes` edges as events arrive. */
 	private readonly lastEventByTurn = new Map<string, string>();
-
-	constructor() {
-		this.graph = new Graph({ type: "directed" });
-	}
 
 	/** Ingest one normalized event, updating the graph. Safe to call multiple times with the same event. */
 	ingest(event: NormalizedEvent): void {
