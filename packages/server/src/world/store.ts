@@ -38,6 +38,14 @@ export interface WorldStore {
 	apply: (intent: CommandIntent) => void;
 	workspaceViewModel: (workspaceId: WorkspaceId) => WorkspaceViewModel | undefined;
 	worldViewModel: () => WorldViewModel;
+	/**
+	 * Subscribes to every successful mutation (createWorkspace/dockSurface/
+	 * undockSurface/apply), called with the fresh worldViewModel -- the one
+	 * hook a daemon needs to fan a change out to every attached client's
+	 * broadcast (SSE) connection. Never fires for a mutation that throws.
+	 * Returns an unsubscribe function.
+	 */
+	onChange: (listener: (viewModel: WorldViewModel) => void) => () => void;
 }
 
 function assertNeverIntent(intent: never): never {
@@ -55,6 +63,12 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		),
 	);
 	const workspaces = new Map(initialWorkspaces);
+	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
+
+	function emitChange(): void {
+		const viewModel = worldViewModel();
+		for (const listener of changeListeners) listener(viewModel);
+	}
 
 	function requireWorkspace(workspaceId: WorkspaceId): Workspace {
 		const workspace = workspaces.get(workspaceId);
@@ -67,6 +81,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: "Window 0", surfaces: [] };
 		const workspace: Workspace = { id: workspaceId, title, windows: [window], activeWindowIndex: 0 };
 		workspaces.set(workspaceId, workspace);
+		emitChange();
 		return workspace;
 	}
 
@@ -78,6 +93,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		const updatedWindow: WorkspaceWindow = { ...activeWindow, surfaces: [...activeWindow.surfaces, surface] };
 		const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? updatedWindow : window));
 		workspaces.set(workspaceId, { ...workspace, windows });
+		emitChange();
 		return surface;
 	}
 
@@ -85,6 +101,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		const workspace = requireWorkspace(workspaceId);
 		const windows = workspace.windows.map((window) => ({ ...window, surfaces: window.surfaces.filter((surface) => surface.id !== surfaceId) }));
 		workspaces.set(workspaceId, { ...workspace, windows });
+		emitChange();
 	}
 
 	function moveActiveWindow(workspaceId: WorkspaceId, direction: 1 | -1): void {
@@ -107,9 +124,11 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				return;
 			case "window.next":
 				moveActiveWindow(intent.workspaceId, 1);
+				emitChange();
 				return;
 			case "window.previous":
 				moveActiveWindow(intent.workspaceId, -1);
+				emitChange();
 				return;
 			default:
 				assertNeverIntent(intent);
@@ -149,6 +168,10 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		apply,
 		workspaceViewModel,
 		worldViewModel,
+		onChange: (listener) => {
+			changeListeners.add(listener);
+			return () => changeListeners.delete(listener);
+		},
 	};
 }
 

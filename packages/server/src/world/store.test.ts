@@ -80,6 +80,63 @@ describe("WorldStore walking skeleton", () => {
 		expect(() => store.dockSurface(workspaceId("ghost"), integrationId("activity"), "Activity")).toThrow(/no Workspace/i);
 	});
 
+	describe("onChange -- a broadcast hook for a daemon to fan out mutations to attached clients", () => {
+		it("fires after createWorkspace, dockSurface, undockSurface, and apply each succeed", () => {
+			const store = createWorldStore(worldId("w1"));
+			const calls: string[] = [];
+			store.onChange(() => calls.push("change"));
+
+			store.createWorkspace(workspaceId("ws"), "WS");
+			expect(calls).toEqual(["change"]);
+
+			const surface = store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity");
+			expect(calls).toEqual(["change", "change"]);
+
+			store.undockSurface(workspaceId("ws"), surface.id);
+			expect(calls).toEqual(["change", "change", "change"]);
+
+			store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
+			expect(calls).toEqual(["change", "change", "change", "change"]);
+		});
+
+		it("does not fire when a mutation throws instead of succeeding", () => {
+			const store = createWorldStore(worldId("w1"));
+			const calls: string[] = [];
+			store.onChange(() => calls.push("change"));
+
+			expect(() => store.dockSurface(workspaceId("ghost"), integrationId("activity"), "Activity")).toThrow();
+			expect(calls).toEqual([]);
+		});
+
+		it("passes the fresh worldViewModel to every listener, so a subscriber never has to call back into the store", () => {
+			const store = createWorldStore(worldId("w1"));
+			let received: ReturnType<typeof store.worldViewModel> | undefined;
+			store.onChange((viewModel) => {
+				received = viewModel;
+			});
+
+			store.createWorkspace(workspaceId("ws"), "WS");
+			expect(received).toEqual(store.worldViewModel());
+		});
+
+		it("supports multiple independent listeners, each of which can unsubscribe on its own", () => {
+			const store = createWorldStore(worldId("w1"));
+			const a: string[] = [];
+			const b: string[] = [];
+			const unsubscribeA = store.onChange(() => a.push("a"));
+			store.onChange(() => b.push("b"));
+
+			store.createWorkspace(workspaceId("ws"), "WS");
+			expect(a).toEqual(["a"]);
+			expect(b).toEqual(["b"]);
+
+			unsubscribeA();
+			store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
+			expect(a).toEqual(["a"]);
+			expect(b).toEqual(["b", "b"]);
+		});
+	});
+
 	describe("invalid external or persisted input is rejected at runtime", () => {
 		it("hydrateWorldStore rejects a snapshot with zero Windows in a Workspace", () => {
 			const result = hydrateWorldStore({ id: "w1", workspaces: [{ id: "ws", title: "WS", windows: [], activeWindowIndex: 0 }] });
