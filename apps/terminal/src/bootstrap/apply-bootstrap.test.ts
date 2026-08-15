@@ -1,4 +1,4 @@
-import { createWorldStore } from "@zodiac/server";
+import { createWorldStore } from "@zodiac/server/world";
 import { worldId } from "@zodiac/protocol";
 import { describe, expect, it } from "vitest";
 import { applyBootstrapToWorld } from "./apply-bootstrap.js";

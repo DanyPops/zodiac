@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import type { WorldStore } from "@zodiac/server";
+import type { WorldStore } from "@zodiac/server/world";
 import { integrationId, workspaceId } from "@zodiac/protocol";
 import type { BootstrappedWorkspace } from "./workspace-bootstrap.js";
 

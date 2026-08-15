@@ -1,4 +1,4 @@
-import { createWorldStore } from "@zodiac/server";
+import { createWorldStore } from "@zodiac/server/world";
 import { worldId } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it, vi } from "vitest";

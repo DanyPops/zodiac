@@ -4,11 +4,6 @@ export { createCommandDispatcher } from "./command/dispatcher.js";
 export type { ContributionApi, Contribution, ContributionRegistry } from "./contribution/registry.js";
 export { createContributionRegistry } from "./contribution/registry.js";
 
-export type { WorldStore } from "./world/store.js";
-export { createWorldStore, createWorldStoreFromWorld, hydrateWorldStore } from "./world/store.js";
-
-export type { WorldSnapshotPort } from "./world/snapshot-port.js";
-
 export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 
 // pi-agent-dir.ts is deliberately NOT re-exported here: it imports node:fs/
@@ -22,3 +17,10 @@ export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 // placeholder with no visible error. Node-only consumers (packages/pi-integration,
 // apps/terminal) import it from the "@zodiac/server/pi-agent-dir" subpath
 // instead -- see that package's exports map.
+
+// world/store.ts is also deliberately excluded, for a bundle-weight reason
+// rather than a crash: it pulls in zod (via @zodiac/protocol's branded id
+// schemas), and nothing apps/web actually calls (createContributionRegistry,
+// createCommandDispatcher, highestIdSuffix) needs it -- confirmed via a real
+// bundle-visualizer trace, not assumed. Import it from the
+// "@zodiac/server/world" subpath instead (apps/terminal's cli.ts does).
