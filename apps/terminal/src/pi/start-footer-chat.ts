@@ -1,4 +1,4 @@
-import { createZodiacAgentSession } from "@zodiac/pi";
+import { createRemoteZodiacAgentSession, createZodiacAgentSession } from "@zodiac/pi";
 import type { AgentSession, ExtensionUIContext, ModelRuntime, ResourceLoader, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createFooterChatController, type FooterChatController } from "./footer-chat-controller.js";
 
@@ -42,6 +42,30 @@ export interface StartFooterChatOptions {
 	 * interactive UI silently no-op, exactly like today.
 	 */
 	readonly uiContext?: ExtensionUIContext;
+	/**
+	 * A real, already-running zodiacd instance to attach an agent session on
+	 * instead of constructing one in-process (zodiacd stage 5). When given,
+	 * every other Pi-SDK-construction option above (modelRuntime,
+	 * resourceLoader, sessionManager, settingsManager, uiContext) is ignored --
+	 * they all only make sense for the local, in-process path, since a remote
+	 * session's own model/extensions/settings live inside zodiacd's own
+	 * process, not this one.
+	 */
+	readonly daemonUrl?: string;
+}
+
+export interface StartedFooterChat {
+	readonly footerChat: FooterChatController;
+	/**
+	 * The underlying real, in-process AgentSession -- only present in local
+	 * mode (no daemonUrl given). Attaching to a remote zodiacd has no local
+	 * AgentSession object to expose (the real one lives inside the daemon's
+	 * own process) -- call `dispose()` for cleanup in *either* mode instead of
+	 * reaching for `session.dispose()` directly.
+	 */
+	readonly session?: AgentSession;
+	/** Releases this chat's own resources: session.dispose() locally, or closing the remote HTTP+SSE connection when attached to a daemon. Always safe to call, regardless of mode. */
+	readonly dispose: () => void;
 }
 
 /**
@@ -53,12 +77,22 @@ export interface StartFooterChatOptions {
  * as "Footer stays unavailable" (exactly like today's LectorHost activation
  * failure path) instead of propagating it, and wrapping the resulting port
  * in a FooterChatController.
+ *
+ * When `options.daemonUrl` is given, attaches to a real, already-running
+ * zodiacd's own agent session instead (createRemoteZodiacAgentSession) --
+ * the exact same FooterChatController either way, since both paths only
+ * ever hand it an AgentIntegrationPort, never a concrete adapter.
  */
-export async function startFooterChat(options: StartFooterChatOptions): Promise<{ footerChat: FooterChatController; session: AgentSession } | undefined> {
+export async function startFooterChat(options: StartFooterChatOptions): Promise<StartedFooterChat | undefined> {
 	try {
+		if (options.daemonUrl) {
+			const { integration } = await createRemoteZodiacAgentSession({ baseUrl: options.daemonUrl, cwd: options.cwd });
+			const footerChat = createFooterChatController(integration);
+			return { footerChat, dispose: () => integration.dispose() };
+		}
 		const { session, integration } = await createZodiacAgentSession({ ...options, mode: "tui" });
 		const footerChat = createFooterChatController(integration);
-		return { footerChat, session };
+		return { footerChat, session, dispose: () => session.dispose() };
 	} catch {
 		return undefined;
 	}

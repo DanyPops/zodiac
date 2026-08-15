@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./pi-agent-dir": "./src/pi-agent-dir.ts",
     "./world": "./src/world/index.ts",
-    "./conversations": "./src/conversations/index.ts"
+    "./conversations": "./src/conversations/index.ts",
+    "./net": "./src/net/sse-client.ts"
   },
   "scripts": {
     "test": "vitest run",

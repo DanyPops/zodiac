@@ -57,3 +57,15 @@ export interface AgentIntegrationPort {
 export function assertNeverZodiacAgentEvent(event: never): never {
 	throw new Error(`Unhandled ZodiacAgentEvent: ${JSON.stringify(event)}`);
 }
+
+/**
+ * Narrows an unknown, already-JSON-parsed SSE frame payload to a real
+ * ZodiacAgentEvent -- shared by every HTTP+SSE consumer of zodiacd's
+ * `/api/agent/sessions/:id/events` wire format (apps/web's PiClient and
+ * @zodiac/pi's HttpAgentIntegration) so the exact same "a session-exited
+ * frame isn't one of these" rule lives in exactly one place, not
+ * re-implemented per adapter and left to drift.
+ */
+export function isZodiacAgentEvent(value: unknown): value is ZodiacAgentEvent {
+	return typeof value === "object" && value !== null && "type" in value && value.type !== "session-exited";
+}

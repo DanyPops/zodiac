@@ -1,1 +1,1 @@
-export { assertNeverZodiacAgentEvent, type AgentIntegrationPort, type ZodiacAgentEvent } from "./port.js";
+export { assertNeverZodiacAgentEvent, isZodiacAgentEvent, type AgentIntegrationPort, type ZodiacAgentEvent } from "./port.js";

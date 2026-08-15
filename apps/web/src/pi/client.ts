@@ -1,4 +1,4 @@
-import type { ZodiacAgentEvent } from "@zodiac/agent";
+import { isZodiacAgentEvent, type ZodiacAgentEvent } from "@zodiac/agent";
 
 /**
  * Driven port: the Chat surface's own view of "a live Pi agent to talk to,"
@@ -26,10 +26,6 @@ export interface CreatePiClientOptions {
 	readonly EventSourceCtor?: typeof EventSource;
 	/** Base URL of the running zodiacd instance, e.g. http://127.0.0.1:4390. Defaults to same-origin (empty string) -- a caller (App.tsx's composition root) supplies the real configured value via resolveZodiacdBaseUrl(). */
 	readonly baseUrl?: string;
-}
-
-function isZodiacAgentEvent(value: unknown): value is ZodiacAgentEvent {
-	return typeof value === "object" && value !== null && "type" in value && value.type !== "session-exited";
 }
 
 export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClient {

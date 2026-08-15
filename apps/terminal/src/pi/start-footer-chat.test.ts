@@ -88,7 +88,9 @@ describe("startFooterChat", () => {
 			settingsManager: SettingsManager.inMemory(),
 		});
 		if (!chat) throw new Error("startFooterChat unexpectedly failed");
-		disposers.push(() => chat.session.dispose());
+		disposers.push(() => chat.dispose());
+		const session = chat.session;
+		if (!session) throw new Error("startFooterChat's own local (non-daemonUrl) path unexpectedly returned no session");
 
 		// Without calling session.bindExtensions() after createAgentSession(),
 		// session_start never fires, so the extension's own narrowing never
@@ -98,7 +100,7 @@ describe("startFooterChat", () => {
 		// never bound extensions to it, unlike the web app's subprocess path
 		// (a real `pi --mode rpc` process, whose own rpc-mode.js calls
 		// bindExtensions() internally).
-		expect(chat.session.getActiveToolNames()).toEqual(["read"]);
+		expect(session.getActiveToolNames()).toEqual(["read"]);
 	});
 
 	it("re-resolves the user's configured default model after bindExtensions(), since a model from an extension-registered provider is invisible to createAgentSession()'s own internal resolution", async () => {
@@ -141,10 +143,12 @@ describe("startFooterChat", () => {
 			settingsManager,
 		});
 		if (!chat) throw new Error("startFooterChat unexpectedly failed");
-		disposers.push(() => chat.session.dispose());
+		disposers.push(() => chat.dispose());
+		const session = chat.session;
+		if (!session) throw new Error("startFooterChat's own local (non-daemonUrl) path unexpectedly returned no session");
 
-		expect(chat.session.model?.provider).toBe("preferred");
-		expect(chat.session.model?.id).toBe("preferred-model");
+		expect(session.model?.provider).toBe("preferred");
+		expect(session.model?.id).toBe("preferred-model");
 	});
 
 	describe("agent dir namespacing", () => {
