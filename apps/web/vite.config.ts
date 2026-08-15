@@ -4,8 +4,16 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
-import { readSessionEvents } from "./src/ingest/session-jsonl-source.js";
-import { scanConversations } from "./src/server/conversations-api.js";
+// Relative path, not the "@zodiac/server/conversations" package specifier: Vite's
+// own config-file loader (distinct from its normal dev-server transform
+// pipeline) bundles vite.config.ts with esbuild but treats any bare package
+// specifier as external, left for Node's native ESM resolver to load at config-
+// execution time -- which cannot follow this repo's ".js"-import-maps-to-".ts"-
+// source convention (confirmed: the pre-existing "@zodiac/server/world" subpath
+// fails identically under plain `node --input-type=module`). A relative path is
+// inlined by esbuild instead, the same way it already resolves every other
+// relative import in this file.
+import { readSessionEvents, scanConversations } from "../../packages/server/src/conversations/index.js";
 import { createPiHttpRoutes } from "./src/pi/http-routes.js";
 import { createPiSessionRegistry } from "./src/pi/session-registry.js";
 

@@ -3,8 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TraceGraph } from "../graph/trace-graph.js";
 import { SessionGraph } from "../graph/session-graph.js";
-import { createSessionJsonlSource } from "../ingest/session-jsonl-source.js";
-import type { NormalizedEvent } from "../ingest/types.js";
+import { createSessionJsonlSource, type NormalizedEvent } from "@zodiac/server/conversations";
 import type { ConversationItem } from "./projector.js";
 import { buildConversationItems, latestToolCallName } from "./projector.js";
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SessionGraph } from "../graph/session-graph.js";
-import type { NormalizedEvent } from "../ingest/types.js";
+import type { NormalizedEvent } from "@zodiac/server/conversations";
 import type { ConversationClient, ConversationSummary } from "./client.js";
 import { buildConversationItems, type ConversationItem } from "./projector.js";
 

@@ -1,5 +1,5 @@
 import { TraceGraph } from "./trace-graph.js";
-import type { NormalizedEvent } from "../ingest/types.js";
+import type { NormalizedEvent } from "@zodiac/server/conversations";
 
 /**
  * Node kinds in the trace graph.

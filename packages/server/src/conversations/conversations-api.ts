@@ -2,12 +2,12 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { createReadStream } from "node:fs";
-import { groupSessionsIntoConversations, type Conversation, type SessionMeta } from "../graph/conversation-grouping.js";
+import { groupSessionsIntoConversations, type Conversation, type SessionMeta } from "./conversation-grouping.js";
 
 /**
  * Bounded scan of Alef's real local session store
  * (~/.local/share/alef/sessions/<cwd-hash>/<id>.jsonl), Node-only (fs access)
- * -- mirrors the existing dev-only bridge pattern in vite.config.ts.
+ * -- daemon-owned, per zodiacd's own API design.
  *
  * Explicit bounds, since real local data has directories with thousands of
  * session files (observed: one with 4695): only the most recently active

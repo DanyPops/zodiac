@@ -1,8 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { createSessionJsonlSource } from "../ingest/session-jsonl-source.js";
-import type { NormalizedEvent } from "../ingest/types.js";
+import { createSessionJsonlSource, type NormalizedEvent } from "@zodiac/server/conversations";
 import { SessionGraph } from "./session-graph.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

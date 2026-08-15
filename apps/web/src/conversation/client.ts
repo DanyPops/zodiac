@@ -1,4 +1,4 @@
-import type { NormalizedEvent } from "../ingest/types.js";
+import type { NormalizedEvent } from "@zodiac/server/conversations";
 
 export interface ConversationSummary {
 	id: string;

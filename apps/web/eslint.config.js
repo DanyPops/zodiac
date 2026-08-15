@@ -19,7 +19,10 @@ import tseslint from "typescript-eslint";
 // by its resolved specifier, and `no-restricted-globals` matches genuine
 // identifier references, not substrings of unrelated text.
 
-const DOMAIN_FILES = ["src/workspace/model.ts", "src/conversation/projector.ts", "src/graph/conversation-grouping.ts", "src/graph/observability-graph.ts", "src/graph/session-graph.ts", "src/ingest/types.ts"];
+// conversation-grouping.ts and ingest/types.ts moved to @zodiac/server/conversations
+// (zodiacd stage 2) -- that package has no react dependency at all, so domain
+// purity for them is enforced by not being importable, not by this rule.
+const DOMAIN_FILES = ["src/workspace/model.ts", "src/conversation/projector.ts", "src/graph/observability-graph.ts", "src/graph/session-graph.ts"];
 
 // Files allowed to reference a browser/fetch global directly -- everything
 // else must go through ConversationClient/Preferences/ThemeController.
