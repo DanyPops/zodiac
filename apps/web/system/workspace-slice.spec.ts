@@ -550,6 +550,23 @@ test("the split/tab preview overlay is debounced: a fast pass over several posit
 	await glyph.dispatchEvent("dragend", { dataTransfer });
 });
 
+test("collapsing/expanding Workspace selection only changes its width -- the first Workspace's own vertical position never shifts as a side effect", async ({ page }) => {
+	const expandedFirstRow = page.getByRole("navigation", { name: "Workspace selection" }).locator("li").first();
+	const expandedBox = (await expandedFirstRow.boundingBox())!;
+
+	await page.keyboard.press("Control+b");
+	const collapsedFirstGlyph = page.getByRole("navigation", { name: "Workspace quick selection" }).getByRole("button").nth(1); // after CollapsedToggle
+	const collapsedBox = (await collapsedFirstGlyph.boundingBox())!;
+
+	// Width is the axis this toggle is actually about -- free to differ.
+	expect(collapsedBox.width).not.toBeCloseTo(expandedBox.width, 0);
+	// Vertical position is not: both states' own header precedes the first
+	// Workspace by the same total height, so it lands at the same y either way.
+	expect(Math.abs(collapsedBox.y - expandedBox.y)).toBeLessThan(2);
+
+	await page.keyboard.press("Control+b");
+});
+
 test("all shell actions share command bindings and expose them on hover and focus", async ({ page }) => {
 	const toggle = page.getByRole("button", { name: "Hide workspace selection" });
 	await expect(toggle).toHaveAttribute("aria-keyshortcuts", "Control+B");

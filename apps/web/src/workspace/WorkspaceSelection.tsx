@@ -59,9 +59,6 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 							<ChevronsLeft aria-hidden="true" size={16} />
 						</CommandButton>
 					</div>
-					<div className="border-b-[length:var(--app-line-width)] border-gray-200 px-3 py-2 dark:border-gray-700">
-						<p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-600 dark:text-gray-300">Workspaces</p>
-					</div>
 					<div className="flex min-h-0 flex-1 flex-col">
 						<ul aria-label="Workspaces" className="overflow-auto p-2">
 							{catalog.map((entry) => (
