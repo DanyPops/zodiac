@@ -43,8 +43,6 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@zodiac/server": "*",
-    "@zodiac/agent": "*",
     "@icons-pack/react-simple-icons": "^13.11.1",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-context-menu": "^2.3.7",
@@ -52,6 +50,10 @@
     "@radix-ui/react-popover": "^1.1.23",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@tanstack/react-hotkeys": "^0.10.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "@zodiac/agent": "*",
+    "@zodiac/server": "*",
     "dockview-react": "^7.0.4",
     "lucide-react": "^1.28.0",
     "react": "^19.2.0",

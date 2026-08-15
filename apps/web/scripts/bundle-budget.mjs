@@ -11,7 +11,7 @@
 export const BUDGETS_BYTES = {
 	entryJs: 155_000, // gzip -- measured ~124.2kB baseline; raised from 150kB for @radix-ui/react-popover (Notifications), still ~14% headroom
 	entryCss: 7_200, // gzip -- measured ~5.6kB baseline; raised from 7kB for the Dock Ruler's own overlay hiding rule, ~22% headroom
-	totalJs: 250_000, // gzip -- measured ~207.2kB baseline (entry + WindowDockview's dockview-react chunk); raised alongside entryJs, ~13% headroom
+	totalJs: 375_000, // gzip -- measured ~315.8kB baseline (entry + WindowDockview's dockview-react chunk + the new lazy-loaded TerminalSurface chunk, ~84.6kB gzip for xterm.js + @xterm/addon-fit); raised for the Terminal Surface Template, a real deliberate capability paid for only by a session that actually docks a Terminal (same reasoning as WindowDockview's own prior raise), ~14% headroom
 	totalCss: 18_000, // gzip -- measured ~14.3kB baseline, ~23% headroom
 };
 

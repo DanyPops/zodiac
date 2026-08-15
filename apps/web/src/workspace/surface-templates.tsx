@@ -1,6 +1,7 @@
-import { Activity } from "lucide-react";
+import { Activity, SquareTerminal } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { ActivitySurfaceContent } from "./ActivitySurface.js";
+import { TerminalSurfaceLazy } from "./TerminalSurfaceLazy.js";
 
 export interface SurfaceTemplateIconProps {
 	"aria-hidden"?: boolean | "true" | "false";
@@ -25,6 +26,7 @@ export interface SurfaceTemplateDefinition {
 }
 
 export const ACTIVITY_TEMPLATE_ID = "activity";
+export const TERMINAL_TEMPLATE_ID = "terminal";
 
 export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 	{
@@ -35,6 +37,15 @@ export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 		dockCommandTitle: "Dock Activity",
 		dockCommandDescription: "Dock a new Activity Surface into the active Window.",
 		render: () => <ActivitySurfaceContent />,
+	},
+	{
+		id: TERMINAL_TEMPLATE_ID,
+		title: "Terminal",
+		icon: SquareTerminal,
+		dockCommandId: "template.dockTerminal",
+		dockCommandTitle: "Dock Terminal",
+		dockCommandDescription: "Dock a new real, interactive shell (zodiacd --enable-terminal) into the active Window.",
+		render: () => <TerminalSurfaceLazy />,
 	},
 ];
 

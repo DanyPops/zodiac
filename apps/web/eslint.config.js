@@ -32,6 +32,7 @@ const ADAPTER_ALLOWLIST = [
 	"src/theme.ts", // ThemeController's own browser adapter factory
 	"src/conversation/client.ts", // ConversationClient's own fetch adapter factory (fetch is its injectable default, never called literally here)
 	"src/pi/client.ts", // PiClient's own fetch/EventSource adapter factory (both are injectable defaults, never called literally here)
+	"src/terminal/terminal-client.ts", // TerminalClient's own fetch/WebSocket adapter factory (both are injectable defaults, never called literally here)
 	"src/platform/pointer.ts", // PointerTracker's own browser adapter factory
 	"src/platform/shape-settings-style.ts", // ShapeSettingsStyleTarget's own browser adapter factory
 	"src/platform/wisp-target-measurer.ts", // WispTargetMeasurer's own browser adapter factory
