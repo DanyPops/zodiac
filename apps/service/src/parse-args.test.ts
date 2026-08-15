@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_HOST, DEFAULT_PORT, parseZodiacdArgs } from "./parse-args.js";
 
 describe("parseZodiacdArgs", () => {
-	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env, fixtureMode false", () => {
+	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env, fixtureMode/enableTerminal false", () => {
 		const args = parseZodiacdArgs([], {});
-		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false });
+		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false });
+	});
+
+	it("ZODIAC_ENABLE_TERMINAL=1 or --enable-terminal enables enableTerminal -- off by default, real RCE exposure once reachable off loopback", () => {
+		expect(parseZodiacdArgs([], { ZODIAC_ENABLE_TERMINAL: "1" }).enableTerminal).toBe(true);
+		expect(parseZodiacdArgs(["--enable-terminal"]).enableTerminal).toBe(true);
+		expect(parseZodiacdArgs([]).enableTerminal).toBe(false);
 	});
 
 	it("ZODIAC_FIXTURE_MODE=1 or --fixture-mode enables fixtureMode", () => {

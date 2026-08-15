@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
 
 type ZodiacdProcess = ChildProcessByStdio<null, Readable, Readable>;
 
@@ -47,7 +48,7 @@ async function waitForReady(child: ZodiacdProcess): Promise<string> {
 beforeAll(async () => {
 	stateDir = await mkdtemp(join(tmpdir(), "zodiacd-multi-client-"));
 	const cli = new URL("../dist/cli.js", import.meta.url).pathname;
-	daemon = spawn(process.execPath, [cli, "--port", "0", "--host", "127.0.0.1", "--state-dir", stateDir], { stdio: ["ignore", "pipe", "pipe"] });
+	daemon = spawn(process.execPath, [cli, "--port", "0", "--host", "127.0.0.1", "--state-dir", stateDir, "--enable-terminal"], { stdio: ["ignore", "pipe", "pipe"] });
 	baseUrl = await waitForReady(daemon);
 }, 20_000);
 
@@ -215,4 +216,77 @@ describe("zodiacd: a real decoupled daemon process, multiple parallel UI clients
 			steady.close();
 		}
 	});
+});
+
+/** Same message-queue-not-one-shot-listener reasoning as terminal-routes.test.ts's own helper: a server can send its first frame before a caller gets around to attaching a listener. */
+function wsMessageQueue(ws: WebSocket): { next(): Promise<unknown> } {
+	const queue: unknown[] = [];
+	const waiters: ((value: unknown) => void)[] = [];
+	ws.on("message", (raw: Buffer) => {
+		const parsed = JSON.parse(raw.toString("utf8"));
+		const waiter = waiters.shift();
+		if (waiter) waiter(parsed);
+		else queue.push(parsed);
+	});
+	return {
+		next(): Promise<unknown> {
+			if (queue.length > 0) return Promise.resolve(queue.shift());
+			return new Promise((resolve) => waiters.push(resolve));
+		},
+	};
+}
+
+function waitForWsOpen(ws: WebSocket): Promise<void> {
+	return new Promise((resolve, reject) => {
+		ws.once("open", () => resolve());
+		ws.once("error", reject);
+	});
+}
+
+/** Waits for a queue's next output frame whose data contains `text`, discarding shell noise (prompts, echoed input, ANSI) in between -- a real shell's own output around one command is not fully deterministic byte-for-byte. */
+async function waitForOutputContaining(messages: { next(): Promise<unknown> }, text: string, maxFrames = 200): Promise<void> {
+	for (let i = 0; i < maxFrames; i++) {
+		const message = (await messages.next()) as { type: string; data?: string };
+		if (message.type === "output" && message.data?.includes(text)) return;
+	}
+	throw new Error(`did not see output containing ${JSON.stringify(text)} within ${maxFrames} frames`);
+}
+
+describe("zodiacd: a real decoupled daemon process, a real shell shared by multiple parallel terminal clients", () => {
+	it("a command typed by one WebSocket client's own terminal is observed, live, by another WebSocket client attached to the same real shell", async () => {
+		const created = await fetch(`${baseUrl}/api/terminal/sessions`, { method: "POST" });
+		expect(created.status).toBe(200);
+		const { sessionId } = (await created.json()) as { sessionId: string };
+
+		const wsBase = baseUrl.replace("http://", "ws://");
+		const clientA = new WebSocket(`${wsBase}/api/terminal/sessions/${sessionId}`);
+		const clientB = new WebSocket(`${wsBase}/api/terminal/sessions/${sessionId}`);
+		const messagesA = wsMessageQueue(clientA);
+		const messagesB = wsMessageQueue(clientB);
+		try {
+			await Promise.all([waitForWsOpen(clientA), waitForWsOpen(clientB)]);
+
+			const marker = "zodiacd-multi-client-marker-12345";
+			clientA.send(JSON.stringify({ type: "input", data: `echo ${marker}\n` }));
+
+			// Both the client that typed the command and the one that didn't see
+			// the exact same real shell output -- a real process boundary, a real
+			// pty, two independent sockets.
+			await Promise.all([waitForOutputContaining(messagesA, marker), waitForOutputContaining(messagesB, marker)]);
+
+			// A third, late-joining client attaches to the same still-live shell
+			// and gets the scrollback replay -- it never typed the command itself.
+			const clientC = new WebSocket(`${wsBase}/api/terminal/sessions/${sessionId}`);
+			const messagesC = wsMessageQueue(clientC);
+			try {
+				await waitForWsOpen(clientC);
+				await waitForOutputContaining(messagesC, marker);
+			} finally {
+				clientC.close();
+			}
+		} finally {
+			clientA.close();
+			clientB.close();
+		}
+	}, 15_000);
 });

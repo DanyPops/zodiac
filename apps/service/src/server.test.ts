@@ -2,10 +2,29 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { WebSocket } from "ws";
 import { worldId } from "@zodiac/protocol";
 import { createWorldStore } from "@zodiac/server/world";
 import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
+import type { TerminalPtyPort } from "./terminal/terminal-pty-port.js";
 import { createZodiacService } from "./server.js";
+
+function fakePty(): TerminalPtyPort & { emitData(data: string): void } {
+	const dataListeners = new Set<(data: string) => void>();
+	return {
+		write: vi.fn(),
+		resize: vi.fn(),
+		kill: vi.fn(),
+		onData: (listener) => {
+			dataListeners.add(listener);
+			return () => dataListeners.delete(listener);
+		},
+		onExit: () => () => {},
+		emitData(data) {
+			for (const listener of dataListeners) listener(data);
+		},
+	};
+}
 
 function fakeIntegration(): AgentIntegrationPort & { emit(event: ZodiacAgentEvent): void } {
 	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
@@ -78,6 +97,57 @@ describe("createZodiacService", () => {
 
 		const response = await fetch(`${service.baseUrl}/api/nonexistent`);
 		expect(response.status).toBe(404);
+	});
+
+	it("terminal routes are 404/refused by default -- real RCE exposure once reachable off loopback, opt-in only", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration });
+
+		const created = await fetch(`${service.baseUrl}/api/terminal/sessions`, { method: "POST" });
+		expect(created.status).toBe(404);
+
+		const wsUrl = service.baseUrl.replace("http://", "ws://");
+		const client = new WebSocket(`${wsUrl}/api/terminal/sessions/anything`);
+		const outcome = await new Promise<"error" | "open">((resolve) => {
+			client.once("error", () => resolve("error"));
+			client.once("open", () => resolve("open"));
+		});
+		expect(outcome).toBe("error");
+	});
+
+	it("terminal routes are live when enableTerminal is on: spawn a session over HTTP, then read/write it over the WebSocket", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		const pty = fakePty();
+		service = await createZodiacService({
+			world,
+			sessionsRoot: join(dir, "sessions"),
+			port: 0,
+			host: "127.0.0.1",
+			createAgentIntegration: fakeIntegration,
+			enableTerminal: true,
+			createTerminalPty: () => pty,
+		});
+
+		const created = await fetch(`${service.baseUrl}/api/terminal/sessions`, { method: "POST" });
+		expect(created.status).toBe(200);
+		const { sessionId } = (await created.json()) as { sessionId: string };
+
+		const wsUrl = service.baseUrl.replace("http://", "ws://");
+		const client = new WebSocket(`${wsUrl}/api/terminal/sessions/${sessionId}`);
+		const message = await new Promise<unknown>((resolve, reject) => {
+			client.once("open", () => pty.emitData("hello from the shell"));
+			client.once("message", (raw: Buffer) => resolve(JSON.parse(raw.toString("utf8"))));
+			client.once("error", reject);
+		});
+		expect(message).toEqual({ type: "output", data: "hello from the shell" });
+
+		client.send(JSON.stringify({ type: "input", data: "ls\n" }));
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(pty.write).toHaveBeenCalledWith("ls\n");
+
+		client.close();
 	});
 
 	it("dispatches a real command end to end through the live HTTP surface", async () => {

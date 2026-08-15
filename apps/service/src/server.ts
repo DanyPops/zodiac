@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import { WebSocketServer } from "ws";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
 import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
@@ -6,6 +7,9 @@ import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/f
 import { createAgentRoutes } from "./routes/agent-routes.js";
 import { createWorldRoutes } from "./routes/world-routes.js";
 import { createConversationsRoutes } from "./routes/conversations-routes.js";
+import { createTerminalRoutes } from "./routes/terminal-routes.js";
+import { createTerminalSessionRegistry } from "./terminal/terminal-session-registry.js";
+import type { TerminalPtyFactory } from "./terminal/terminal-pty-port.js";
 
 export interface CreateZodiacServiceOptions {
 	world: WorldStore;
@@ -18,6 +22,10 @@ export interface CreateZodiacServiceOptions {
 	fixtureMode?: boolean;
 	/** Constructs a fresh AgentIntegrationPort per new agent session, given an optional client-requested cwd -- a real createZodiacAgentSession(...).integration in production, a fake port in tests. */
 	createAgentIntegration: (cwd?: string) => AgentIntegrationPort | Promise<AgentIntegrationPort>;
+	/** Wires the terminal-session routes (POST to spawn, WS to attach) -- off by default, see parse-args.ts's own doc comment on why. */
+	enableTerminal?: boolean;
+	/** Constructs a real pty per new terminal session -- a real node-pty child in production (createNodePtyFactory), a fake port in tests. Required when enableTerminal is true. */
+	createTerminalPty?: TerminalPtyFactory;
 }
 
 export interface ZodiacService {
@@ -39,6 +47,12 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 	);
 	const agentSessionRegistry = createAgentSessionRegistry(options.createAgentIntegration);
 	const agentRoutes = createAgentRoutes(agentSessionRegistry);
+
+	// Only constructed when explicitly opted into -- see enableTerminal's own
+	// doc comment on why this isn't wired by default.
+	const terminalSessionRegistry = options.enableTerminal && options.createTerminalPty ? createTerminalSessionRegistry(options.createTerminalPty) : undefined;
+	const terminalRoutes = terminalSessionRegistry ? createTerminalRoutes(terminalSessionRegistry) : undefined;
+	const webSocketServer = terminalRoutes ? new WebSocketServer({ noServer: true }) : undefined;
 
 	const server = createServer((req, res) => {
 		// A browser-served static build (dist/) is necessarily a different origin
@@ -100,10 +114,34 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 			void agentRoutes.dispatchAction(req, res);
 			return;
 		}
+		if (terminalRoutes && pathname === "/api/terminal/sessions" && req.method === "POST") {
+			void terminalRoutes.createSession(req, res);
+			return;
+		}
+		if (terminalRoutes && pathname === "/api/terminal/sessions" && req.method === "GET") {
+			terminalRoutes.listSessions(req, res);
+			return;
+		}
 
 		res.statusCode = 404;
 		res.setHeader("Content-Type", "application/json");
 		res.end(JSON.stringify({ code: "not-found", message: `No route for ${req.method} ${pathname}` }));
+	});
+
+	// A WebSocket upgrade is a separate Node http.Server event, never routed
+	// through the request handler above -- terminalRoutes is only defined at
+	// all when enableTerminal opted in, so a WS upgrade request against a
+	// daemon that never enabled terminals is destroyed outright, the same
+	// refusal posture the request handler's own 404 gives every other route.
+	server.on("upgrade", (req, socket, head) => {
+		const pathname = new URL(req.url ?? "", "http://zodiac.local").pathname;
+		const match = terminalRoutes && webSocketServer ? /^\/api\/terminal\/sessions\/([^/]+)$/.exec(pathname) : null;
+		const sessionId = match?.[1];
+		if (!terminalRoutes || !webSocketServer || !sessionId) {
+			socket.destroy();
+			return;
+		}
+		webSocketServer.handleUpgrade(req, socket, head, (ws) => terminalRoutes.handleConnection(ws, sessionId));
 	});
 
 	return new Promise((resolve, reject) => {
@@ -120,6 +158,8 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 				close: () =>
 					new Promise<void>((res2, rej2) => {
 						agentSessionRegistry.disposeAll();
+						terminalSessionRegistry?.disposeAll();
+						webSocketServer?.close();
 						server.close((err) => (err ? rej2(err) : res2()));
 					}),
 			});

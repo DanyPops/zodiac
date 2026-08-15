@@ -15,15 +15,18 @@
     "test": "npm run build && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:@earendil-works/* --banner:js=\"import{createRequire as __createRequire}from 'module';const require=__createRequire(import.meta.url);\" --outfile=dist/cli.js"
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:@earendil-works/* --external:node-pty --banner:js=\"import{createRequire as __createRequire}from 'module';const require=__createRequire(import.meta.url);\" --outfile=dist/cli.js"
   },
   "dependencies": {
-    "@zodiac/server": "*",
-    "@zodiac/protocol": "*",
     "@zodiac/agent": "*",
-    "@zodiac/pi": "*"
+    "@zodiac/pi": "*",
+    "@zodiac/protocol": "*",
+    "@zodiac/server": "*",
+    "node-pty": "^1.1.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@types/ws": "^8.18.1",
     "esbuild": "^0.28.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

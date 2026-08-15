@@ -20,7 +20,9 @@ zodiac/
 │                         zodiacd, see Development below); @zodiac/terminal remains fully
 │                         self-contained today (zodiacd stage 5, not yet built) -- see the
 │                         "zodiacd API surface" and "monolith/daemon/remote-attach prior art"
-│                         Papyrus Docs.
+│                         Papyrus Docs. Optionally (`--enable-terminal`, off by default) also
+│                         hosts real, persistent, detachable pty terminal sessions over
+│                         WebSocket -- see "Terminal sessions" below.
 ├── packages/
 │   ├── server/           Framework-neutral domain core (Workspace/World, Alef conversation
 │   │                      scanning) -- @zodiac/server, the daemon-owned code @zodiac/service
@@ -71,3 +73,21 @@ browser-served static build is necessarily a different origin than the daemon) a
 every OPTIONS preflight -- there is no auth yet (loopback-only transport is the assumed
 threat model for this first cut; see the "zodiacd API surface" Papyrus Doc for what's
 intentionally not designed yet).
+
+### Terminal sessions (optional, off by default)
+
+`zodiacd --enable-terminal` additionally spawns `POST /api/terminal/sessions {cwd?}` and
+`WS /api/terminal/sessions/:id`, giving a UI a real, interactive shell backed by a real
+persistent, detachable `node-pty` child -- the same capability `@zodiac/terminal`'s own
+native-terminal.ts already gives the TUI, but server-side, since a browser can't spawn
+`node-pty` itself. Designed directly against VS Code's own real remote-terminal source (see
+the "zodiacd API surface" Papyrus Doc's Terminal sessions section for the citation trail),
+not guessed: one WebSocket per session carries both directions (client -> server: keystrokes
+and resizes; server -> client: raw output and exit), replays buffered scrollback on
+(re)attach before tailing live output, and lets a second client attach to the same live shell
+-- the one deliberate, scoped exception to zodiacd's otherwise HTTP+SSE-only transport,
+justified by the terminal's input volume/ordering/latency profile.
+
+This is **off by default** and should stay that way outside a trusted, local setup: a real
+shell over the network is unauthenticated remote code execution the moment the daemon is
+reachable off loopback, and (per the section above) there is no auth yet.

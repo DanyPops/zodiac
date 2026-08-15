@@ -5,6 +5,8 @@ export interface ZodiacdArgs {
 	stateDir: string | undefined;
 	/** Serve deterministic, filesystem-free fixture conversations instead of scanning sessionsRoot -- for Playwright's system suite, never a real deployment. */
 	fixtureMode: boolean;
+	/** Wires the terminal-session routes (a real shell over WebSocket) -- off by default: real RCE exposure once the daemon is reachable off loopback, and there is no auth yet (see the "zodiacd API surface" Papyrus Doc's Terminal sessions section). */
+	enableTerminal: boolean;
 }
 
 export const DEFAULT_PORT = 4390;
@@ -23,6 +25,7 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 	let sessionsRoot: string | undefined;
 	let stateDir: string | undefined;
 	let fixtureMode = env.ZODIAC_FIXTURE_MODE === "1";
+	let enableTerminal = env.ZODIAC_ENABLE_TERMINAL === "1";
 
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
@@ -31,9 +34,10 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 		else if (arg === "--sessions-root") sessionsRoot = argv[++i];
 		else if (arg === "--state-dir") stateDir = argv[++i];
 		else if (arg === "--fixture-mode") fixtureMode = true;
+		else if (arg === "--enable-terminal") enableTerminal = true;
 	}
 
 	if (!Number.isInteger(port) || port < 0) throw new Error(`zodiacd: invalid --port "${port}"`);
 
-	return { port, host, sessionsRoot, stateDir, fixtureMode };
+	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal };
 }

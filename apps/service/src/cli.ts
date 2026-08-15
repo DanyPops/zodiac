@@ -8,6 +8,7 @@ import type { AgentIntegrationPort } from "@zodiac/agent";
 import { createZodiacService } from "./server.js";
 import { parseZodiacdArgs } from "./parse-args.js";
 import { resolveZodiacServiceStateDir } from "./state-dir.js";
+import { createNodePtyFactory } from "./terminal/terminal-pty-port.js";
 
 const DEFAULT_SESSIONS_ROOT = join(homedir(), ".local", "share", "alef", "sessions");
 const WORLD_ID = worldId("zodiac");
@@ -51,9 +52,21 @@ async function main(): Promise<void> {
 	if (args.host === "0.0.0.0") {
 		process.stderr.write("[zodiacd] WARNING: binding to 0.0.0.0 exposes the daemon to the network. No auth is implemented yet.\n");
 	}
+	if (args.enableTerminal) {
+		process.stderr.write("[zodiacd] WARNING: --enable-terminal exposes a real shell over the network. No auth is implemented yet -- loopback only.\n");
+	}
 
-	const service = await createZodiacService({ world, sessionsRoot, port: args.port, host: args.host, fixtureMode: args.fixtureMode, createAgentIntegration: createDaemonAgentIntegration });
-	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot})`);
+	const service = await createZodiacService({
+		world,
+		sessionsRoot,
+		port: args.port,
+		host: args.host,
+		fixtureMode: args.fixtureMode,
+		createAgentIntegration: createDaemonAgentIntegration,
+		enableTerminal: args.enableTerminal,
+		createTerminalPty: args.enableTerminal ? createNodePtyFactory() : undefined,
+	});
+	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
 
 	const shutdown = (signal: string) => {
 		console.log(`[zodiacd] ${signal} received, shutting down`);
