@@ -1,5 +1,8 @@
 import { createServer, type Server } from "node:http";
+import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
+import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
+import { createAgentRoutes } from "./routes/agent-routes.js";
 import { createWorldRoutes } from "./routes/world-routes.js";
 import { createConversationsRoutes } from "./routes/conversations-routes.js";
 
@@ -10,6 +13,8 @@ export interface CreateZodiacServiceOptions {
 	/** 0 binds an ephemeral port -- what every test here uses. */
 	port: number;
 	host: string;
+	/** Constructs a fresh AgentIntegrationPort per new agent session, given an optional client-requested cwd -- a real createZodiacAgentSession(...).integration in production, a fake port in tests. */
+	createAgentIntegration: (cwd?: string) => AgentIntegrationPort | Promise<AgentIntegrationPort>;
 }
 
 export interface ZodiacService {
@@ -19,16 +24,16 @@ export interface ZodiacService {
 }
 
 /**
- * Wires the World and Conversations route groups (see the "zodiacd API
- * surface" Papyrus Doc) into one standalone Node HTTP server -- no
- * framework, mirroring apps/web's own pi/http-routes.ts, which this
- * package's routes were themselves promoted alongside. Agent-session
- * routes are a separate, later addition (zodiacd stage 3), not this file's
- * concern yet.
+ * Wires the World, Conversations, and Agent-session route groups (see the
+ * "zodiacd API surface" Papyrus Doc) into one standalone Node HTTP server --
+ * no framework, mirroring apps/web's own pi/http-routes.ts, which the World
+ * and Conversations routes were themselves promoted alongside.
  */
 export function createZodiacService(options: CreateZodiacServiceOptions): Promise<ZodiacService> {
 	const worldRoutes = createWorldRoutes(options.world);
 	const conversationsRoutes = createConversationsRoutes({ sessionsRoot: options.sessionsRoot });
+	const agentSessionRegistry = createAgentSessionRegistry(options.createAgentIntegration);
+	const agentRoutes = createAgentRoutes(agentSessionRegistry);
 
 	const server = createServer((req, res) => {
 		const url = new URL(req.url ?? "", "http://zodiac.local");
@@ -59,6 +64,22 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 			void conversationsRoutes.getConversationEvents(req, res);
 			return;
 		}
+		if (pathname === "/api/agent/sessions" && req.method === "POST") {
+			void agentRoutes.createSession(req, res);
+			return;
+		}
+		if (pathname === "/api/agent/sessions" && req.method === "GET") {
+			agentRoutes.listSessions(req, res);
+			return;
+		}
+		if (pathname.endsWith("/events") && pathname.startsWith("/api/agent/sessions/") && req.method === "GET") {
+			agentRoutes.streamEvents(req, res);
+			return;
+		}
+		if (pathname.startsWith("/api/agent/sessions/") && req.method === "POST") {
+			void agentRoutes.dispatchAction(req, res);
+			return;
+		}
 
 		res.statusCode = 404;
 		res.setHeader("Content-Type", "application/json");
@@ -76,7 +97,11 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 			resolve({
 				server,
 				baseUrl: `http://${options.host}:${address.port}`,
-				close: () => new Promise<void>((res2, rej2) => server.close((err) => (err ? rej2(err) : res2()))),
+				close: () =>
+					new Promise<void>((res2, rej2) => {
+						agentSessionRegistry.disposeAll();
+						server.close((err) => (err ? rej2(err) : res2()));
+					}),
 			});
 		});
 	});

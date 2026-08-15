@@ -3,12 +3,20 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { worldId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore } from "@zodiac/server/world";
+import { createZodiacAgentSession } from "@zodiac/pi";
+import type { AgentIntegrationPort } from "@zodiac/agent";
 import { createZodiacService } from "./server.js";
 import { parseZodiacdArgs } from "./parse-args.js";
 import { resolveZodiacServiceStateDir } from "./state-dir.js";
 
 const DEFAULT_SESSIONS_ROOT = join(homedir(), ".local", "share", "alef", "sessions");
 const WORLD_ID = worldId("zodiac");
+
+/** Constructs a real, live agent session per zodiacd agent-session request -- "rpc" mode, the same headless character pi's own `pi --mode rpc` subprocess has, since a daemon session has no interactive TUI of its own. Falls back to the daemon's own process cwd when a client doesn't request one. */
+async function createDaemonAgentIntegration(cwd?: string): Promise<AgentIntegrationPort> {
+	const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc" });
+	return integration;
+}
 
 /** Loads the persisted World if one exists, exiting loudly on a corrupted snapshot rather than silently discarding it (see the JSON-file WorldSnapshotPort's own doc comment). */
 async function loadOrCreateWorld(snapshotPort: ReturnType<typeof createJsonFileSnapshotPort>): Promise<WorldStore> {
@@ -44,7 +52,7 @@ async function main(): Promise<void> {
 		process.stderr.write("[zodiacd] WARNING: binding to 0.0.0.0 exposes the daemon to the network. No auth is implemented yet.\n");
 	}
 
-	const service = await createZodiacService({ world, sessionsRoot, port: args.port, host: args.host });
+	const service = await createZodiacService({ world, sessionsRoot, port: args.port, host: args.host, createAgentIntegration: createDaemonAgentIntegration });
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot})`);
 
 	const shutdown = (signal: string) => {

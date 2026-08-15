@@ -19,7 +19,9 @@
   },
   "dependencies": {
     "@zodiac/server": "*",
-    "@zodiac/protocol": "*"
+    "@zodiac/protocol": "*",
+    "@zodiac/agent": "*",
+    "@zodiac/pi": "*"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
