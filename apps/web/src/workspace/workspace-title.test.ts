@@ -1,4 +1,4 @@
-import type { PiRpcEvent } from "@danypops/pi-rpc-protocol";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import { describe, expect, it, vi } from "vitest";
 import type { PiClient } from "../pi/client.js";
 import { clampTitleWords, createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "./workspace-title.js";
@@ -60,8 +60,8 @@ describe("createLlmWorkspaceTitleGenerator", () => {
 });
 
 /** Mirrors pi-chat-controller.test.ts's own fakeClient exactly -- the established PiClient test-double convention. */
-function fakeClient(): PiClient & { emit(event: PiRpcEvent): void } {
-	let listener: ((event: PiRpcEvent) => void) | undefined;
+function fakeClient(): PiClient & { emit(event: ZodiacAgentEvent): void } {
+	let listener: ((event: ZodiacAgentEvent) => void) | undefined;
 	return {
 		createSession: vi.fn(async () => "naming-session-1"),
 		sendPrompt: vi.fn(async () => {}),
@@ -86,33 +86,34 @@ describe("createPiWorkspaceTitleComplete", () => {
 		const resultPromise = complete("Name this conversation...");
 		await vi.waitFor(() => expect(client.sendPrompt).toHaveBeenCalledWith("naming-session-1", "Name this conversation..."));
 
-		client.emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Deploy staging fix" }] } });
+		client.emit({ type: "assistant-message-end", text: "Deploy staging fix" });
 
 		await expect(resultPromise).resolves.toBe("Deploy staging fix");
 		expect(client.abort).toHaveBeenCalledWith("naming-session-1");
 	});
 
-	it("ignores the user's own echoed message_end and waits for the real assistant reply", async () => {
+	it("waits for assistant-message-end, not an in-progress assistant-message-delta", async () => {
 		const client = fakeClient();
 		const complete = createPiWorkspaceTitleComplete(client);
 
 		const resultPromise = complete("Name this conversation...");
 		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
 
-		client.emit({ type: "message_end", message: { role: "user", content: [{ type: "text", text: "Name this conversation..." }] } });
-		client.emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Deploy staging fix" }] } });
+		client.emit({ type: "assistant-message-start" });
+		client.emit({ type: "assistant-message-delta", text: "Deploy staging" });
+		client.emit({ type: "assistant-message-end", text: "Deploy staging fix" });
 
 		await expect(resultPromise).resolves.toBe("Deploy staging fix");
 	});
 
-	it("rejects when Pi reports a failed response", async () => {
+	it("rejects when Pi reports an error event", async () => {
 		const client = fakeClient();
 		const complete = createPiWorkspaceTitleComplete(client);
 
 		const resultPromise = complete("Name this conversation...");
 		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
 
-		client.emit({ type: "response", command: "prompt", success: false, error: "no model configured" });
+		client.emit({ type: "error", message: "no model configured" });
 
 		await expect(resultPromise).rejects.toThrow("no model configured");
 	});

@@ -1,4 +1,4 @@
-import { extractMessageText, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import type { ConversationItem } from "../conversation/projector.js";
 import type { PiClient } from "./client.js";
 
@@ -28,14 +28,12 @@ function describeError(error: unknown): string {
 type ToolCallItem = Extract<ConversationItem, { kind: "tool-call" }>;
 
 /**
- * The same live-Pi-session projection `usePiChat` owns, factored out as a
- * plain (non-hook) controller so `usePiChatSessions` can run any number of
- * them side by side. React's rules of hooks forbid calling a hook once per
- * dynamic key, so a single-session hook can't itself be the building block
- * for a multi-session one -- this is deliberately a small, self-contained
- * duplicate of usePiChat's event-projection logic rather than a shared
- * import; consolidating the two into one shared reducer is a reasonable
- * follow-up once a second caller actually needs it, not before.
+ * Owns one live agent-session projection, driven by zodiacd's own bounded
+ * ZodiacAgentEvent vocabulary (zodiacd stage 4 -- previously the raw
+ * PiRpcEvent wire shape of a locally-spawned `pi --mode rpc` subprocess).
+ * Factored out as a plain (non-hook) controller so usePiChatSessions can
+ * run any number of them side by side -- React's rules of hooks forbid
+ * calling a hook once per dynamic key.
  */
 export function createPiChatController(client: PiClient, options: PiChatControllerOptions = {}): PiChatController {
 	let items: ConversationItem[] = [];
@@ -64,58 +62,55 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 		items = [...items, { kind: "message", role: "assistant", text, timestamp: nextTimestamp }];
 	}
 
-	function handleEvent(event: PiRpcEvent): void {
+	function handleEvent(event: ZodiacAgentEvent): void {
 		switch (event.type) {
-			case "agent_start":
+			case "agent-start":
 				busy = true;
 				notify();
 				return;
-			case "agent_settled":
+			case "agent-settled":
 				busy = false;
 				assistantTimestamp = undefined;
 				notify();
 				return;
-			case "agent_end":
+			case "assistant-message-start":
+				// A fresh assistant message begins -- ensure the next delta/end
+				// starts its own ConversationItem rather than reusing a stale
+				// timestamp left over from an earlier message this same turn.
+				assistantTimestamp = undefined;
 				return;
-			case "response":
-				if (!event.success) {
-					error = event.error ?? "Pi rejected the last message.";
-					notify();
-				}
+			// Both carry event.text as the full text so far -- assistant-message-delta's
+			// is already the full accumulated text (see InProcessAgentIntegration's own
+			// doc comment on why it builds this itself rather than trusting an SDK-owned
+			// snapshot), and assistant-message-end's is the final text -- replace, not
+			// append, either way.
+			case "assistant-message-delta":
+			case "assistant-message-end":
+				appendOrReplaceAssistantText(event.text);
+				notify();
 				return;
-			case "message_start":
-			case "message_end":
-				if (event.message.role === "user") return;
-				if (event.type === "message_end") {
-					appendOrReplaceAssistantText(extractMessageText(event.message));
-					notify();
-				}
-				return;
-			case "message_update":
-				if (event.delta) {
-					appendOrReplaceAssistantText(event.delta.text);
-					notify();
-				}
-				return;
-			case "tool_execution_start": {
-				const item: ToolCallItem = { kind: "tool-call", toolCallId: event.toolCallId, toolName: event.toolName, request: event.args, response: undefined, timestamp: Date.now() };
+			case "tool-call-start": {
+				const item: ToolCallItem = { kind: "tool-call", toolCallId: event.toolCallId, toolName: event.toolName, request: event.input, response: undefined, timestamp: Date.now() };
 				toolCallIndex.set(event.toolCallId, items.length);
 				items = [...items, item];
 				notify();
 				return;
 			}
-			case "tool_execution_end": {
+			case "tool-call-end": {
 				const index = toolCallIndex.get(event.toolCallId);
 				if (index === undefined) return;
 				const existing = items[index];
 				if (existing?.kind !== "tool-call") return;
 				const next = [...items];
-				next[index] = { ...existing, response: event.result };
+				next[index] = { ...existing, response: event.output };
 				items = next;
 				notify();
 				return;
 			}
-			case "unknown-event":
+			case "error":
+				error = event.message;
+				busy = false;
+				notify();
 				return;
 		}
 	}

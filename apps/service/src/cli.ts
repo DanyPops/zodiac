@@ -52,7 +52,7 @@ async function main(): Promise<void> {
 		process.stderr.write("[zodiacd] WARNING: binding to 0.0.0.0 exposes the daemon to the network. No auth is implemented yet.\n");
 	}
 
-	const service = await createZodiacService({ world, sessionsRoot, port: args.port, host: args.host, createAgentIntegration: createDaemonAgentIntegration });
+	const service = await createZodiacService({ world, sessionsRoot, port: args.port, host: args.host, fixtureMode: args.fixtureMode, createAgentIntegration: createDaemonAgentIntegration });
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot})`);
 
 	const shutdown = (signal: string) => {

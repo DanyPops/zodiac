@@ -24,23 +24,30 @@ class FakeEventSource {
 }
 
 describe("createHttpPiClient", () => {
-	it("createSession posts and returns the sessionId from a successful response", async () => {
+	it("createSession posts to zodiacd's /api/agent/sessions and returns the sessionId from a successful response", async () => {
 		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { sessionId: "abc" }));
 		const client = createHttpPiClient({ fetcher });
 		await expect(client.createSession()).resolves.toBe("abc");
-		expect(fetcher).toHaveBeenCalledWith("/api/pi/sessions", { method: "POST", signal: undefined });
+		expect(fetcher).toHaveBeenCalledWith("/api/agent/sessions", { method: "POST", signal: undefined });
 	});
 
 	it("createSession posts a JSON body with cwd when given options, unlike the plain no-options call", async () => {
 		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { sessionId: "abc" }));
 		const client = createHttpPiClient({ fetcher });
 		await expect(client.createSession({ cwd: "/repos/lector" })).resolves.toBe("abc");
-		expect(fetcher).toHaveBeenCalledWith("/api/pi/sessions", {
+		expect(fetcher).toHaveBeenCalledWith("/api/agent/sessions", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ cwd: "/repos/lector" }),
 			signal: undefined,
 		});
+	});
+
+	it("prefixes every request with the configured baseUrl, for a zodiacd instance not on the same origin", async () => {
+		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { sessionId: "abc" }));
+		const client = createHttpPiClient({ fetcher, baseUrl: "http://127.0.0.1:4390" });
+		await client.createSession();
+		expect(fetcher).toHaveBeenCalledWith("http://127.0.0.1:4390/api/agent/sessions", { method: "POST", signal: undefined });
 	});
 
 	it("createSession rejects on a non-ok response", async () => {
@@ -55,14 +62,14 @@ describe("createHttpPiClient", () => {
 		await expect(client.createSession()).rejects.toThrow("pi-create-session:invalid-response");
 	});
 
-	it("sendPrompt posts the message as JSON to the session's prompt endpoint", async () => {
+	it("sendPrompt posts the text as JSON to the session's own prompt endpoint", async () => {
 		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { accepted: true }));
 		const client = createHttpPiClient({ fetcher });
 		await client.sendPrompt("s1", "hello");
-		expect(fetcher).toHaveBeenCalledWith("/api/pi/prompt?sessionId=s1", {
+		expect(fetcher).toHaveBeenCalledWith("/api/agent/sessions/s1/prompt", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ message: "hello" }),
+			body: JSON.stringify({ text: "hello" }),
 			signal: undefined,
 		});
 	});
@@ -73,25 +80,38 @@ describe("createHttpPiClient", () => {
 		await expect(client.sendPrompt("s1", "hi")).rejects.toThrow("pi-send-prompt:404");
 	});
 
-	it("abort posts to the session's abort endpoint", async () => {
+	it("abort posts to the session's own abort endpoint", async () => {
 		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { accepted: true }));
 		const client = createHttpPiClient({ fetcher });
 		await client.abort("s1");
-		expect(fetcher).toHaveBeenCalledWith("/api/pi/abort?sessionId=s1", { method: "POST", signal: undefined });
+		expect(fetcher).toHaveBeenCalledWith("/api/agent/sessions/s1/abort", { method: "POST", signal: undefined });
 	});
 
-	it("streamEvents parses each SSE message into a PiRpcEvent and forwards it", () => {
+	it("streamEvents connects to the session's own events endpoint, parses each SSE frame into a ZodiacAgentEvent, and forwards it", () => {
 		FakeEventSource.instances = [];
 		const client = createHttpPiClient({ EventSourceCtor: FakeEventSource as unknown as typeof EventSource });
 		const received: unknown[] = [];
 		client.streamEvents("s1", (event) => received.push(event));
 
 		const source = FakeEventSource.instances[0]!;
-		expect(source.url).toBe("/api/pi/events?sessionId=s1");
-		source.onmessage?.({ data: '{"type":"agent_start"}' });
+		expect(source.url).toBe("/api/agent/sessions/s1/events");
+		source.onmessage?.({ data: '{"type":"agent-start"}' });
 		source.onmessage?.({ data: "not json" });
 
-		expect(received).toEqual([{ type: "agent_start" }]);
+		expect(received).toEqual([{ type: "agent-start" }]);
+	});
+
+	it("streamEvents filters out zodiacd's own session-exited frame -- not part of ZodiacAgentEvent's bounded vocabulary", () => {
+		FakeEventSource.instances = [];
+		const client = createHttpPiClient({ EventSourceCtor: FakeEventSource as unknown as typeof EventSource });
+		const received: unknown[] = [];
+		client.streamEvents("s1", (event) => received.push(event));
+
+		const source = FakeEventSource.instances[0]!;
+		source.onmessage?.({ data: '{"type":"session-exited","reason":"process exited"}' });
+		source.onmessage?.({ data: '{"type":"agent-settled"}' });
+
+		expect(received).toEqual([{ type: "agent-settled" }]);
 	});
 
 	it("streamEvents forwards connection errors to onError", () => {

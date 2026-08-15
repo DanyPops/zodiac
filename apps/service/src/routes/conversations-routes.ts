@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readSessionEvents, scanConversations, type Conversation } from "@zodiac/server/conversations";
+import { readSessionEvents, scanConversations, type Conversation, type NormalizedEvent, type ReadSessionEventsOptions } from "@zodiac/server/conversations";
 
 const MAX_EVENTS_PER_CONVERSATION = 5_000;
 
@@ -34,6 +34,10 @@ function writeJson(res: ServerResponse, status: number, body: unknown): void {
 export interface ConversationsRoutesOptions {
 	/** Root of Alef's local session store, e.g. ~/.local/share/alef/sessions. */
 	sessionsRoot: string;
+	/** Overridable for tests/fixture-mode (see apps/service/src/fixtures) -- defaults to a real scanConversations(sessionsRoot) call. */
+	scan?: (sessionsRoot: string) => Promise<Conversation[]>;
+	/** Overridable for tests/fixture-mode -- defaults to the real readSessionEvents. */
+	readEvents?: (options: ReadSessionEventsOptions) => Promise<NormalizedEvent[]>;
 }
 
 /**
@@ -44,11 +48,11 @@ export interface ConversationsRoutesOptions {
  * client can reach.
  */
 export function createConversationsRoutes(options: ConversationsRoutesOptions) {
-	const { sessionsRoot } = options;
+	const { sessionsRoot, scan = scanConversations, readEvents = readSessionEvents } = options;
 	let resolvedConversations = new Map<string, ResolvedConversation>();
 
 	async function refreshConversations(): Promise<ResolvedConversation[]> {
-		const scanned: Conversation[] = await scanConversations(sessionsRoot);
+		const scanned: Conversation[] = await scan(sessionsRoot);
 		const conversations: ResolvedConversation[] = scanned.map((conversation) => ({
 			id: conversation.id,
 			name: conversation.name,
@@ -87,7 +91,7 @@ export function createConversationsRoutes(options: ConversationsRoutesOptions) {
 					writeJson(res, 404, { code: "conversation-not-found", message: "Conversation not found." });
 					return;
 				}
-				const events = await readSessionEvents({
+				const events = await readEvents({
 					filePath: conversation.filePath,
 					sessionId: conversation.latestSessionId,
 					maxEvents: MAX_EVENTS_PER_CONVERSATION,

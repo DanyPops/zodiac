@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@zodiac/server": "*",
-    "@danypops/pi-rpc-protocol": "^0.0.1",
+    "@zodiac/agent": "*",
     "@icons-pack/react-simple-icons": "^13.11.1",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-context-menu": "^2.3.7",

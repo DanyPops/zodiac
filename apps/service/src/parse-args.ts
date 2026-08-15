@@ -3,6 +3,8 @@ export interface ZodiacdArgs {
 	host: string;
 	sessionsRoot: string | undefined;
 	stateDir: string | undefined;
+	/** Serve deterministic, filesystem-free fixture conversations instead of scanning sessionsRoot -- for Playwright's system suite, never a real deployment. */
+	fixtureMode: boolean;
 }
 
 export const DEFAULT_PORT = 4390;
@@ -20,6 +22,7 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 	let host = env.ZODIAC_SERVICE_HOST ?? DEFAULT_HOST;
 	let sessionsRoot: string | undefined;
 	let stateDir: string | undefined;
+	let fixtureMode = env.ZODIAC_FIXTURE_MODE === "1";
 
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
@@ -27,9 +30,10 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 		else if (arg === "--host") host = argv[++i] ?? host;
 		else if (arg === "--sessions-root") sessionsRoot = argv[++i];
 		else if (arg === "--state-dir") stateDir = argv[++i];
+		else if (arg === "--fixture-mode") fixtureMode = true;
 	}
 
 	if (!Number.isInteger(port) || port < 0) throw new Error(`zodiacd: invalid --port "${port}"`);
 
-	return { port, host, sessionsRoot, stateDir };
+	return { port, host, sessionsRoot, stateDir, fixtureMode };
 }

@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_HOST, DEFAULT_PORT, parseZodiacdArgs } from "./parse-args.js";
 
 describe("parseZodiacdArgs", () => {
-	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env", () => {
+	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env, fixtureMode false", () => {
 		const args = parseZodiacdArgs([], {});
-		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined });
+		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false });
+	});
+
+	it("ZODIAC_FIXTURE_MODE=1 or --fixture-mode enables fixtureMode", () => {
+		expect(parseZodiacdArgs([], { ZODIAC_FIXTURE_MODE: "1" }).fixtureMode).toBe(true);
+		expect(parseZodiacdArgs(["--fixture-mode"]).fixtureMode).toBe(true);
+		expect(parseZodiacdArgs([]).fixtureMode).toBe(false);
 	});
 
 	it("env vars override the hardcoded defaults", () => {

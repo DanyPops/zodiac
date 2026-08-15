@@ -20,15 +20,23 @@ export interface ConversationClient {
 	loadEvents: (conversationId: string, signal?: AbortSignal) => Promise<NormalizedEvent[]>;
 }
 
-export function createHttpConversationClient(fetcher: typeof fetch = fetch): ConversationClient {
+export interface CreateHttpConversationClientOptions {
+	readonly fetcher?: typeof fetch;
+	/** Base URL of the running zodiacd instance, e.g. http://127.0.0.1:4390. Defaults to same-origin (empty string) -- App.tsx's composition root supplies the real configured value via resolveZodiacdBaseUrl(). */
+	readonly baseUrl?: string;
+}
+
+export function createHttpConversationClient(options: CreateHttpConversationClientOptions = {}): ConversationClient {
+	const fetcher = options.fetcher ?? fetch;
+	const baseUrl = options.baseUrl ?? "";
 	return {
 		async list(signal) {
-			const response = await fetcher("/api/conversations", { signal });
+			const response = await fetcher(`${baseUrl}/api/conversations`, { signal });
 			if (!response.ok) throw new Error(`conversation-list:${response.status}`);
 			return parseConversationList(await response.json());
 		},
 		async loadEvents(conversationId, signal) {
-			const response = await fetcher(`/api/events?conversationId=${encodeURIComponent(conversationId)}`, { signal });
+			const response = await fetcher(`${baseUrl}/api/conversations/events?conversationId=${encodeURIComponent(conversationId)}`, { signal });
 			if (!response.ok) throw new Error(`conversation-events:${response.status}`);
 			return parseEvents(await response.json());
 		},

@@ -1,4 +1,4 @@
-import { extractMessageText, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import type { PiClient } from "../pi/client.js";
 
 /**
@@ -113,7 +113,9 @@ export function createPiWorkspaceTitleComplete(client: PiClient): WorkspaceTitle
  * so its own cleanup/settle helpers and the streamEvents/sendPrompt
  * callbacks don't sit 5 functions deep in one closure (sonarjs's own
  * no-nested-functions cap is 4); the extraction is purely mechanical, no
- * behavior changed.
+ * behavior changed. Driven by zodiacd's own bounded ZodiacAgentEvent
+ * vocabulary (zodiacd stage 4), not the raw PiRpcEvent wire shape a
+ * locally-spawned subprocess used to produce.
  */
 function runNamingSession(client: PiClient, sessionId: string, prompt: string): Promise<string> {
 	return new Promise<string>((resolve, reject) => {
@@ -148,11 +150,11 @@ function runNamingSession(client: PiClient, sessionId: string, prompt: string): 
 
 		unsubscribe = client.streamEvents(
 			sessionId,
-			(event: PiRpcEvent) => {
-				if (event.type === "message_end" && event.message.role !== "user") {
-					settle(() => resolve(extractMessageText(event.message)));
-				} else if (event.type === "response" && !event.success) {
-					settle(() => reject(new Error(event.error ?? "Pi rejected the naming prompt.")));
+			(event: ZodiacAgentEvent) => {
+				if (event.type === "assistant-message-end") {
+					settle(() => resolve(event.text));
+				} else if (event.type === "error") {
+					settle(() => reject(new Error(event.message)));
 				}
 			},
 			(error) => settle(() => reject(error instanceof Error ? error : new Error(String(error)))),

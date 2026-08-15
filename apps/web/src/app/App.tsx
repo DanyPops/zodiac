@@ -8,6 +8,7 @@ import { useKeybindingOverrides } from "../commands/useKeybindingOverrides.js";
 import { createHttpConversationClient } from "../conversation/client.js";
 import { useConversationWorkspace } from "../conversation/useConversationWorkspace.js";
 import { createHttpPiClient } from "../pi/client.js";
+import { resolveZodiacdBaseUrl } from "../platform/zodiacd-config.js";
 import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
@@ -40,8 +41,9 @@ import { DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
 
-const conversationClient = createHttpConversationClient();
-const piClient = createHttpPiClient();
+const zodiacdBaseUrl = resolveZodiacdBaseUrl();
+const conversationClient = createHttpConversationClient({ baseUrl: zodiacdBaseUrl });
+const piClient = createHttpPiClient({ baseUrl: zodiacdBaseUrl });
 
 // The docking engine (dockview-react + its CSS theme) is a real ~80kB gzip
 // dependency -- split into its own chunk so the core shell (Workspace

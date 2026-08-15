@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
 import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
+import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/fixture-conversations.js";
 import { createAgentRoutes } from "./routes/agent-routes.js";
 import { createWorldRoutes } from "./routes/world-routes.js";
 import { createConversationsRoutes } from "./routes/conversations-routes.js";
@@ -13,6 +14,8 @@ export interface CreateZodiacServiceOptions {
 	/** 0 binds an ephemeral port -- what every test here uses. */
 	port: number;
 	host: string;
+	/** Serve deterministic fixture conversations instead of scanning sessionsRoot -- see apps/service/src/fixtures. */
+	fixtureMode?: boolean;
 	/** Constructs a fresh AgentIntegrationPort per new agent session, given an optional client-requested cwd -- a real createZodiacAgentSession(...).integration in production, a fake port in tests. */
 	createAgentIntegration: (cwd?: string) => AgentIntegrationPort | Promise<AgentIntegrationPort>;
 }
@@ -31,11 +34,28 @@ export interface ZodiacService {
  */
 export function createZodiacService(options: CreateZodiacServiceOptions): Promise<ZodiacService> {
 	const worldRoutes = createWorldRoutes(options.world);
-	const conversationsRoutes = createConversationsRoutes({ sessionsRoot: options.sessionsRoot });
+	const conversationsRoutes = createConversationsRoutes(
+		options.fixtureMode ? { sessionsRoot: options.sessionsRoot, scan: fixtureScanConversations, readEvents: fixtureReadSessionEvents } : { sessionsRoot: options.sessionsRoot },
+	);
 	const agentSessionRegistry = createAgentSessionRegistry(options.createAgentIntegration);
 	const agentRoutes = createAgentRoutes(agentSessionRegistry);
 
 	const server = createServer((req, res) => {
+		// A browser-served static build (dist/) is necessarily a different origin
+		// than the daemon -- reflecting the request's own Origin (rather than a
+		// blanket "*") keeps this working with credentials/cookies later without
+		// another change here, and answering every OPTIONS preflight up front
+		// means no individual route below has to know CORS exists at all.
+		const origin = req.headers.origin;
+		if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+		res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+		if (req.method === "OPTIONS") {
+			res.statusCode = 204;
+			res.end();
+			return;
+		}
+
 		const url = new URL(req.url ?? "", "http://zodiac.local");
 		const { pathname } = url;
 

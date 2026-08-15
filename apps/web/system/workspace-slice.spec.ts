@@ -1,5 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { ZODIACD_PORT } from "../playwright.config.js";
+
+const ZODIACD_BASE_URL = `http://127.0.0.1:${ZODIACD_PORT}`;
 
 test.beforeEach(async ({ page }) => {
 	await page.goto("/");
@@ -686,13 +689,15 @@ test("the shell remains usable at a narrow viewport after keyboard-collapsing se
 });
 
 test("browser APIs expose opaque conversation identity, not filesystem paths", async ({ request }) => {
-	const conversationsResponse = await request.get("/api/conversations");
+	// zodiacd stage 4: these routes live on the daemon's own origin now, not
+	// the web app's -- see the "zodiacd API surface" Papyrus Doc.
+	const conversationsResponse = await request.get(`${ZODIACD_BASE_URL}/api/conversations`);
 	expect(conversationsResponse.ok()).toBe(true);
 	const conversationsBody = await conversationsResponse.text();
 	expect(conversationsBody).not.toContain("filePath");
 	expect(conversationsBody).not.toContain("session-sample.jsonl");
 
-	const missingIdResponse = await request.get("/api/events");
+	const missingIdResponse = await request.get(`${ZODIACD_BASE_URL}/api/conversations/events`);
 	expect(missingIdResponse.status()).toBe(400);
 	expect(await missingIdResponse.json()).toMatchObject({ code: "conversation-id-required" });
 
@@ -700,7 +705,7 @@ test("browser APIs expose opaque conversation identity, not filesystem paths", a
 	// filesystem path -- a traversal-shaped id must resolve like any other
 	// unknown id (404), not read an arbitrary file.
 	for (const traversalId of ["../../../../etc/passwd", "/etc/passwd", "..%2f..%2fetc%2fpasswd"]) {
-		const traversalResponse = await request.get(`/api/events?conversationId=${encodeURIComponent(traversalId)}`);
+		const traversalResponse = await request.get(`${ZODIACD_BASE_URL}/api/conversations/events?conversationId=${encodeURIComponent(traversalId)}`);
 		expect(traversalResponse.status()).toBe(404);
 		expect(await traversalResponse.json()).toMatchObject({ code: "conversation-not-found" });
 	}

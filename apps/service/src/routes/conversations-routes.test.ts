@@ -68,6 +68,25 @@ describe("createConversationsRoutes", () => {
 		expect(response.status).toBe(404);
 	});
 
+	it("an injected scan/readEvents override (fixture mode) is used instead of the real filesystem scan", async () => {
+		const scan = async () => [
+			{ id: "fixture", name: "Fixture conversation", sessionIds: ["fixture-session"], latestSessionId: "fixture-session", latestFilePath: "/fixture.jsonl", lastActiveAt: "2026-01-01T00:00:00Z", totalTurns: 0, totalErrors: 0 },
+		];
+		const readEvents = async () => [];
+		const routes = createConversationsRoutes({ sessionsRoot: dir, scan, readEvents });
+		const base = await listen((req, res) => {
+			const url = new URL(req.url ?? "", "http://zodiac.local");
+			if (url.pathname === "/api/conversations") void routes.getConversations(req, res);
+			else void routes.getConversationEvents(req, res);
+		});
+
+		const list = await fetch(`${base}/api/conversations`).then((r) => r.json());
+		expect(list).toMatchObject({ conversations: [{ id: "fixture", name: "Fixture conversation" }] });
+
+		const events = await fetch(`${base}/api/conversations/events?conversationId=fixture`).then((r) => r.json());
+		expect(events).toMatchObject({ conversationId: "fixture", events: [] });
+	});
+
 	it("getConversationEvents returns the real events for a known conversation", async () => {
 		const projectDir = join(dir, "project-a");
 		mkdirSync(projectDir);

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PiClient } from "./client.js";
-import type { PiRpcEvent } from "@danypops/pi-rpc-protocol";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import { createPiChatController } from "./pi-chat-controller.js";
 
-/** A fully in-memory PiClient stand-in -- mirrors usePiChat.test.ts's own fakeClient, since this controller is that hook's plain-object sibling. */
-function fakeClient(): PiClient & { emit(event: PiRpcEvent): void } {
-	let listener: ((event: PiRpcEvent) => void) | undefined;
+/** A fully in-memory PiClient stand-in, driven by zodiacd's own bounded ZodiacAgentEvent vocabulary. */
+function fakeClient(): PiClient & { emit(event: ZodiacAgentEvent): void } {
+	let listener: ((event: ZodiacAgentEvent) => void) | undefined;
 	return {
 		createSession: vi.fn(async () => "session-1"),
 		sendPrompt: vi.fn(async () => {}),
@@ -55,55 +55,58 @@ describe("createPiChatController", () => {
 		expect(client.createSession).toHaveBeenCalledOnce();
 	});
 
-	it("tracks busy across agent_start/agent_settled", async () => {
+	it("tracks busy across agent-start/agent-settled", async () => {
 		const client = fakeClient();
 		const controller = createPiChatController(client);
 		controller.sendMessage("hi");
 		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
 
-		client.emit({ type: "agent_start" });
+		client.emit({ type: "agent-start" });
 		expect(controller.getSnapshot().busy).toBe(true);
 
-		client.emit({ type: "agent_settled" });
+		client.emit({ type: "agent-settled" });
 		expect(controller.getSnapshot().busy).toBe(false);
 	});
 
-	it("live-updates a single assistant item across message_update deltas, then finalizes it on message_end", async () => {
+	it("live-updates a single assistant item across assistant-message-delta events, then finalizes it on assistant-message-end", async () => {
 		const client = fakeClient();
 		const controller = createPiChatController(client);
 		controller.sendMessage("hi");
 		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
 
-		client.emit({ type: "message_update", delta: { text: "Hel" } });
+		client.emit({ type: "assistant-message-start" });
+		client.emit({ type: "assistant-message-delta", text: "Hel" });
 		expect(controller.getSnapshot().items).toHaveLength(2);
 		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "message", role: "assistant", text: "Hel" });
 
-		client.emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Hello!" }] } });
+		client.emit({ type: "assistant-message-end", text: "Hello!" });
 		expect(controller.getSnapshot().items).toHaveLength(2);
 		expect(controller.getSnapshot().items[1]).toMatchObject({ role: "assistant", text: "Hello!" });
 	});
 
-	it("pairs tool_execution_start/end into one tool-call item", async () => {
+	it("pairs tool-call-start/end into one tool-call item", async () => {
 		const client = fakeClient();
 		const controller = createPiChatController(client);
 		controller.sendMessage("hi");
 		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
 
-		client.emit({ type: "tool_execution_start", toolCallId: "call_1", toolName: "bash", args: { command: "ls" } });
+		client.emit({ type: "tool-call-start", toolCallId: "call_1", toolName: "bash", input: { command: "ls" } });
 		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "tool-call", toolCallId: "call_1", toolName: "bash", response: undefined });
 
-		client.emit({ type: "tool_execution_end", toolCallId: "call_1", toolName: "bash", result: { output: "ok" }, isError: false });
+		client.emit({ type: "tool-call-end", toolCallId: "call_1", toolName: "bash", output: { output: "ok" }, isError: false });
 		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "tool-call", response: { output: "ok" } });
 	});
 
-	it("surfaces a rejected response as an error", async () => {
+	it("surfaces an error event, clearing busy", async () => {
 		const client = fakeClient();
 		const controller = createPiChatController(client);
 		controller.sendMessage("hi");
 		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
 
-		client.emit({ type: "response", command: "prompt", success: false, error: "no model configured" });
+		client.emit({ type: "agent-start" });
+		client.emit({ type: "error", message: "no model configured" });
 		expect(controller.getSnapshot().error).toBe("no model configured");
+		expect(controller.getSnapshot().busy).toBe(false);
 	});
 
 	it("dispose() unsubscribes from the event stream and stops notifying listeners", async () => {
@@ -116,7 +119,7 @@ describe("createPiChatController", () => {
 
 		controller.dispose();
 		listener.mockClear();
-		client.emit({ type: "agent_start" });
+		client.emit({ type: "agent-start" });
 		expect(listener).not.toHaveBeenCalled();
 	});
 });

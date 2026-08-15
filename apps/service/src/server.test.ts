@@ -54,6 +54,23 @@ describe("createZodiacService", () => {
 		expect(agentSessions.status).toBe(200);
 	});
 
+	it("sends permissive CORS headers on every response and answers an OPTIONS preflight -- a browser-served static build is necessarily a different origin than the daemon", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration });
+
+		const preflight = await fetch(`${service.baseUrl}/api/world/commands`, {
+			method: "OPTIONS",
+			headers: { Origin: "http://127.0.0.1:5199", "Access-Control-Request-Method": "POST" },
+		});
+		expect(preflight.status).toBe(204);
+		expect(preflight.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:5199");
+		expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
+
+		const real = await fetch(`${service.baseUrl}/api/world`, { headers: { Origin: "http://127.0.0.1:5199" } });
+		expect(real.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:5199");
+	});
+
 	it("404s an unrecognized route instead of hanging or crashing", async () => {
 		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
 		const world = createWorldStore(worldId("zodiac"));

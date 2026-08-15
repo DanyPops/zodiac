@@ -2,13 +2,13 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { PiClient } from "./client.js";
-import type { PiRpcEvent } from "@danypops/pi-rpc-protocol";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import { usePiChatSessions } from "./usePiChatSessions.js";
 
-/** A PiClient stand-in that hands out a distinct fake session per createSession() call and remembers each one's own event listener separately -- the point being to prove sessions stay independent, unlike usePiChat's single-session fakeClient. */
-function fakeMultiSessionClient(): PiClient & { emit(sessionId: string, event: PiRpcEvent): void } {
+/** A PiClient stand-in that hands out a distinct fake session per createSession() call and remembers each one's own event listener separately -- the point being to prove sessions stay independent. */
+function fakeMultiSessionClient(): PiClient & { emit(sessionId: string, event: ZodiacAgentEvent): void } {
 	let nextId = 1;
-	const listeners = new Map<string, (event: PiRpcEvent) => void>();
+	const listeners = new Map<string, (event: ZodiacAgentEvent) => void>();
 	const cwdBySession = new Map<string, string | undefined>();
 	return {
 		createSession: vi.fn(async (options) => {
@@ -50,7 +50,7 @@ describe("usePiChatSessions", () => {
 		act(() => result.current.chatFor("workspace-b").sendMessage("hi"));
 		await waitFor(() => expect(client.streamEvents).toHaveBeenCalledTimes(2));
 
-		act(() => client.emit("session-1", { type: "agent_start" }));
+		act(() => client.emit("session-1", { type: "agent-start" }));
 
 		expect(result.current.chatFor("workspace-a").busy).toBe(true);
 		expect(result.current.chatFor("workspace-b").busy).toBe(false);
