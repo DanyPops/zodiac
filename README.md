@@ -8,14 +8,21 @@ Zodiac presents Alef conversations and pooled SDLC data as composable Workspaces
 zodiac/
 ├── apps/
 │   ├── web/              Web client (React) -- @zodiac/web
-│   └── terminal/         Terminal client -- @zodiac/terminal, its own installed CLI command
-│                         `zodiac-tui` (renamed from `alignment-tui` alongside the rest of
-│                         the Alignment -> Zodiac rename -- a real, published-binary-name
-│                         breaking change, not just internal repo layout)
+│   ├── terminal/         Terminal client -- @zodiac/terminal, its own installed CLI command
+│   │                     `zodiac-tui` (renamed from `alignment-tui` alongside the rest of
+│   │                     the Alignment -> Zodiac rename -- a real, published-binary-name
+│   │                     breaking change, not just internal repo layout)
+│   └── service/          The real `zodiacd` daemon -- @zodiac/service, its own installed CLI
+│                         command `zodiacd`. Owns one canonical World (persisted to
+│                         ~/.zodiac/service/world.json) and Alef's conversation-history scan,
+│                         exposed over HTTP+SSE. @zodiac/web is its first real client
+│                         (zodiacd stage 4); @zodiac/terminal remains fully self-contained
+│                         today (zodiacd stage 5, not yet built) -- see the "zodiacd API
+│                         surface" and "monolith/daemon/remote-attach prior art" Papyrus Docs.
 ├── packages/
-│   ├── server/           Framework-neutral domain core (Workspace/World) -- @zodiac/server,
-│   │                      destined to be owned by a real daemon (`zodiacd`); today each
-│   │                      client still instantiates its own in-memory copy directly.
+│   ├── server/           Framework-neutral domain core (Workspace/World, Alef conversation
+│   │                      scanning) -- @zodiac/server, the daemon-owned code @zodiac/service
+│   │                      hosts.
 │   ├── agent/            The driven AgentIntegrationPort/ZodiacAgentEvent port -- @zodiac/agent,
 │   │                      deliberately Pi-SDK-neutral (no @earendil-works/pi-coding-agent or
 │   │                      @danypops/pi-rpc-protocol dependency): a caller that only needs the
@@ -32,6 +39,7 @@ zodiac/
 npm install       # once, or after pulling a dependency change
 npm run dev       # bring up the web client (@zodiac/web) at http://127.0.0.1:5173
 npm run terminal  # build and launch the terminal client (@zodiac/terminal) against the cwd
+npm run zodiacd   # build and launch the zodiacd daemon (@zodiac/service) on 127.0.0.1:4390
 ```
 
 Every other everyday command is a plain root-level npm script -- run from the repo root, no
@@ -49,4 +57,7 @@ Every other everyday command is a plain root-level npm script -- run from the re
 | `npm run clean` | Removes every workspace's own build/test output and lint cache (dist/, test-results/, playwright-report/, .eslintcache) -- never node_modules. |
 | `npm run reinstall` | The "something's actually broken" nuke: removes node_modules and package-lock.json, then reinstalls clean. |
 
-The application reads Alef's local session store through a development-server adapter. Browser code receives opaque conversation identifiers and normalized events; it does not receive filesystem paths.
+@zodiac/web's own local dev server (`npm run dev`) still bridges directly to Alef's local
+session store for now -- zodiacd stage 4 (making @zodiac/web a real HTTP client of a running
+zodiacd instead) has not landed yet. Browser code receives opaque conversation identifiers and
+normalized events either way; it never receives filesystem paths.

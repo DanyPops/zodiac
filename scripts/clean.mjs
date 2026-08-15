@@ -22,7 +22,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const TARGET_DIR_NAMES = ["dist", "test-results", "playwright-report"];
 const TARGET_FILE_NAMES = [".eslintcache"];
-const WORKSPACE_ROOTS = ["apps/web", "apps/terminal", "packages/agent", "packages/pi", "packages/protocol", "packages/server", "prototypes/ui-compat-lab"];
+const WORKSPACE_ROOTS = ["apps/web", "apps/terminal", "apps/service", "packages/agent", "packages/pi", "packages/protocol", "packages/server", "prototypes/ui-compat-lab"];
 
 let removedCount = 0;
 

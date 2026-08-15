@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=@zodiac/web --",
     "terminal": "npm run build --workspace=@zodiac/terminal && node apps/terminal/dist/cli.js",
+    "zodiacd": "npm run build --workspace=@zodiac/service && node apps/service/dist/cli.js",
     "test": "npm test --workspaces --if-present",
     "test:system": "npm run test:system --workspace=@zodiac/web --",
     "typecheck": "npm run typecheck --workspaces --if-present",
