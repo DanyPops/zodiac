@@ -50,6 +50,8 @@ const piClient = createHttpPiClient({ baseUrl: zodiacdBaseUrl });
 // Selection, Window Carousel, Chat, command palette) becomes interactive
 // without waiting on it first.
 const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then((module) => ({ default: module.WindowDockview })));
+// Same reasoning as WindowDockview above -- see LiveDaemonPanel's own doc comment for the confirmed bundle-budget breach this avoids.
+const LiveDaemonPanel = lazy(() => import("../workspace/LiveDaemonPanel.js").then((module) => ({ default: module.LiveDaemonPanel })));
 
 export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
@@ -136,6 +138,8 @@ export function App(): React.JSX.Element {
 	const selectionRef = useRef<HTMLElement>(null);
 	const canvasRef = useRef<HTMLElement>(null);
 	const workspaceNavigation = useWorkspaceListNavigation(selectionRef);
+
+
 
 	useEffect(() => {
 		if (!templateDragging) {
@@ -381,6 +385,11 @@ export function App(): React.JSX.Element {
 						setCreatingWorkspace(false);
 					}}
 				/>
+
+				{/* Additive, non-disruptive proof that the daemon's own real WorldStore (not this file's own mock Workspace/Window/Surface model above) is now reachable and live from apps/web -- see the "story 6 Web half" task's own scope-correcting finding. Does not touch the WindowDockview render path at all; collapsed by default so it never competes with the real UI; lazy-loaded so it never costs first paint (see LiveDaemonPanel's own doc comment). */}
+				<Suspense fallback={null}>
+					<LiveDaemonPanel baseUrl={zodiacdBaseUrl} />
+				</Suspense>
 			</div>
 		</CommandProvider>
 	);

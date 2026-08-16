@@ -10,6 +10,7 @@
     "./agent": "./src/agent/index.ts",
     "./pi-agent-dir": "./src/pi-agent-dir.ts",
     "./world": "./src/world/index.ts",
+    "./world-client": "./src/world/client.ts",
     "./window": "./src/window/index.ts",
     "./conversations": "./src/conversations/index.ts",
     "./net": "./src/net/sse-client.ts"
