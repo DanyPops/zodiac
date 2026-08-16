@@ -6,6 +6,9 @@ export { createContributionRegistry } from "./contribution/registry.js";
 
 export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 
+export type { BusChannelName, BusMessage, BusMessageInput, BusHandler, Unsubscribe, BusListenerLimitExceeded, BusSubscribeResult, EventBus, EventBusOptions } from "./event/bus.js";
+export { BUS_CHANNELS, WILDCARD_TYPE, createEventBus } from "./event/bus.js";
+
 // pi-agent-dir.ts is deliberately NOT re-exported here: it imports node:fs/
 // node:os at module scope, and this barrel is also the one apps/web's
 // browser bundle imports from (createContributionRegistry, createCommandDispatcher,
