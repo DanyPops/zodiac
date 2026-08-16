@@ -33,7 +33,7 @@ const NOT_SUPPORTED = "is not available over a remote WorldStore -- zodiacd's ow
  * Every caller of `apply()`/`worldViewModel()` in this codebase today
  * (apps/terminal's own `applyBootstrapToWorld` and `SemanticShellApplication`)
  * never touches `createWorkspace`/`getWorkspace`/`dockSurface`/
- * `undockSurface`/`snapshot` -- those exist on `WorldStore` only for the
+ * `undockSurface`/`dockSurfaceInto`/`windowTile`/`snapshot` -- those exist on `WorldStore` only for the
  * daemon's own in-process use (apps/service's own snapshot-to-disk hook)
  * and were never meant to cross a wire boundary (their return values are raw
  * domain objects, not the WorldViewModel projection zodiacd's API actually
@@ -137,6 +137,12 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 		},
 		undockSurface(_workspaceId: WorkspaceId, _surfaceId: Parameters<WorldStore["undockSurface"]>[1]): void {
 			notSupported("undockSurface");
+		},
+		dockSurfaceInto(_workspaceId: WorkspaceId, _integrationId: Parameters<WorldStore["dockSurfaceInto"]>[1], _title: string, _windowId: Parameters<WorldStore["dockSurfaceInto"]>[3]): ReturnType<WorldStore["dockSurfaceInto"]> {
+			notSupported("dockSurfaceInto");
+		},
+		windowTile(_workspaceId: WorkspaceId, _windowId: Parameters<WorldStore["windowTile"]>[1]): ReturnType<WorldStore["windowTile"]> {
+			notSupported("windowTile");
 		},
 		dispose(): void {
 			streamController.abort();

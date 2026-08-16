@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { integrationId, workspaceId, worldId } from "@zodiac/protocol";
+import { integrationId, windowId, workspaceId, worldId } from "@zodiac/protocol";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 
@@ -134,6 +134,102 @@ describe("WorldStore walking skeleton", () => {
 			store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
 			expect(a).toEqual(["a"]);
 			expect(b).toEqual(["b", "b"]);
+		});
+	});
+
+	describe("windowTile -- the tile tree dock/undock maintain alongside the flat surfaces array", () => {
+		it("starts null for a freshly created Window", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			expect(store.windowTile(workspaceId("ws"), workspace.windows[0]!.id)).toBeNull();
+		});
+
+		it("reflects a single dock as a leaf, and two docks as an evenly-weighted row", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			const windowIdValue = workspace.windows[0]!.id;
+
+			const s1 = store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity");
+			expect(store.windowTile(workspaceId("ws"), windowIdValue)).toEqual({ kind: "leaf", surfaceId: s1.id });
+
+			const s2 = store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity 2");
+			expect(store.windowTile(workspaceId("ws"), windowIdValue)).toEqual({
+				kind: "row",
+				children: [
+					{ tile: { kind: "leaf", surfaceId: s1.id }, constraint: { kind: "fill", weight: 1 } },
+					{ tile: { kind: "leaf", surfaceId: s2.id }, constraint: { kind: "fill", weight: 1 } },
+				],
+			});
+		});
+
+		it("collapses back to a leaf (and then to null) as undockSurface removes each Surface", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			const windowIdValue = workspace.windows[0]!.id;
+			const s1 = store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity");
+			const s2 = store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity 2");
+
+			store.undockSurface(workspaceId("ws"), s1.id);
+			expect(store.windowTile(workspaceId("ws"), windowIdValue)).toEqual({ kind: "leaf", surfaceId: s2.id });
+
+			store.undockSurface(workspaceId("ws"), s2.id);
+			expect(store.windowTile(workspaceId("ws"), windowIdValue)).toBeNull();
+		});
+
+		it("returns undefined for an unknown Workspace or an unknown Window", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			expect(store.windowTile(workspaceId("ghost"), workspace.windows[0]!.id)).toBeUndefined();
+			expect(store.windowTile(workspaceId("ws"), windowId("ghost-window"))).toBeUndefined();
+		});
+	});
+
+	describe("dockSurfaceInto -- targets a specific Window by id, per CommandIntent's own optional windowId", () => {
+		it("docks into the named Window and returns a typed success outcome", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			const windowIdValue = workspace.windows[0]!.id;
+
+			const result = store.dockSurfaceInto(workspaceId("ws"), integrationId("activity"), "Activity", windowIdValue);
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toEqual([result.value]);
+		});
+
+		it("returns a typed failure for an unknown Workspace", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+
+			const result = store.dockSurfaceInto(workspaceId("ghost"), integrationId("activity"), "Activity", workspace.windows[0]!.id);
+
+			expect(result).toEqual({ ok: false, reason: "workspace-not-found", workspaceId: workspaceId("ghost") });
+		});
+
+		it("returns a typed failure for a Window id that doesn't exist in that Workspace", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const result = store.dockSurfaceInto(workspaceId("ws"), integrationId("activity"), "Activity", windowId("ghost-window"));
+
+			expect(result).toEqual({ ok: false, reason: "window-not-found", workspaceId: workspaceId("ws"), windowId: windowId("ghost-window") });
+		});
+
+		it("apply() routes a surface.dock intent's own windowId through dockSurfaceInto", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			const windowIdValue = workspace.windows[0]!.id;
+
+			store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: windowIdValue });
+
+			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(1);
+		});
+
+		it("apply() throws a clear error when a surface.dock intent names a Window that doesn't exist -- preserving apply()'s own throw-on-failure contract", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			expect(() => store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: windowId("ghost-window") })).toThrow(/window-not-found/);
 		});
 	});
 

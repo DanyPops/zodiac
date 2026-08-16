@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { workspaceId, worldId } from "@zodiac/protocol";
+import { integrationId, windowId, workspaceId, worldId } from "@zodiac/protocol";
 import type { WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore } from "./remote-world-store.js";
 
@@ -114,11 +114,13 @@ describe("connectRemoteWorldStore", () => {
 		await expect(connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: fetcher as unknown as typeof fetch })).rejects.toThrow(/500/);
 	});
 
-	it("snapshot/getWorkspace/createWorkspace/dockSurface/undockSurface throw a clear not-supported error instead of silently returning nonsense", async () => {
+	it("snapshot/getWorkspace/createWorkspace/dockSurface/undockSurface/dockSurfaceInto/windowTile throw a clear not-supported error instead of silently returning nonsense", async () => {
 		const daemon = createFakeDaemon(EMPTY);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
 		expect(() => store.snapshot()).toThrow(/not available over a remote WorldStore/);
 		expect(() => store.getWorkspace(workspaceId("w1"))).toThrow(/not available over a remote WorldStore/);
+		expect(() => store.dockSurfaceInto(workspaceId("w1"), integrationId("activity"), "Activity", windowId("w"))).toThrow(/not available over a remote WorldStore/);
+		expect(() => store.windowTile(workspaceId("w1"), windowId("w"))).toThrow(/not available over a remote WorldStore/);
 		store.dispose();
 	});
 
