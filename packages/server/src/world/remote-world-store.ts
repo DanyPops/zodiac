@@ -1,56 +1,48 @@
-import type { CommandIntent, Surface, Workspace, WorkspaceId, WorkspaceViewModel, WorldId, WorldViewModel } from "@zodiac/protocol";
-import { worldId as makeWorldId } from "@zodiac/protocol";
+import type { CommandIntent, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
 import { readSseFrames } from "../net/sse-client.js";
-import type { WorldStore } from "./store.js";
+import type { WorldClientPort } from "./world-client-port.js";
 
 export interface RemoteWorldStoreOptions {
 	/** Base URL of a running zodiacd instance, e.g. http://127.0.0.1:4390. */
 	readonly baseUrl: string;
-	/**
-	 * Cosmetic only -- zodiacd's own /api/world routes never expose a World's
-	 * id over the wire (WorldViewModel has no id field at all; only the
-	 * daemon's own startup log line reads WorldStore.id locally). Defaults to
-	 * the same "zodiac" id apps/terminal's own embedded createWorldStore call
-	 * already uses, so a caller never has to invent one just to satisfy the
-	 * type.
-	 */
-	readonly id?: WorldId;
 	readonly fetcher?: typeof fetch;
 	/** How long the initial connectivity probe (GET /api/world) waits before giving up -- the signal a caller uses to fall back to an embedded WorldStore instead. Defaults to 2s. */
 	readonly connectTimeoutMs?: number;
 }
 
-const NOT_SUPPORTED = "is not available over a remote WorldStore -- zodiacd's own /api/world routes expose only worldViewModel() (GET) and apply() (POST .../commands); dispatch the equivalent CommandIntent through apply() instead.";
-
 /**
- * A `WorldStore` backed by a real, already-running zodiacd instance instead
- * of an in-process World -- the client half of zodiacd stage 5 (per the
- * "Build zodiacd" Papyrus Task and the Alef prior-art Doc's own
+ * A `WorldClientPort` backed by a real, already-running zodiacd instance
+ * instead of an in-process World -- the client half of zodiacd stage 5 (per
+ * the "Build zodiacd" Papyrus Task and the Alef prior-art Doc's own
  * RemoteSession precedent: fetch current state once, then an SSE tail for
  * live updates, so a late-attaching client is never left guessing whether
  * it missed something).
  *
- * Every caller of `apply()`/`worldViewModel()` in this codebase today
- * (apps/terminal's own `applyBootstrapToWorld` and `SemanticShellApplication`)
- * never touches `createWorkspace`/`getWorkspace`/`dockSurface`/
- * `undockSurface`/`dockSurfaceInto`/`windowTile`/`snapshot` -- those exist on `WorldStore` only for the
- * daemon's own in-process use (apps/service's own snapshot-to-disk hook)
- * and were never meant to cross a wire boundary (their return values are raw
- * domain objects, not the WorldViewModel projection zodiacd's API actually
- * exposes). This adapter still implements the full interface, so it's a
- * drop-in `WorldStore` wherever one is expected, but those specific methods
- * throw a clear, actionable error instead of silently returning nonsense if
- * a future caller ever does reach them.
+ * Returns `WorldClientPort`, not the wider `WorldStore` -- every caller of
+ * `apply()`/`worldViewModel()` in this codebase today (apps/terminal's own
+ * `applyBootstrapToWorld` and `SemanticShellApplication`'s own even-narrower
+ * `WorldProjection`) never touches `createWorkspace`/`getWorkspace`/
+ * `dockSurface`/`undockSurface`/`dockSurfaceInto`/`windowTile`/`snapshot` --
+ * those exist on `WorldStore` only for the daemon's own in-process use
+ * (apps/service's own snapshot-to-disk hook) and were never meant to cross a
+ * wire boundary (their return values are raw domain objects, not the
+ * WorldViewModel projection zodiacd's API actually exposes). Forcing this
+ * adapter to implement them anyway (as literal `throw "not supported"`
+ * stubs) was a real Interface Segregation violation; `WorldStore` remains
+ * structurally a superset of `WorldClientPort`, so a real in-process
+ * `WorldStore` (e.g. `createWorldStore()`) is still substitutable anywhere
+ * a `WorldClientPort` is expected -- only the reverse direction (treating
+ * this remote adapter as a full `WorldStore`) is no longer offered, because
+ * it was never actually true.
  *
  * Rejects if the initial GET /api/world never completes within
  * `connectTimeoutMs` -- the one signal a caller needs to decide "no daemon
  * reachable, fall back to an embedded WorldStore" without hanging
  * indefinitely on a stale/wrong URL.
  */
-export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions): Promise<WorldStore & { dispose: () => void }> {
+export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions): Promise<WorldClientPort & { dispose: () => void }> {
 	const { baseUrl } = options;
 	const fetcher = options.fetcher ?? fetch;
-	const id = options.id ?? makeWorldId("zodiac");
 
 	const initial = await fetcher(`${baseUrl}/api/world`, { signal: AbortSignal.timeout(options.connectTimeoutMs ?? 2_000) });
 	if (!initial.ok) throw new Error(`connectRemoteWorldStore: GET /api/world returned ${initial.status}`);
@@ -89,12 +81,7 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 	}
 	void streamForever();
 
-	function notSupported(method: string): never {
-		throw new Error(`connectRemoteWorldStore: ${method}() ${NOT_SUPPORTED}`);
-	}
-
 	return {
-		id,
 		worldViewModel(): WorldViewModel {
 			return latest;
 		},
@@ -122,27 +109,6 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 		onChange(listener: (viewModel: WorldViewModel) => void): () => void {
 			changeListeners.add(listener);
 			return () => changeListeners.delete(listener);
-		},
-		snapshot(): never {
-			notSupported("snapshot");
-		},
-		getWorkspace(_workspaceId: WorkspaceId): Workspace | undefined {
-			notSupported("getWorkspace");
-		},
-		createWorkspace(_workspaceId: WorkspaceId, _title: string): Workspace {
-			notSupported("createWorkspace");
-		},
-		dockSurface(_workspaceId: WorkspaceId, _integrationId: Parameters<WorldStore["dockSurface"]>[1], _title: string): Surface {
-			notSupported("dockSurface");
-		},
-		undockSurface(_workspaceId: WorkspaceId, _surfaceId: Parameters<WorldStore["undockSurface"]>[1]): void {
-			notSupported("undockSurface");
-		},
-		dockSurfaceInto(_workspaceId: WorkspaceId, _integrationId: Parameters<WorldStore["dockSurfaceInto"]>[1], _title: string, _windowId: Parameters<WorldStore["dockSurfaceInto"]>[3]): ReturnType<WorldStore["dockSurfaceInto"]> {
-			notSupported("dockSurfaceInto");
-		},
-		windowTile(_workspaceId: WorkspaceId, _windowId: Parameters<WorldStore["windowTile"]>[1]): ReturnType<WorldStore["windowTile"]> {
-			notSupported("windowTile");
 		},
 		dispose(): void {
 			streamController.abort();

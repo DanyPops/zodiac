@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { integrationId, windowId, workspaceId, worldId } from "@zodiac/protocol";
+import { workspaceId } from "@zodiac/protocol";
 import type { WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore } from "./remote-world-store.js";
 
@@ -93,13 +93,6 @@ describe("connectRemoteWorldStore", () => {
 		store.dispose();
 	});
 
-	it("defaults id to worldId(\"zodiac\") -- cosmetic, never round-tripped over the wire", async () => {
-		const daemon = createFakeDaemon(EMPTY);
-		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
-		expect(store.id).toBe(worldId("zodiac"));
-		store.dispose();
-	});
-
 	it("rejects if the initial GET /api/world never resolves within connectTimeoutMs", async () => {
 		const hangingFetcher = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
 			return new Promise<Response>((_resolve, reject) => {
@@ -114,15 +107,12 @@ describe("connectRemoteWorldStore", () => {
 		await expect(connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: fetcher as unknown as typeof fetch })).rejects.toThrow(/500/);
 	});
 
-	it("snapshot/getWorkspace/createWorkspace/dockSurface/undockSurface/dockSurfaceInto/windowTile throw a clear not-supported error instead of silently returning nonsense", async () => {
-		const daemon = createFakeDaemon(EMPTY);
-		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
-		expect(() => store.snapshot()).toThrow(/not available over a remote WorldStore/);
-		expect(() => store.getWorkspace(workspaceId("w1"))).toThrow(/not available over a remote WorldStore/);
-		expect(() => store.dockSurfaceInto(workspaceId("w1"), integrationId("activity"), "Activity", windowId("w"))).toThrow(/not available over a remote WorldStore/);
-		expect(() => store.windowTile(workspaceId("w1"), windowId("w"))).toThrow(/not available over a remote WorldStore/);
-		store.dispose();
-	});
+	// The daemon-only members of WorldStore (snapshot/getWorkspace/createWorkspace/
+	// dockSurface/undockSurface/dockSurfaceInto/windowTile) no longer exist on
+	// connectRemoteWorldStore's own return type (WorldClientPort) at all -- the
+	// invariant a runtime "not supported" throw used to protect is now enforced
+	// at compile time instead, a strictly stronger guarantee. See
+	// world-client-port.ts's own doc comment.
 
 	it("reconnects the SSE stream after it drops, and the reconnect's own first frame resyncs state (idempotent by construction)", async () => {
 		const daemon = createFakeDaemon(EMPTY);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { dirname } from "node:path";
-import { connectRemoteWorldStore, createWorldStore, type WorldStore } from "@zodiac/server/world";
+import { connectRemoteWorldStore, createWorldStore, type WorldClientPort } from "@zodiac/server/world";
 import { worldId } from "@zodiac/protocol";
 import { Key, matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
 import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
@@ -36,7 +36,7 @@ function fail(message: string): void {
  * `--daemon`/`ZODIAC_DAEMON_URL` degrades to "just works locally" instead of
  * refusing to start at all.
  */
-async function attachToDaemon(daemonUrl: string): Promise<(WorldStore & { dispose: () => void }) | undefined> {
+async function attachToDaemon(daemonUrl: string): Promise<(WorldClientPort & { dispose: () => void }) | undefined> {
   try {
     return await connectRemoteWorldStore({ baseUrl: daemonUrl });
   } catch (error) {
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
 
   const remoteWorld = daemonUrl ? await attachToDaemon(daemonUrl) : undefined;
   const attached = remoteWorld !== undefined;
-  const world: WorldStore = remoteWorld ?? createWorldStore(worldId("zodiac"));
+  const world: WorldClientPort = remoteWorld ?? createWorldStore(worldId("zodiac"));
   let host: LectorHost | undefined;
   // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
   // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch

@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import type { WorldStore } from "@zodiac/server/world";
+import type { WorldClientPort } from "@zodiac/server/world";
 import { integrationId, workspaceId } from "@zodiac/protocol";
 import type { BootstrappedWorkspace } from "./workspace-bootstrap.js";
 
@@ -13,7 +13,7 @@ import type { BootstrappedWorkspace } from "./workspace-bootstrap.js";
  * whatever eventually consumes that projection. Still unique per real root and stable across a
  * later CommandIntent replay, since Lector derives it deterministically from the resolved path.
  */
-export function applyBootstrapToWorld(world: WorldStore, bootstrapped: BootstrappedWorkspace): void {
+export function applyBootstrapToWorld(world: WorldClientPort, bootstrapped: BootstrappedWorkspace): void {
 	const id = workspaceId(bootstrapped.workspaceId);
 	world.apply({ type: "workspace.create", workspaceId: id, title: bootstrapped.rootTitle });
 	const surfaceTitle = bootstrapped.kind === "file" && bootstrapped.file ? basename(bootstrapped.file.path) : "Files";
