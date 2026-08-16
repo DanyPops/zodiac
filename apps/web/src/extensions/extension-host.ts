@@ -10,6 +10,9 @@ export interface ExtensionHost {
 	commands: () => readonly CommandDefinition[];
 }
 
+/** Bridges SurfaceTemplateDefinition's own `integrationId` field to the core registry's plain `id` key; never leaks out of surfaceTemplates(). */
+type RegisteredSurfaceTemplate = SurfaceTemplateDefinition & { id: string };
+
 /**
  * This app's own specialization of `@zodiac/server`'s framework-neutral
  * ContributionRegistry, bound to this app's real Surface Template/command/
@@ -24,7 +27,7 @@ export interface ExtensionHost {
  * change for any existing extension.
  */
 export function createExtensionHost(): ExtensionHost {
-	const registry = createContributionRegistry<SurfaceTemplateDefinition, CommandDefinition, WorkspaceLifecycleEvent>();
+	const registry = createContributionRegistry<RegisteredSurfaceTemplate, CommandDefinition, WorkspaceLifecycleEvent>();
 	return {
 		registerExtension(extension) {
 			registry.register({
@@ -33,9 +36,9 @@ export function createExtensionHost(): ExtensionHost {
 					const api: ZodiacExtensionAPI = {
 						registerSurfaceTemplate(definition) {
 							try {
-								coreApi.registerIntegration(definition);
+								coreApi.registerIntegration({ ...definition, id: definition.integrationId });
 							} catch (error) {
-								if (error instanceof Error && /^duplicate integration id:/i.test(error.message)) throw new Error(`Duplicate Surface Template id: ${definition.id}`, { cause: error });
+								if (error instanceof Error && /^duplicate integration id:/i.test(error.message)) throw new Error(`Duplicate Surface Template id: ${definition.integrationId}`, { cause: error });
 								throw error;
 							}
 						},

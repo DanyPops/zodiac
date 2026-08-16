@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Activity } from "lucide-react";
+import { integrationId } from "@zodiac/protocol";
 import { createExtensionHost } from "./extension-host.js";
 import type { ZodiacExtension } from "./types.js";
 
@@ -8,7 +9,7 @@ function extension(id: string, activate: ZodiacExtension["activate"]): ZodiacExt
 }
 
 function fakeTemplate(id: string) {
-	return { id, title: id, icon: Activity, dockCommandId: `dock.${id}`, dockCommandTitle: id, dockCommandDescription: "", render: () => null };
+	return { integrationId: integrationId(id), title: id, icon: Activity, dockCommandId: `dock.${id}`, dockCommandTitle: id, dockCommandDescription: "", render: () => null };
 }
 
 function fakeCommand(id: string) {
@@ -30,7 +31,7 @@ describe("createExtensionHost", () => {
 				api.registerCommand(fakeCommand("acme.doThing"));
 			}),
 		);
-		expect(host.surfaceTemplates().map((t) => t.id)).toEqual(["acme-surface"]);
+		expect(host.surfaceTemplates().map((t) => t.integrationId)).toEqual(["acme-surface"]);
 		expect(host.commands().map((c) => c.id)).toEqual(["acme.doThing"]);
 	});
 

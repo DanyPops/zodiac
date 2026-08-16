@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Also published as "@zodiac/protocol/ids" (see package.json) for a caller
+// that needs id-branding in a bundle too budget-constrained for the full
+// barrel's zod schema weight -- see apps/web's surface-templates.tsx.
+
 /**
  * A nominal wrapper around a primitive so two same-shaped-but-distinct
  * identifiers (a WorkspaceId and a WindowId are both plain strings) can

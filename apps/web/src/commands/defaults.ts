@@ -70,7 +70,7 @@ export function createZodiacCommandRegistry(actions: ZodiacCommandActions, userB
 		define("templates.open", "Browse Surface Templates", "Filter Surface Templates by keyboard and choose where to dock one.", actions.openTemplatesPicker),
 		define("templates.openGallery", "Browse the Surface Templates gallery", "Browse Surface Template categories by their brand logos and previews.", actions.openTemplatesGallery),
 		define("appearance.open", "Open Settings", "Shell actions and the Shape (Stroke Width, Corner Radius) appearance controls.", actions.openAppearance),
-		...SURFACE_TEMPLATE_REGISTRY.map((template) => define(template.dockCommandId, template.dockCommandTitle, template.dockCommandDescription, () => actions.dockDefaultTemplate(template.id))),
+		...SURFACE_TEMPLATE_REGISTRY.map((template) => define(template.dockCommandId, template.dockCommandTitle, template.dockCommandDescription, () => actions.dockDefaultTemplate(template.integrationId))),
 		...extensionCommands,
 	];
 	return createCommandRegistry({ commands, bindings: DEFAULT_BINDINGS, userBindings });

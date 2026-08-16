@@ -22,11 +22,11 @@ let savedIdCounter = 0;
 
 function builtinEntries(extensionTemplates: readonly SurfaceTemplateDefinition[]): SurfaceTemplateEntry[] {
 	return [...SURFACE_TEMPLATE_REGISTRY, ...extensionTemplates].map((template) => ({
-		id: template.id,
+		id: template.integrationId,
 		title: template.title,
 		icon: template.icon,
 		dockCommandId: template.dockCommandId,
-		templateId: template.id,
+		templateId: template.integrationId,
 		saved: false,
 	}));
 }

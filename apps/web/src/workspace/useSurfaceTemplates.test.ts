@@ -2,6 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Activity } from "lucide-react";
+import { integrationId } from "@zodiac/protocol";
 import { createPreferences } from "../platform/preferences.js";
 import { useSurfaceTemplates } from "./useSurfaceTemplates.js";
 
@@ -65,7 +66,7 @@ describe("useSurfaceTemplates", () => {
 
 	it("includes extension-registered Surface Templates alongside the built-in catalog", () => {
 		const preferences = createPreferences(memoryStorage());
-		const extensionTemplate = { id: "acme-tickets", title: "Acme Tickets", icon: Activity, dockCommandId: "dock.acmeTickets", dockCommandTitle: "Dock Acme Tickets", dockCommandDescription: "", render: () => null };
+		const extensionTemplate = { integrationId: integrationId("acme-tickets"), title: "Acme Tickets", icon: Activity, dockCommandId: "dock.acmeTickets", dockCommandTitle: "Dock Acme Tickets", dockCommandDescription: "", render: () => null };
 
 		const { result } = renderHook(() => useSurfaceTemplates(preferences, [extensionTemplate]));
 
