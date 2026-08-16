@@ -36,7 +36,8 @@ export interface WorldStore {
 	snapshot: () => World;
 	createWorkspace: (workspaceId: WorkspaceId, title: string) => Workspace;
 	getWorkspace: (workspaceId: WorkspaceId) => Workspace | undefined;
-	dockSurface: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string) => Surface;
+	/** `requestedSurfaceId` (optional) is a caller-supplied id -- see CommandIntent's own surface.dock.surfaceId. Throws if it collides with a Surface that already exists anywhere in this World, the same throw-on-failure contract as an unknown Workspace. */
+	dockSurface: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId) => Surface;
 	undockSurface: (workspaceId: WorkspaceId, surfaceId: SurfaceId) => void;
 	/**
 	 * Docks into a specific Window instead of dockSurface's always-the-
@@ -45,7 +46,8 @@ export interface WorldStore {
 	 * typed outcome instead of throwing: an unknown Workspace or Window id
 	 * is a real, expected caller mistake, not a programmer error.
 	 */
-	dockSurfaceInto: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, windowId: WindowId) => DockIntoOutcome;
+	/** `requestedSurfaceId` (optional): see dockSurface's own doc comment; a collision reports as a typed DockSurfaceIdCollision failure instead of throwing, consistent with this function's own typed-outcome contract. */
+	dockSurfaceInto: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, windowId: WindowId, requestedSurfaceId?: SurfaceId) => DockIntoOutcome;
 	/** The current tile tree for one Window (see window/tile.ts) -- undefined if the Workspace or Window doesn't exist, null if the Window has no docked Surfaces yet. Web and the TUI project this through window/geometry.ts's computeTileRects; neither recalculates tiling itself. */
 	windowTile: (workspaceId: WorkspaceId, windowId: WindowId) => SurfaceTile | null | undefined;
 	/**
@@ -88,7 +90,13 @@ export interface DockWindowNotFound {
 	readonly workspaceId: WorkspaceId;
 	readonly windowId: WindowId;
 }
-export type DockIntoFailure = DockWorkspaceNotFound | DockWindowNotFound | TileFailure;
+/** dockSurfaceInto/dockSurface failed because the caller-supplied surfaceId already names a Surface somewhere in this World -- another concurrent caller may have raced the same id. */
+export interface DockSurfaceIdCollision {
+	readonly ok: false;
+	readonly reason: "surface-id-collision";
+	readonly surfaceId: SurfaceId;
+}
+export type DockIntoFailure = DockWorkspaceNotFound | DockWindowNotFound | DockSurfaceIdCollision | TileFailure;
 export type DockIntoOutcome = { readonly ok: true; readonly value: Surface } | DockIntoFailure;
 
 /** apply()'s own return value -- see WorldStore.apply's doc comment. */
@@ -165,11 +173,21 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return workspace;
 	}
 
-	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string): Surface {
+	function surfaceIdInUse(candidate: SurfaceId): boolean {
+		for (const workspace of workspaces.values()) {
+			for (const window of workspace.windows) {
+				if (window.surfaces.some((surface) => surface.id === candidate)) return true;
+			}
+		}
+		return false;
+	}
+
+	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId): Surface {
 		const workspace = requireWorkspace(workspaceId);
 		const activeWindow = workspace.windows[workspace.activeWindowIndex];
 		if (!activeWindow) throw new Error(`Workspace "${workspaceId}" has an out-of-bounds activeWindowIndex ${workspace.activeWindowIndex}`);
-		const surface: Surface = { id: makeSurfaceId(nextSurfaceId()), integrationId, title };
+		if (requestedSurfaceId !== undefined && surfaceIdInUse(requestedSurfaceId)) throw new Error(`Cannot dock Surface "${requestedSurfaceId}" into World "${worldId}": surface-id-collision`);
+		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), integrationId, title };
 		const inserted = insertTile(tileByWindow.get(activeWindow.id) ?? null, surface.id);
 		if (!inserted.ok) throw new Error(`Cannot dock Surface "${surface.id}" into Window "${activeWindow.id}": ${inserted.reason}`);
 		const updatedWindow: WorkspaceWindow = { ...activeWindow, surfaces: [...activeWindow.surfaces, surface] };
@@ -181,13 +199,14 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	}
 
 	/** The typed-outcome sibling of dockSurface, docking into a caller-named Window instead of always the active one -- see WorldStore.dockSurfaceInto's own doc comment. */
-	function dockSurfaceInto(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, targetWindowId: WindowId): DockIntoOutcome {
+	function dockSurfaceInto(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, targetWindowId: WindowId, requestedSurfaceId?: SurfaceId): DockIntoOutcome {
 		const workspace = workspaces.get(workspaceId);
 		if (!workspace) return { ok: false, reason: "workspace-not-found", workspaceId };
 		const targetWindow = workspace.windows.find((window) => window.id === targetWindowId);
 		if (!targetWindow) return { ok: false, reason: "window-not-found", workspaceId, windowId: targetWindowId };
+		if (requestedSurfaceId !== undefined && surfaceIdInUse(requestedSurfaceId)) return { ok: false, reason: "surface-id-collision", surfaceId: requestedSurfaceId };
 
-		const surface: Surface = { id: makeSurfaceId(nextSurfaceId()), integrationId, title };
+		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), integrationId, title };
 		const inserted = insertTile(tileByWindow.get(targetWindowId) ?? null, surface.id);
 		if (!inserted.ok) return inserted;
 
@@ -232,11 +251,11 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				return { commandId: intent.commandId };
 			case "surface.dock": {
 				if (intent.windowId !== undefined) {
-					const result = dockSurfaceInto(intent.workspaceId, intent.integrationId, intent.title, intent.windowId);
+					const result = dockSurfaceInto(intent.workspaceId, intent.integrationId, intent.title, intent.windowId, intent.surfaceId);
 					if (!result.ok) throw new Error(`Cannot dock into Window "${intent.windowId}": ${result.reason}`);
 					return { commandId: intent.commandId, surfaceId: result.value.id };
 				}
-				const surface = dockSurface(intent.workspaceId, intent.integrationId, intent.title);
+				const surface = dockSurface(intent.workspaceId, intent.integrationId, intent.title, intent.surfaceId);
 				return { commandId: intent.commandId, surfaceId: surface.id };
 			}
 			case "surface.undock":

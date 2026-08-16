@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { integrationId } from "@zodiac/protocol/ids";
 import { useWorldClient } from "../world/use-world-client.js";
+import { useOptimisticDock } from "../world/use-optimistic-dock.js";
 import { LiveWorldTiles } from "./LiveWorldTiles.js";
 
 /**
@@ -10,10 +12,17 @@ import { LiveWorldTiles } from "./LiveWorldTiles.js";
  * import already documents. Confirmed directly: importing this eagerly
  * pushed the entry chunk over apps/web's own bundle-size budget
  * (check:bundle-budget) by ~11kB gzip.
+ *
+ * "Dock Activity" demonstrates the identity/authority fix end to end: an
+ * optimistic placeholder appears immediately, then either confirms (the
+ * real WorldViewModel eventually reports the same surfaceId) or rolls back
+ * with a real error (a collision, an invalid Window) -- see useOptimisticDock.
  */
 export function LiveDaemonPanel({ baseUrl }: { readonly baseUrl: string }): React.JSX.Element {
 	const worldClient = useWorldClient(baseUrl);
 	const [expanded, setExpanded] = useState(false);
+	const optimisticDock = useOptimisticDock(baseUrl, worldClient.viewModel);
+	const activeWorkspaceId = worldClient.viewModel.state === "ready" ? worldClient.viewModel.activeWorkspaceId : null;
 
 	return (
 		<div className="fixed bottom-2 right-2 z-50 max-w-md">
@@ -25,8 +34,30 @@ export function LiveDaemonPanel({ baseUrl }: { readonly baseUrl: string }): Reac
 				Live Daemon State {worldClient.connected ? "\u25cf" : "\u25cb"}
 			</button>
 			{expanded ? (
-				<div className="mt-1">
+				<div className="mt-1 space-y-1">
 					<LiveWorldTiles viewModel={worldClient.viewModel} connected={worldClient.connected} />
+					{optimisticDock.pending.length > 0 ? (
+						<ul data-testid="live-daemon-pending" className="text-xs text-gray-500 dark:text-gray-400">
+							{optimisticDock.pending.map((entry) => (
+								<li key={entry.surfaceId}>Docking &quot;{entry.title}&quot;\u2026</li>
+							))}
+						</ul>
+					) : null}
+					{optimisticDock.lastError ? (
+						<p data-testid="live-daemon-dock-error" className="text-xs text-danger-80">
+							{optimisticDock.lastError}
+						</p>
+					) : null}
+					{activeWorkspaceId ? (
+						<button
+							type="button"
+							data-testid="live-daemon-dock-activity"
+							onClick={() => optimisticDock.dock({ workspaceId: activeWorkspaceId, integrationId: integrationId("activity"), title: "Activity" })}
+							className="rounded-md border border-gray-400 bg-white/90 px-2 py-1 text-xs text-gray-700 shadow-sm dark:border-gray-600 dark:bg-black/70 dark:text-gray-300"
+						>
+							Dock Activity
+						</button>
+					) : null}
 				</div>
 			) : null}
 		</div>

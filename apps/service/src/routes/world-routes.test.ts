@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorldStore } from "@zodiac/server/world";
-import { worldId, workspaceId, integrationId } from "@zodiac/protocol";
+import { worldId, workspaceId, integrationId, surfaceId } from "@zodiac/protocol";
 import { createWorldRoutes } from "./world-routes.js";
 
 let server: Server | undefined;
@@ -106,6 +106,23 @@ describe("createWorldRoutes", () => {
 
 		const response = await fetch(`${base}/api/world/commands`, { method: "POST", body: "not json" });
 		expect(response.status).toBe(400);
+	});
+
+	it("postCommand rejects a colliding caller-supplied surfaceId with 400, without mutating the store", async () => {
+		const world = createWorldStore(worldId("w1"));
+		world.createWorkspace(workspaceId("ws"), "WS");
+		world.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity", surfaceId("dup"));
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => {
+			void routes.postCommand(req, res);
+		});
+
+		const response = await fetch(`${base}/api/world/commands`, {
+			method: "POST",
+			body: JSON.stringify({ intent: { type: "surface.dock", workspaceId: "ws", integrationId: "activity", title: "Activity 2", surfaceId: "dup" } }),
+		});
+		expect(response.status).toBe(400);
+		expect(world.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(1);
 	});
 
 	it("postCommand surfaces a real domain error (e.g. docking into an unknown Workspace) as 400, not a 500 crash", async () => {

@@ -44,4 +44,14 @@ describe("CommandIntentSchema", () => {
 	it("rejects a blank commandId, same rule as every other branded id", () => {
 		expect(CommandIntentSchema.safeParse({ type: "window.next", workspaceId: "w1", commandId: "" }).success).toBe(false);
 	});
+
+	it("accepts an optional caller-supplied surfaceId on surface.dock, same shape workspace.create already has for workspaceId", () => {
+		const result = CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", integrationId: "activity", title: "Activity", surfaceId: "client-surface-1" });
+		expect(result.success).toBe(true);
+		if (result.success && result.data.type === "surface.dock") expect(result.data.surfaceId).toBe("client-surface-1");
+	});
+
+	it("still accepts surface.dock without a surfaceId (optional, not required)", () => {
+		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", integrationId: "activity", title: "Activity" }).success).toBe(true);
+	});
 });

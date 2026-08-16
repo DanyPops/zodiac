@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { commandId, workspaceId } from "@zodiac/protocol";
 import type { WorldViewModel } from "@zodiac/protocol";
-import { connectRemoteWorldStore } from "./remote-world-store.js";
+import { connectRemoteWorldStore, postCommandIntent } from "./remote-world-store.js";
 
 const EMPTY: WorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
 
@@ -149,6 +149,24 @@ describe("connectRemoteWorldStore", () => {
 		daemon.push(ready);
 		await vi.waitFor(() => expect(store.worldViewModel()).toEqual(ready));
 		store.dispose();
+	});
+
+	it("postCommandIntent returns the daemon's echoed commandId/result on success", async () => {
+		const fetcher = vi.fn(async () => new Response(JSON.stringify({ accepted: true, commandId: "cmd-1", result: { surfaceId: "surface-9" } }), { status: 200 }));
+		const outcome = await postCommandIntent("http://fake", { type: "surface.dock", workspaceId: workspaceId("w1"), integrationId: "activity" as never, title: "Activity" }, fetcher as unknown as typeof fetch);
+		expect(outcome).toEqual({ accepted: true, commandId: "cmd-1", surfaceId: "surface-9" });
+	});
+
+	it("postCommandIntent returns a rejection with the daemon's own message on a non-2xx response", async () => {
+		const fetcher = vi.fn(async () => new Response(JSON.stringify({ message: "surface-id-collision" }), { status: 400 }));
+		const outcome = await postCommandIntent("http://fake", { type: "window.next", workspaceId: workspaceId("w1") }, fetcher as unknown as typeof fetch);
+		expect(outcome).toEqual({ accepted: false, message: "surface-id-collision" });
+	});
+
+	it("postCommandIntent returns a rejection, not a throw, when the fetch itself fails", async () => {
+		const fetcher = vi.fn(async () => { throw new Error("network down"); });
+		const outcome = await postCommandIntent("http://fake", { type: "window.next", workspaceId: workspaceId("w1") }, fetcher as unknown as typeof fetch);
+		expect(outcome).toEqual({ accepted: false, message: "network down" });
 	});
 
 	it("dispose() stops delivering further onChange notifications", async () => {

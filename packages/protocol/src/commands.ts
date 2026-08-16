@@ -21,7 +21,7 @@ const commandIdField = { commandId: CommandIdSchema.optional() };
  */
 export const CommandIntentSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("workspace.create"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1), ...commandIdField }),
-	z.object({ type: z.literal("surface.dock"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, title: z.string().trim().min(1), windowId: WindowIdSchema.optional(), ...commandIdField }),
+	z.object({ type: z.literal("surface.dock"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, title: z.string().trim().min(1), windowId: WindowIdSchema.optional(), surfaceId: SurfaceIdSchema.optional(), ...commandIdField }),
 	z.object({ type: z.literal("surface.undock"), workspaceId: WorkspaceIdSchema, surfaceId: SurfaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.next"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.previous"), workspaceId: WorkspaceIdSchema, ...commandIdField }),

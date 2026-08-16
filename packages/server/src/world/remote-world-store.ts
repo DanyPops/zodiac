@@ -1,6 +1,39 @@
-import type { CommandIntent, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import type { CommandId, CommandIntent, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
 import { readSseFrames } from "../net/sse-client.js";
 import type { WorldClientPort } from "./world-client-port.js";
+
+/** postCommandIntent's own outcome -- the real, synchronous accept/reject answer WorldClientPort.apply() deliberately never gives a caller. */
+export interface PostCommandOutcome {
+	readonly accepted: boolean;
+	readonly commandId?: CommandId;
+	readonly surfaceId?: SurfaceId;
+	/** Present on rejection; a human-readable reason from the daemon's own error response. */
+	readonly message?: string;
+}
+
+/**
+ * One real POST /api/world/commands round trip, returning its actual
+ * accept/reject outcome -- unlike WorldClientPort.apply() (fire-and-forget
+ * by design), a caller building optimistic UI needs exactly this
+ * synchronous answer to "did MY specific command succeed," since a
+ * rejected command never appears in any future WorldViewModel at all.
+ * Never throws on a network failure -- reports it as a rejection instead,
+ * so a caller has one outcome shape to branch on.
+ */
+export async function postCommandIntent(baseUrl: string, intent: CommandIntent, fetcher: typeof fetch = fetch): Promise<PostCommandOutcome> {
+	try {
+		const response = await fetcher(`${baseUrl}/api/world/commands`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ intent }),
+		});
+		const body = (await response.json().catch(() => ({}))) as { commandId?: string; result?: { surfaceId?: string }; message?: string };
+		if (!response.ok) return { accepted: false, message: body.message ?? `daemon rejected the command (${response.status})` };
+		return { accepted: true, commandId: body.commandId as CommandId | undefined, surfaceId: body.result?.surfaceId as SurfaceId | undefined };
+	} catch (error) {
+		return { accepted: false, message: error instanceof Error ? error.message : String(error) };
+	}
+}
 
 export interface RemoteWorldStoreOptions {
 	/** Base URL of a running zodiacd instance, e.g. http://127.0.0.1:4390. */

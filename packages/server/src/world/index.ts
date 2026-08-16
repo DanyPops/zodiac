@@ -3,8 +3,8 @@ export { createWorldStore, createWorldStoreFromWorld, hydrateWorldStore } from "
 
 export type { WorldClientPort } from "./world-client-port.js";
 
-export type { RemoteWorldStoreOptions } from "./remote-world-store.js";
-export { connectRemoteWorldStore } from "./remote-world-store.js";
+export type { RemoteWorldStoreOptions, PostCommandOutcome } from "./remote-world-store.js";
+export { connectRemoteWorldStore, postCommandIntent } from "./remote-world-store.js";
 
 export type { WorldSnapshotPort } from "./snapshot-port.js";
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandId, integrationId, windowId, workspaceId, worldId } from "@zodiac/protocol";
+import { commandId, integrationId, surfaceId, windowId, workspaceId, worldId } from "@zodiac/protocol";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 
@@ -271,6 +271,63 @@ describe("WorldStore walking skeleton", () => {
 			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
 
 			expect(outcome.commandId).toBeUndefined();
+		});
+	});
+
+	describe("caller-supplied surfaceId -- surface.dock's own identity/authority fix", () => {
+		it("dockSurface uses the caller-supplied surfaceId instead of auto-generating one", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const surface = store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity", surfaceId("client-1"));
+
+			expect(surface.id).toBe(surfaceId("client-1"));
+		});
+
+		it("dockSurface throws a clear surface-id-collision error when the requested id is already in use", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity", surfaceId("client-1"));
+
+			expect(() => store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity 2", surfaceId("client-1"))).toThrow(/surface-id-collision/);
+		});
+
+		it("dockSurfaceInto reports a typed surface-id-collision failure instead of throwing", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity", surfaceId("client-1"));
+
+			const result = store.dockSurfaceInto(workspaceId("ws"), integrationId("activity"), "Activity 2", workspace.windows[0]!.id, surfaceId("client-1"));
+
+			expect(result).toEqual({ ok: false, reason: "surface-id-collision", surfaceId: surfaceId("client-1") });
+		});
+
+		it("apply() passes a surface.dock intent's own surfaceId through to the created Surface", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", surfaceId: surfaceId("client-2") });
+
+			expect(outcome.surfaceId).toBe(surfaceId("client-2"));
+			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id).toBe(surfaceId("client-2"));
+		});
+
+		it("apply() throws a clear surface-id-collision error for a colliding surfaceId, whether or not a windowId is also given", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+			store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", surfaceId: surfaceId("dup") });
+
+			expect(() => store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity 2", surfaceId: surfaceId("dup") })).toThrow(/surface-id-collision/);
+			expect(() => store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity 3", windowId: workspace.windows[0]!.id, surfaceId: surfaceId("dup") })).toThrow(/surface-id-collision/);
+		});
+
+		it("omits surfaceId from apply()'s outcome for intents that don't create a Surface, even if one collides elsewhere", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
+
+			expect(outcome.surfaceId).toBeUndefined();
 		});
 	});
 
