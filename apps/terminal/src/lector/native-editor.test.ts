@@ -113,6 +113,57 @@ describe("openLectorEditorNatively", () => {
 		typeKeys(editor, [":", "q", "\r"]);
 		await opened;
 	}, 15_000);
+
+	it("an external mutation between open and save is typed as a stale-write failure, the in-memory edit is preserved, and the editor is not closed -- proven against the real Lector daemon, not mocked", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-stale-"));
+		const filePath = join(root, "note.txt");
+		writeFileSync(filePath, "hello\n");
+		const { host: nativeHost, mounted } = fakeNativeHost();
+
+		const opened = openLectorEditorNatively(nativeHost, await realHost(), filePath);
+		await new Promise((r) => setTimeout(r, 50));
+		const editor = mounted();
+		if (!editor) throw new Error("editor never mounted");
+
+		// Make an unsaved in-memory edit, but don't save yet.
+		typeKeys(editor, ["A", " ", "w", "o", "r", "l", "d", "\x1b"]);
+
+		// Mutate the file on disk directly, bypassing Lector entirely -- a real external writer
+		// (another process, another editor) racing this one.
+		writeFileSync(filePath, "hello\nexternal change\n");
+
+		// :wq attempts save-and-quit. It must fail typed (StaleExpectedHash -> "stale-write"),
+		// surfaced by pi-lector's own ModalEditorComponent as a status message -- see
+		// modal-editor-component.ts's performAction: on a thrown save() it sets statusMessage and
+		// returns *without* calling done(), so the editor stays mounted and open.
+		typeKeys(editor, [":", "w", "q", "\r"]);
+		await new Promise((r) => setTimeout(r, 100));
+
+		expect(mounted()).toBeDefined(); // not closed -- "recover without restarting" requires the process/editor to still be alive
+		// eslint-disable-next-line no-control-regex -- stripping real terminal escape codes (cursor-highlight reverse video splits "world" across an SGR boundary) is the point here.
+		const afterFailedSave = mounted()!
+			.render(80)
+			.join("\n")
+			.replace(/\x1b\[[0-9;]*m/g, "");
+		expect(afterFailedSave).toContain("save failed");
+		expect(afterFailedSave).toContain("world"); // the unsaved edit is still in the live buffer, not discarded
+		expect(readFileSync(filePath, "utf8")).toBe("hello\nexternal change\n"); // disk was NOT silently overwritten
+
+		// Known, real, cross-repo gap (not fixed by this test): GuardedLiveBuffer.markStale (in
+		// @danypops/lector's own guarded-live-buffer.ts) records the conflict's expected/actual
+		// hash pair for introspection but never advances `savedHash` to the actual on-disk hash.
+		// A second :wq here would fail with the exact same StaleExpectedHash forever -- there is no
+		// exposed "force save" or "resync" contribution command today. This test therefore proves
+		// exactly Slice 2's detect+preserve+no-crash guarantee and deliberately stops short of a
+		// successful-retry assertion, rather than asserting something the real code cannot yet do.
+		// See task "Lector contribution needs a real conflict-resolution command" for the follow-up.
+		//
+		// Cleanup: pi-lector's own editor-state.ts parses ":q" straight to {kind: "quit"} with no
+		// dirty-buffer guard and no "!" variant at all (confirmed by direct source read) -- a plain
+		// ":q" always quits, dirty or not, so no force-quit syntax is needed or recognized here.
+		typeKeys(mounted()!, [":", "q", "\r"]);
+		await opened;
+	}, 15_000);
 });
 
 describe("promptAndOpenLectorEditorNatively", () => {
