@@ -14,9 +14,11 @@
  *
  * The path data itself is not hand-drawn: every `<path>`/`<line>`/`<circle>`
  * below is transcribed verbatim (same coordinates, same viewBox) from the
- * real vendored artwork in ../assets/zodiac-signs/*.svg -- see that
- * directory's own README.md for the upstream source, exact version, and
- * SIL OFL 1.1 attribution this transcription itself is still bound by.
+ * real vendored artwork in apps/web/src/assets/zodiac-signs/*.svg (that
+ * directory stays in apps/web -- reference-only attribution material,
+ * never imported code) -- see that directory's own README.md for the
+ * upstream source, exact version, and SIL OFL 1.1 attribution this
+ * transcription itself is still bound by.
  * `stroke`/`fill`/`stroke-width` are hoisted onto the shared <svg> (every
  * source file uses the same three values throughout); every other
  * per-element attribute (`stroke-linecap`, `stroke-linejoin`,

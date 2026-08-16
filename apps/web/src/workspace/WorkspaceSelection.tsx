@@ -2,13 +2,9 @@ import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Setting
 import { useState, type RefObject } from "react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
-import { ConfirmDialog, SURFACE_BG } from "@zodiac/ui";
-import { GlyphBadge } from "./GlyphBadge.js";
-import { glyphBadgeClassName } from "./glyph-badge-style.js";
-import { iconButtonClassName } from "./icon-button-style.js";
+import { ConfirmDialog, glyphBadgeClassName, GlyphBadge, iconButtonClassName, SURFACE_BG, UserAvatar } from "@zodiac/ui";
 import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";
-import { UserAvatar } from "./UserAvatar.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
 interface WorkspaceSelectionProps {

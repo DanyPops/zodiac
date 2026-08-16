@@ -1,7 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { DialogChrome } from "@zodiac/ui";
+import { DialogChrome, glyphBadgeClassName } from "@zodiac/ui";
 import { useState } from "react";
-import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID, WORKSPACE_GLYPH_OPTIONS } from "./workspace-catalog.js";
 
 interface CreateWorkspaceDialogProps {

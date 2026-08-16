@@ -1,21 +1,19 @@
 import * as Popover from "@radix-ui/react-popover";
 import { Bell } from "lucide-react";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "@zodiac/ui";
-import { iconButtonClassName } from "./icon-button-style.js";
-import { UTILITY_PILL_CLASSES } from "./utility-pill-style.js";
+import { iconButtonClassName, pillClassName, SURFACE_BG } from "@zodiac/ui";
 
 /**
  * Notifications flanking the Window Carousel -- reuses the shared pill
- * shape (utility-pill-style.ts), Gradient to Contrast (SURFACE_BG), and
- * Icon Button (icon-button-style.ts), the same elements every other pill
- * and action in the shell already uses. A plain local toggle (Radix
- * Popover's own uncontrolled open state), not a global command -- ephemeral
- * peek UI that isn't a Workspace/Window-level action doesn't need one.
+ * shape (pillClassName, @zodiac/ui) and Icon Button (iconButtonClassName),
+ * the same elements every other pill and action in the shell already
+ * uses. A plain local toggle (Radix Popover's own uncontrolled open
+ * state), not a global command -- ephemeral peek UI that isn't a
+ * Workspace/Window-level action doesn't need one.
  */
 export function NotificationsPill(): React.JSX.Element {
 	return (
-		<div className={cn(UTILITY_PILL_CLASSES, SURFACE_BG)}>
+		<div className={pillClassName()}>
 			<Popover.Root>
 				<Popover.Trigger asChild>
 					<button type="button" aria-label="Notifications" className={iconButtonClassName({ size: "md" })}>

@@ -1,11 +1,10 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Command, Keyboard, MoonStar, PanelBottom, PanelLeft, PanelRight, PanelTop, Settings } from "lucide-react";
-import { DialogChrome } from "@zodiac/ui";
+import { DialogChrome, iconButtonClassName } from "@zodiac/ui";
 import { DialogCloseButton } from "../commands/DialogCloseButton.js";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
 import type { ChatPlacement } from "../platform/chat-placement.js";
-import { iconButtonClassName } from "../workspace/icon-button-style.js";
 import { cornerRadiusPx, lineWidthPx, type ShapeSettings } from "../platform/shape-settings.js";
 import { ShapeSlider } from "./ShapeSlider.js";
 

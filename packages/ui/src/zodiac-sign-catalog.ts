@@ -1,6 +1,6 @@
 import { AquariusIcon, AriesIcon, CancerIcon, CapricornIcon, GeminiIcon, LeoIcon, LibraIcon, PiscesIcon, SagittariusIcon, ScorpioIcon, TaurusIcon, VirgoIcon, type ZodiacSignIconProps } from "./zodiac-signs.js";
 
-/** A zodiac sign id, lowercase and unaccented -- the vendored SVG's own filename stem (see ../assets/zodiac-signs/), so `ZODIAC_SIGNS_BY_ID[id]` and the source asset share one name to look up by. */
+/** A zodiac sign id, lowercase and unaccented -- the vendored SVG's own filename stem (see apps/web/src/assets/zodiac-signs/, which stays there as reference-only attribution material, never imported code), so `ZODIAC_SIGNS_BY_ID[id]` and the source asset share one name to look up by. */
 export type ZodiacSignId = "aries" | "taurus" | "gemini" | "cancer" | "leo" | "virgo" | "libra" | "scorpio" | "sagittarius" | "capricorn" | "aquarius" | "pisces";
 
 /** One inclusive end of a tropical-zodiac date range -- a month/day pair rather than a Date, since the range recurs every year and never carries its own year. */

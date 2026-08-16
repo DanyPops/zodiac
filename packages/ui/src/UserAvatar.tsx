@@ -1,5 +1,5 @@
-import { resolveZodiacSign, type ZodiacSignId } from "../icons/zodiac-sign-catalog.js";
-import { cn } from "../platform/cn.js";
+import { resolveZodiacSign, type ZodiacSignId } from "./zodiac-sign-catalog.js";
+import { cn } from "./cn.js";
 import { GLYPH_SIZE_CLASSES, type GlyphSize } from "./glyph-size.js";
 
 interface UserAvatarProps {

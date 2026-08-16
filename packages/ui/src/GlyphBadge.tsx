@@ -1,9 +1,9 @@
-import { cn } from "../platform/cn.js";
+import { cn } from "./cn.js";
 import { glyphBadgeClassName, type GlyphBadgeStateOptions } from "./glyph-badge-style.js";
 
 /**
  * "Glyph Badge": Zodiac's one recurring icon-in-a-box element, styled
- * per Gradient to Contrast (see @zodiac/ui's surface-style.ts) -- idle content
+ * per Gradient to Contrast (see ./surface-style.ts) -- idle content
  * sits flush and muted against its surface; the active one gets its own
  * bordered, filled chip with darker content, exactly the Window Carousel's
  * own numbered-pill treatment (its reference implementation). Every other

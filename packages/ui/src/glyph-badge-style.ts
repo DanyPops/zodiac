@@ -1,4 +1,4 @@
-import { cn } from "../platform/cn.js";
+import { cn } from "./cn.js";
 import { GLYPH_SIZE_CLASSES, type GlyphSize } from "./glyph-size.js";
 
 export interface GlyphBadgeStateOptions {
