@@ -1,16 +1,16 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { formatForDisplay, useHotkeyRecorder, type Hotkey } from "@tanstack/react-hotkeys";
-import { DialogChrome } from "@zodiac/ui";
+import { DialogChrome, Picker } from "@zodiac/ui";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DialogCloseButton } from "./DialogCloseButton.js";
 import { useCommandEnvironment } from "./react.js";
-import type { KeybindingDefinition } from "./registry.js";
+import type { CommandDefinition } from "./registry.js";
 import type { DialogMode } from "./useCommandContextStack.js";
 
-function bindingLabel(isEditingThisCommand: boolean, isRecording: boolean, binding: KeybindingDefinition | undefined): string {
+function bindingLabel(isEditingThisCommand: boolean, isRecording: boolean, keys: string | undefined): string {
 	if (isEditingThisCommand && isRecording) return "Press keys…";
-	if (binding) return formatForDisplay(binding.keys);
+	if (keys) return formatForDisplay(keys);
 	return "Unbound";
 }
 
@@ -57,8 +57,15 @@ export function CommandDialog({
 		const normalized = query.trim().toLowerCase();
 		return registry
 			.commands()
-			.filter((command) => !normalized || `${command.title} ${command.description}`.toLowerCase().includes(normalized));
-	}, [query, registry]);
+			.filter((command) => !normalized || `${command.title} ${command.description}`.toLowerCase().includes(normalized))
+			.map((command) => ({
+				id: command.id,
+				label: command.title,
+				description: command.description,
+				disabled: mode === "palette" && command.enabled?.() === false,
+				value: command,
+			}));
+	}, [query, registry, mode]);
 
 	return (
 		<DialogChrome variant="dialog" open={isOpen} onOpenChange={(open) => !open && onModeChange(null)} width={640} topOffsetVh={14} ariaLabel={title}>
@@ -70,51 +77,31 @@ export function CommandDialog({
 			<Dialog.Description className="sr-only">
 				{mode === "palette" ? "Search and execute Zodiac commands." : "Inspect the active keyboard bindings for Zodiac commands."}
 			</Dialog.Description>
-			{mode === "palette" && (
-				<div className="border-b border-gray-200 p-3 dark:border-gray-700">
-					<input
-						autoFocus
-						value={query}
-						onChange={(event) => setQuery(event.target.value)}
-						aria-label="Filter commands"
-						placeholder="Type a command…"
-						className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent-20 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-accent-70"
-					/>
-				</div>
-			)}
 			{bindingError && <p role="alert" className="mx-3 mt-3 rounded-md bg-danger-10 px-3 py-2 text-xs text-danger-80">{bindingError}</p>}
-			<div className="max-h-[55vh] overflow-auto p-2">
-				{commands.map((command) => {
-					const binding = registry.bindingFor(command.id);
-					return (
-						<button
-							key={command.id}
-							type="button"
-							aria-label={mode === "shortcuts" ? `Change shortcut for ${command.title}` : command.title}
-							disabled={command.enabled?.() === false && mode === "palette"}
-							onClick={() => {
-								if (mode === "shortcuts") {
-									setBindingError(undefined);
-									setEditingCommandId(command.id);
-									recorder.startRecording();
-								} else {
-									registry.execute(command.id);
-									onModeChange(null);
-								}
-							}}
-							className="flex w-full items-center gap-4 rounded-lg px-3 py-2 text-left hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-45 dark:hover:bg-gray-800"
-						>
-							<span className="min-w-0 flex-1">
-								<span className="block text-sm font-medium text-gray-900 dark:text-gray-100">{command.title}</span>
-								<span className="block truncate text-xs text-gray-600 dark:text-gray-300">{command.description}</span>
-							</span>
-							<kbd className="shrink-0 rounded border border-gray-300 bg-gray-50 px-2 py-1 font-mono text-[11px] text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
-							{bindingLabel(editingCommandId === command.id, recorder.isRecording, binding)}
-							</kbd>
-						</button>
-					);
-				})}
-			</div>
+			<Picker<CommandDefinition>
+				items={commands}
+				query={query}
+				onQueryChange={setQuery}
+				showQueryInput={mode === "palette"}
+				queryAriaLabel="Filter commands"
+				queryPlaceholder="Type a command…"
+				itemAriaLabel={(item) => (mode === "shortcuts" ? `Change shortcut for ${item.label}` : item.label)}
+				renderTrailing={(item) => (
+					<kbd className="shrink-0 rounded border border-gray-300 bg-gray-50 px-2 py-1 font-mono text-[11px] text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+						{bindingLabel(editingCommandId === item.id, recorder.isRecording, registry.bindingFor(item.id)?.keys)}
+					</kbd>
+				)}
+				onSelect={(item) => {
+					if (mode === "shortcuts") {
+						setBindingError(undefined);
+						setEditingCommandId(item.id);
+						recorder.startRecording();
+					} else {
+						registry.execute(item.id);
+						onModeChange(null);
+					}
+				}}
+			/>
 		</DialogChrome>
 	);
 }

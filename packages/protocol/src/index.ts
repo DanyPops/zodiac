@@ -14,6 +14,7 @@ export type { CommandIntent } from "./commands.js";
 export { CommandIntentSchema } from "./commands.js";
 
 export type { SurfaceViewModel, WindowViewModel, WorkspaceViewModel } from "./view-models.js";
+export type { PickerItem, PickerRequest } from "./ui-results.js";
 
 export type { Constraint, TileChild, SurfaceTile } from "./tile.js";
 export { ConstraintSchema, SurfaceTileSchema, MAX_TILE_DEPTH, MAX_CHILDREN_PER_TILE, MAX_SURFACES_PER_TILE } from "./tile.js";
