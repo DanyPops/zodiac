@@ -1,6 +1,6 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { paintText, type GridFrame, type Outcome, type Rect } from "../frame/index.js";
+import { paintText, type GridFrame, type Outcome, type Rect } from "./grid-frame.js";
 import { parseAnsiLine } from "./ansi-segments.js";
 
 /**

@@ -1,7 +1,7 @@
 import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
-import type { CellStyle } from "../frame/index.js";
+import type { CellStyle } from "@zodiac/tui";
 import type { FooterChatItem } from "../pi/footer-chat-controller.js";
-import { parseAnsiLine, type StyledSegment } from "./ansi-segments.js";
+import { parseAnsiLine, type StyledSegment } from "@zodiac/tui";
 
 // Pi TUI's own AssistantMessageComponent/UserMessageComponent/ToolExecutionComponent
 // (see semantic-shell.ts's own doc comment on the same constants for the full

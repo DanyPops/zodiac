@@ -1,4 +1,4 @@
-import type { CellStyle } from "../frame/index.js";
+import type { CellStyle } from "./grid-frame.js";
 
 /** One contiguous run of text sharing exactly one CellStyle. */
 export interface StyledSegment {

@@ -3,10 +3,10 @@ import { computeTileRects } from "@zodiac/server/window";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
 import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { createGridFrame, createRect, gridId, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "../frame/index.js";
+import { createGridFrame, createRect, gridId, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "@zodiac/tui";
 import { paintSurfaceTiles } from "../frame/surface-tiles.js";
 import type { FooterChatStatus } from "../pi/footer-chat-controller.js";
-import { mountComponent } from "./component-mount.js";
+import { mountComponent } from "@zodiac/tui";
 import { wrapFooterHistory } from "./footer-history-wrap.js";
 
 /** How many rows one Ctrl+Up/Ctrl+Down expandFooter()/collapseFooter() step changes -- see SemanticShellApplication's own footer-focused keybinding. */

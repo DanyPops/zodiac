@@ -1,6 +1,6 @@
 import type { Region } from "@zodiac/protocol";
 import type { ShellFocus } from "../shell/semantic-shell.js";
-import { createRect, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "./index.js";
+import { createRect, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "@zodiac/tui";
 
 /**
  * The five semantic regions always tile the viewport edge-to-edge (no gap rows/columns),

@@ -1,11 +1,11 @@
 import type { Component, Terminal } from "@earendil-works/pi-tui";
 import type { WorldViewModel } from "@zodiac/protocol";
-import type { GridUpdate, Outcome } from "../frame/index.js";
+import type { GridUpdate, Outcome } from "@zodiac/tui";
 import type { LectorHost } from "../lector/lector-host.js";
 import { promptAndOpenLectorEditorNatively } from "../lector/native-editor.js";
 import { openLectorExplorerNatively } from "../lector/native-explorer.js";
 import type { FooterChatController } from "../pi/footer-chat-controller.js";
-import { GridTerminal } from "../terminal/grid-terminal.js";
+import { GridTerminal } from "@zodiac/tui";
 import { resolveShellCommand, type ShellCommand } from "./keymap.js";
 import { openTerminalPaneNatively } from "./native-terminal.js";
 import { SemanticShell, type ShellFocus } from "./semantic-shell.js";

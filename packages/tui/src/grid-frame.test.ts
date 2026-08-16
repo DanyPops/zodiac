@@ -10,7 +10,7 @@ import {
   paintText,
   setCursor,
   type CellStyle,
-} from "./index.js";
+} from "./grid-frame.js";
 
 function frame(width = 8, height = 3) {
   const result = createGridFrame(gridId("main"), width, height);

@@ -2,8 +2,8 @@ import { createWorldStore } from "@zodiac/server/world";
 import { integrationId, layoutWorldRegions, workspaceId, worldId } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it } from "vitest";
-import { diffFrames, type GridFrame } from "../frame/index.js";
-import { encodeGridUpdate } from "../terminal/grid-terminal.js";
+import { diffFrames, type GridFrame } from "@zodiac/tui";
+import { encodeGridUpdate } from "@zodiac/tui";
 import { SemanticShell } from "./semantic-shell.js";
 
 /** Absolute cell index for a footer-region-relative (x, y) offset -- mirrors border.test.ts's own `t.horizontalTop * width + x` convention, computed from the real Region layout rather than hand-derived magic numbers. */

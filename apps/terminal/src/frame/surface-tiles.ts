@@ -1,6 +1,6 @@
 import type { SurfaceId } from "@zodiac/protocol";
 import type { Rect as PlacementRect, SurfacePlacement } from "@zodiac/server/window";
-import { createRect, paintText, type CellStyle, type GridFrame, type Outcome } from "./index.js";
+import { createRect, paintText, type CellStyle, type GridFrame, type Outcome } from "@zodiac/tui";
 import { labelSegment } from "./border.js";
 
 /**

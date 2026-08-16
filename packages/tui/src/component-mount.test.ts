@@ -1,7 +1,7 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { mountComponent } from "./component-mount.js";
-import { createGridFrame, createRect, gridId, type CellStyle, type GridFrame } from "../frame/index.js";
+import { createGridFrame, createRect, gridId, type CellStyle, type GridFrame } from "./grid-frame.js";
 
 function frameAt(width: number, height: number): GridFrame {
 	const created = createGridFrame(gridId("test"), width, height);

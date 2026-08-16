@@ -1,7 +1,7 @@
 import { layoutWorldRegions, type Region } from "@zodiac/protocol";
 import { describe, expect, it } from "vitest";
 import { deriveBorderTopology, labelSegment, paintBorders } from "./border.js";
-import { createGridFrame, createRect, gridId, type GridFrame } from "./index.js";
+import { createGridFrame, createRect, gridId, type GridFrame } from "@zodiac/tui";
 
 const EMPTY_WORLD = { state: "empty" as const, workspaces: [] as const, activeWorkspaceId: null };
 

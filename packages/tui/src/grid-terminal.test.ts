@@ -1,6 +1,6 @@
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it } from "vitest";
-import { createGridFrame, createRect, diffFrames, gridId, paintText, setCursor, type FrameLimits } from "../frame/index.js";
+import { createGridFrame, createRect, diffFrames, gridId, paintText, setCursor, type FrameLimits } from "./grid-frame.js";
 import { describeTerminalMismatch, encodeGridUpdate, GridTerminal } from "./grid-terminal.js";
 
 const tinyLimits: FrameLimits = {

@@ -22,6 +22,7 @@
     "@zodiac/agent": "*",
     "@zodiac/pi": "*",
     "@zodiac/protocol": "*",
+    "@zodiac/tui": "*",
     "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.2.tgz",
     "@danypops/pi-lector": "file:vendor/danypops-pi-lector-0.12.9.tgz",
     "@earendil-works/pi-coding-agent": "^0.84.1",

@@ -1,5 +1,5 @@
 import type { Terminal } from "@earendil-works/pi-tui";
-import { applyGridUpdate, diffFrames, type CellStyle, type GridFrame, type GridUpdate, type Outcome } from "../frame/index.js";
+import { applyGridUpdate, diffFrames, type CellStyle, type GridFrame, type GridUpdate, type Outcome } from "./grid-frame.js";
 
 function styleSequence(style: CellStyle): string {
   const codes: number[] = [0];

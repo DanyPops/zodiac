@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { surfaceId } from "@zodiac/protocol";
 import { computeTileRects, insertTile, removeTile } from "@zodiac/server/window";
 import type { SurfaceTile } from "@zodiac/server/window";
-import { createGridFrame, diffFrames, gridId, type CellStyle, type GridFrame } from "./index.js";
+import { createGridFrame, diffFrames, gridId, type CellStyle, type GridFrame } from "@zodiac/tui";
 import { paintSurfaceTiles } from "./surface-tiles.js";
 
 const styles = { border: { foreground: 8 } as CellStyle, title: { bold: true } as CellStyle };
