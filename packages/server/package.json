@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./agent": "./src/agent/index.ts",
     "./pi-agent-dir": "./src/pi-agent-dir.ts",
     "./world": "./src/world/index.ts",
     "./window": "./src/window/index.ts",
