@@ -7,7 +7,7 @@ import type { ConversationItem } from "../conversation/projector.js";
 import { chatOrientation, CHAT_SIZE_RATIO, type ChatOrientation, type ChatPlacement } from "../platform/chat-placement.js";
 import { cn } from "../platform/cn.js";
 import { toLocalRect, type Rect } from "../platform/geometry.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 import { DockRuler } from "./DockRuler.js";
 import { computeDockRulerHint, dockRulerFrameMark, type DockRulerFrameMark, type DockRulerHint } from "./dock-ruler.js";
 import { TEMPLATE_DRAG_MIME_TYPE } from "./drag-constants.js";

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../platform/cn.js";
-import { WELL_BG } from "../platform/surface-style.js";
+import { WELL_BG } from "@zodiac/ui";
 import { NotificationsPill } from "./NotificationsPill.js";
 import { WatchPill } from "./WatchPill.js";
 

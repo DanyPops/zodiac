@@ -12,7 +12,7 @@ import { resolveZodiacdBaseUrl } from "../platform/zodiacd-config.js";
 import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
-import { PAGE_BG } from "../platform/surface-style.js";
+import { PAGE_BG } from "@zodiac/ui";
 import { createExtensionHost } from "../extensions/extension-host.js";
 import { useChatPlacement } from "../chat-placement-hooks.js";
 import { SettingsDialog } from "../settings/SettingsDialog.js";

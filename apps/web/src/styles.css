@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/*
+ * Tailwind v4's automatic content detection never scans anything under
+ * node_modules -- @zodiac/ui resolves through this workspace's own
+ * node_modules/@zodiac/ui npm-workspace symlink, so without this explicit
+ * @source directive every class DialogChrome/ConfirmDialog use (the
+ * dialog overlay/content chrome) would silently emit no CSS at all, with
+ * no build error to catch it.
+ */
+@source "../../../packages/ui/src";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {

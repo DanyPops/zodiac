@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { cn } from "../platform/cn.js";
 import type { Rect } from "../platform/geometry.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 import { dockRulerGuides, type DockRulerFrameMark, type DockRulerGuide } from "./dock-ruler.js";
 import { PROXIMITY_CEILING_OPACITY, PROXIMITY_FLOOR_OPACITY } from "./proximity-zones.js";
 

@@ -1,7 +1,7 @@
 import * as Popover from "@radix-ui/react-popover";
 import { Bell } from "lucide-react";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 import { iconButtonClassName } from "./icon-button-style.js";
 import { UTILITY_PILL_CLASSES } from "./utility-pill-style.js";
 

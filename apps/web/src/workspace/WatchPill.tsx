@@ -1,7 +1,7 @@
 import { Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 import { formatClock } from "./clock.js";
 import { UTILITY_PILL_CLASSES } from "./utility-pill-style.js";
 

@@ -9,12 +9,17 @@
  * - page is literal black, not gray-950 -- gray-950/gray-900 are only
  *   13/255 apart, visually one flat black area.
  * - well's dark value is its own named token (`--color-well-dark` in
- *   styles.css), not another gray-* rung -- gray-800 is already surface's,
- *   and gray-900 alone reads as flat black. The dockview theme override
- *   in styles.css reads the same token, so the two can't drift apart.
+ *   apps/web/src/styles.css), not another gray-* rung -- gray-800 is
+ *   already surface's, and gray-900 alone reads as flat black. The
+ *   dockview theme override in styles.css reads the same token, so the
+ *   two can't drift apart.
  *
  * Named constants (not raw Tailwind classes per file) so every call site
- * stays in sync -- each step has more than one consumer.
+ * stays in sync -- each step has more than one consumer. Hardcoded here
+ * (not an injected theme) -- there is exactly one real consumer
+ * (apps/web) today; revisit only once a second real consumer needs
+ * different values, per this package's own "don't inject speculatively"
+ * discipline.
  */
 export const PAGE_BG = "bg-gray-200 dark:bg-black";
 export const WELL_BG = "bg-gray-100 dark:bg-well-dark";

@@ -2,8 +2,7 @@ import { ChevronsLeft, ChevronsRight, Command, Keyboard, MoonStar, Plus, Setting
 import { useState, type RefObject } from "react";
 import { CommandButton, useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
-import { ConfirmDialog } from "./ConfirmDialog.js";
+import { ConfirmDialog, SURFACE_BG } from "@zodiac/ui";
 import { GlyphBadge } from "./GlyphBadge.js";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { iconButtonClassName } from "./icon-button-style.js";

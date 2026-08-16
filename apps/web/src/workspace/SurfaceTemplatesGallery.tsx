@@ -1,8 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { DialogChrome } from "@zodiac/ui";
 import { useEffect, useState } from "react";
 import { DialogCloseButton } from "../commands/DialogCloseButton.js";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
 import { GALLERY_CATEGORIES, type GalleryCategory } from "./gallery-categories.js";
 
 /** How long each face (icon cluster, then preview) shows before cross-fading to the other -- per the settled "automatic loop" discussion. */
@@ -23,28 +23,18 @@ interface SurfaceTemplatesGalleryProps {
  */
 export function SurfaceTemplatesGallery({ open, onClose }: SurfaceTemplatesGalleryProps): React.JSX.Element {
 	return (
-		<Dialog.Root
-			open={open}
-			onOpenChange={(next) => {
-				if (!next) onClose();
-			}}
-		>
-			<Dialog.Portal>
-				<Dialog.Overlay className="fixed inset-0 z-40 bg-gray-950/45 backdrop-blur-[1px] data-[state=open]:animate-in" />
-				<Dialog.Content aria-label="Surface Templates gallery" className={cn("fixed left-1/2 top-[10vh] z-50 w-[min(640px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-200 shadow-2xl outline-none -translate-x-1/2 dark:border-gray-700", SURFACE_BG)}>
-					<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-						<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Surface Templates</Dialog.Title>
-						<DialogCloseButton label="Close Surface Templates gallery" />
-					</div>
-					<Dialog.Description className="sr-only">Browse Surface Template categories. Most are not backed by a real integration yet.</Dialog.Description>
-					<div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-auto p-4 sm:grid-cols-3">
-						{GALLERY_CATEGORIES.map((category) => (
-							<CategoryCard key={category.id} category={category} />
-						))}
-					</div>
-				</Dialog.Content>
-			</Dialog.Portal>
-		</Dialog.Root>
+		<DialogChrome variant="dialog" open={open} onOpenChange={(next) => !next && onClose()} width={640} topOffsetVh={10} ariaLabel="Surface Templates gallery">
+			<div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+				<Dialog.Title className="text-sm font-semibold text-gray-900 dark:text-gray-100">Surface Templates</Dialog.Title>
+				<DialogCloseButton label="Close Surface Templates gallery" />
+			</div>
+			<Dialog.Description className="sr-only">Browse Surface Template categories. Most are not backed by a real integration yet.</Dialog.Description>
+			<div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-auto p-4 sm:grid-cols-3">
+				{GALLERY_CATEGORIES.map((category) => (
+					<CategoryCard key={category.id} category={category} />
+				))}
+			</div>
+		</DialogChrome>
 	);
 }
 

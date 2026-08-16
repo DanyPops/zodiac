@@ -1,7 +1,7 @@
 import { BookOpen } from "lucide-react";
 import { useCommandShortcut } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 import { iconButtonClassName } from "./icon-button-style.js";
 import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";

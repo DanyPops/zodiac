@@ -3,7 +3,7 @@ import type { ConversationItem } from "./projector.js";
 import { CommandButton } from "../commands/react.js";
 import type { ChatOrientation } from "../platform/chat-placement.js";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 
 interface ConversationSurfaceProps {
 	readonly items: readonly ConversationItem[];

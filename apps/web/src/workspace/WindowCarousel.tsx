@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CommandButton } from "../commands/react.js";
 import { cn } from "../platform/cn.js";
-import { SURFACE_BG } from "../platform/surface-style.js";
+import { SURFACE_BG } from "@zodiac/ui";
 import { glyphBadgeClassName } from "./glyph-badge-style.js";
 import { iconButtonClassName } from "./icon-button-style.js";
 import { UTILITY_PILL_CLASSES } from "./utility-pill-style.js";

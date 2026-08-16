@@ -54,6 +54,7 @@
     "@xterm/xterm": "^6.0.0",
     "@zodiac/agent": "*",
     "@zodiac/server": "*",
+    "@zodiac/ui": "*",
     "dockview-react": "^7.0.4",
     "lucide-react": "^1.28.0",
     "react": "^19.2.0",
