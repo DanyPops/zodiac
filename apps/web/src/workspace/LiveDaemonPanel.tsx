@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { integrationId } from "@zodiac/protocol/ids";
+import type { WorkspaceLifecycleEvent } from "../extensions/types.js";
 import { useWorldClient } from "../world/use-world-client.js";
 import { useOptimisticDock } from "../world/use-optimistic-dock.js";
+import { useWorldExtensionEvents } from "../world/use-world-extension-events.js";
 import { LiveWorldTiles } from "./LiveWorldTiles.js";
+
+function noopEmit(): void {
+	// No ExtensionHost wired up -- see LiveDaemonPanelProps.emitExtensionEvent's own doc comment.
+}
 
 /**
  * The whole "Live Daemon State" floating toggle + panel as one lazy-loaded
@@ -18,10 +24,17 @@ import { LiveWorldTiles } from "./LiveWorldTiles.js";
  * real WorldViewModel eventually reports the same surfaceId) or rolls back
  * with a real error (a collision, an invalid Window) -- see useOptimisticDock.
  */
-export function LiveDaemonPanel({ baseUrl }: { readonly baseUrl: string }): React.JSX.Element {
+export interface LiveDaemonPanelProps {
+	readonly baseUrl: string;
+	/** Fans this panel's own live WorldViewModel changes out to an ExtensionHost -- see useWorldExtensionEvents. Optional: omitted, this panel simply doesn't emit (no extension consumer wired up yet). */
+	readonly emitExtensionEvent?: (event: WorkspaceLifecycleEvent) => void;
+}
+
+export function LiveDaemonPanel({ baseUrl, emitExtensionEvent }: LiveDaemonPanelProps): React.JSX.Element {
 	const worldClient = useWorldClient(baseUrl);
 	const [expanded, setExpanded] = useState(false);
 	const optimisticDock = useOptimisticDock(baseUrl, worldClient.viewModel);
+	useWorldExtensionEvents(worldClient.viewModel, emitExtensionEvent ?? noopEmit);
 	const activeWorkspaceId = worldClient.viewModel.state === "ready" ? worldClient.viewModel.activeWorkspaceId : null;
 
 	return (

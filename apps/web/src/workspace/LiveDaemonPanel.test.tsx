@@ -48,6 +48,14 @@ describe("LiveDaemonPanel", () => {
 		expect(screen.getByTestId("live-daemon-pending")).toBeInTheDocument();
 	});
 
+	it("emits the connection's own view-model diff to emitExtensionEvent as the daemon's real WorldViewModel changes", async () => {
+		stubFetch({ status: 200, body: { accepted: true } });
+		const emitExtensionEvent = vi.fn();
+		render(<LiveDaemonPanel baseUrl="http://fake" emitExtensionEvent={emitExtensionEvent} />);
+
+		await waitFor(() => expect(emitExtensionEvent).toHaveBeenCalledWith({ type: "workspace:selected", workspaceId: "ws" }));
+	});
+
 	it("Dock Activity rolls back and shows a real error when the daemon rejects the command", async () => {
 		stubFetch({ status: 400, body: { message: "surface-id-collision" } });
 		render(<LiveDaemonPanel baseUrl="http://fake" />);

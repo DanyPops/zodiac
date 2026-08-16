@@ -386,9 +386,9 @@ export function App(): React.JSX.Element {
 					}}
 				/>
 
-				{/* Additive, non-disruptive proof that the daemon's own real WorldStore (not this file's own mock Workspace/Window/Surface model above) is now reachable and live from apps/web -- see the "story 6 Web half" task's own scope-correcting finding. Does not touch the WindowDockview render path at all; collapsed by default so it never competes with the real UI; lazy-loaded so it never costs first paint (see LiveDaemonPanel's own doc comment). */}
+				{/* Additive, non-disruptive proof that the daemon's own real WorldStore (not this file's own mock Workspace/Window/Surface model above) is now reachable and live from apps/web -- see the "story 6 Web half" task's own scope-correcting finding. Does not touch the WindowDockview render path at all; collapsed by default so it never competes with the real UI; lazy-loaded so it never costs first paint (see LiveDaemonPanel's own doc comment). emitExtensionEvent wires its own live WorldViewModel diffs into the same extensionHost every mock-model extension already listens on (see useWorldExtensionEvents). */}
 				<Suspense fallback={null}>
-					<LiveDaemonPanel baseUrl={zodiacdBaseUrl} />
+					<LiveDaemonPanel baseUrl={zodiacdBaseUrl} emitExtensionEvent={extensionHost.emit} />
 				</Suspense>
 			</div>
 		</CommandProvider>
