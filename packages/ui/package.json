@@ -8,7 +8,13 @@
 	"exports": {
 		".": "./src/index.ts"
 	},
-	"files": ["src/**/*.ts", "src/**/*.tsx", "!src/**/*.test.ts", "!src/**/*.test.tsx", "tsconfig.json"],
+	"files": [
+		"src/**/*.ts",
+		"src/**/*.tsx",
+		"!src/**/*.test.ts",
+		"!src/**/*.test.tsx",
+		"tsconfig.json"
+	],
 	"scripts": {
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -22,6 +28,7 @@
 		"@radix-ui/react-alert-dialog": "^1.1.23",
 		"@radix-ui/react-dialog": "^1.1.23",
 		"@zodiac/protocol": "*",
+		"cmdk": "^1.1.1",
 		"tailwind-merge": "^3.6.0"
 	},
 	"devDependencies": {

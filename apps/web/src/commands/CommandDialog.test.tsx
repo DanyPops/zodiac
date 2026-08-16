@@ -34,7 +34,7 @@ describe("CommandDialog", () => {
 	describe("palette mode", () => {
 		it("shows the query input and every command, with its own formatted binding", () => {
 			renderDialog("palette");
-			expect(screen.getByRole("textbox", { name: "Filter commands" })).toBeInTheDocument();
+			expect(screen.getByRole("combobox", { name: "Filter commands" })).toBeInTheDocument();
 			expect(screen.getByRole("option", { name: "Run tests" })).toBeInTheDocument();
 			expect(screen.getByRole("option", { name: "Run tests" })).toHaveTextContent("Ctrl+R");
 			expect(screen.getByRole("option", { name: "Disabled command" })).toHaveTextContent("Unbound");
@@ -42,15 +42,15 @@ describe("CommandDialog", () => {
 
 		it("filters commands by typing", () => {
 			renderDialog("palette");
-			fireEvent.change(screen.getByRole("textbox", { name: "Filter commands" }), { target: { value: "run" } });
+			fireEvent.change(screen.getByRole("combobox", { name: "Filter commands" }), { target: { value: "run" } });
 			expect(screen.getByRole("option", { name: "Run tests" })).toBeInTheDocument();
 			expect(screen.queryByRole("option", { name: "Disabled command" })).not.toBeInTheDocument();
 		});
 
 		it("renders a command whose own enabled() is false as disabled", () => {
 			renderDialog("palette");
-			expect(screen.getByRole("option", { name: "Disabled command" })).toBeDisabled();
-			expect(screen.getByRole("option", { name: "Run tests" })).toBeEnabled();
+			expect(screen.getByRole("option", { name: "Disabled command" })).toHaveAttribute("aria-disabled", "true");
+			expect(screen.getByRole("option", { name: "Run tests" })).toHaveAttribute("aria-disabled", "false");
 		});
 
 		it("clicking an enabled command executes it and closes the dialog", () => {
@@ -64,7 +64,7 @@ describe("CommandDialog", () => {
 	describe("shortcuts mode", () => {
 		it("hides the query input -- shortcuts browses the fixed list, it isn't filtered", () => {
 			renderDialog("shortcuts");
-			expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+			expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 		});
 
 		it("labels each row for rebinding, not for execution", () => {
@@ -74,7 +74,7 @@ describe("CommandDialog", () => {
 
 		it("a disabled command is still rebindable -- enabled() only gates palette execution", () => {
 			renderDialog("shortcuts");
-			expect(screen.getByRole("option", { name: "Change shortcut for Disabled command" })).toBeEnabled();
+			expect(screen.getByRole("option", { name: "Change shortcut for Disabled command" })).toHaveAttribute("aria-disabled", "false");
 		});
 
 		it("clicking a row starts rebinding instead of executing or closing the dialog", () => {

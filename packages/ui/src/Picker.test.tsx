@@ -30,7 +30,7 @@ describe("Picker", () => {
 	it("typing in the query input calls onQueryChange", () => {
 		const onQueryChange = vi.fn();
 		render(<Picker items={ITEMS} query="" onQueryChange={onQueryChange} onSelect={() => {}} queryAriaLabel="Filter" queryPlaceholder="Type…" />);
-		fireEvent.change(screen.getByRole("textbox", { name: "Filter" }), { target: { value: "al" } });
+		fireEvent.change(screen.getByRole("combobox", { name: "Filter" }), { target: { value: "al" } });
 		expect(onQueryChange).toHaveBeenCalledWith("al");
 	});
 
@@ -64,12 +64,12 @@ describe("Picker", () => {
 	it("disabled items render disabled and are never selected by Enter", () => {
 		const onSelect = vi.fn();
 		render(<Picker items={ITEMS} query="" onQueryChange={() => {}} onSelect={onSelect} queryAriaLabel="Filter" />);
-		expect(screen.getByRole("option", { name: "Bravo" })).toBeDisabled();
+		expect(screen.getByRole("option", { name: "Bravo" })).toHaveAttribute("aria-disabled", "true");
 	});
 
 	it("showQueryInput=false hides the query input entirely", () => {
 		render(<Picker items={ITEMS} query="" onQueryChange={() => {}} onSelect={() => {}} queryAriaLabel="Filter" showQueryInput={false} />);
-		expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+		expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 	});
 
 	it("shows emptyMessage when there are no items", () => {

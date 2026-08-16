@@ -1,0 +1,39 @@
+{
+	"$schema": "https://ui.shadcn.com/schema/registry.json",
+	"name": "zodiac-ui",
+	"homepage": "https://github.com/DanyPops/zodiac",
+	"items": [
+		{
+			"name": "utils",
+			"type": "registry:lib",
+			"title": "cn",
+			"description": "tailwind-merge-backed className combinator, the one place a conditional Tailwind class list gets built.",
+			"files": [{ "path": "src/cn.ts", "type": "registry:lib", "target": "lib/cn.ts" }]
+		},
+		{
+			"name": "surface-style",
+			"type": "registry:lib",
+			"title": "Surface Style",
+			"description": "Zodiac's own 'Gradient to Contrast' background-token ladder (PAGE_BG/WELL_BG/SURFACE_BG). Ported as-is for now (deliberately not yet generalized/theme-injected -- see this repo's own task 04bd1d82) -- a consumer outside Zodiac should replace these three constants with its own tokens before using dialog-chrome.",
+			"files": [{ "path": "src/surface-style.ts", "type": "registry:lib", "target": "lib/surface-style.ts" }]
+		},
+		{
+			"name": "dialog-chrome",
+			"type": "registry:ui",
+			"title": "Dialog Chrome",
+			"description": "Overlay+content chrome for a Radix Dialog/AlertDialog, extracted from 7 byte-identical duplicated dialog shells across apps/web. width/topOffsetVh are closed literal unions on purpose -- Tailwind's JIT scanner needs static literal class strings, not runtime template literals.",
+			"registryDependencies": ["utils", "surface-style"],
+			"dependencies": ["@radix-ui/react-dialog", "@radix-ui/react-alert-dialog"],
+			"files": [{ "path": "src/DialogChrome.tsx", "type": "registry:ui", "target": "components/dialog-chrome.tsx" }]
+		},
+		{
+			"name": "picker",
+			"type": "registry:ui",
+			"title": "Picker",
+			"description": "Generic keyboard-navigable 'search + pick one of several' list. Owns no filtering (caller supplies pre-filtered items) -- built on cmdk (shouldFilter=false) rather than hand-rolled highlight/keyboard-nav state.",
+			"registryDependencies": ["utils"],
+			"dependencies": ["cmdk"],
+			"files": [{ "path": "src/Picker.tsx", "type": "registry:ui", "target": "components/picker.tsx" }]
+		}
+	]
+}
