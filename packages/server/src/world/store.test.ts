@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { integrationId, windowId, workspaceId, worldId } from "@zodiac/protocol";
+import { commandId, integrationId, windowId, workspaceId, worldId } from "@zodiac/protocol";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 
@@ -230,6 +230,47 @@ describe("WorldStore walking skeleton", () => {
 			store.createWorkspace(workspaceId("ws"), "WS");
 
 			expect(() => store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: windowId("ghost-window") })).toThrow(/window-not-found/);
+		});
+	});
+
+	describe("apply()'s own return value -- request/response correlation via commandId", () => {
+		it("echoes the submitted commandId back, and reports surface.dock's newly created surfaceId", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", commandId: commandId("cmd-1") });
+
+			expect(outcome.commandId).toBe(commandId("cmd-1"));
+			const dockedSurfaceId = store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id;
+			expect(outcome.surfaceId).toBe(dockedSurfaceId);
+		});
+
+		it("reports the created surfaceId through dockSurfaceInto's own windowId path too", () => {
+			const store = createWorldStore(worldId("w1"));
+			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+
+			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: workspace.windows[0]!.id });
+
+			expect(outcome.surfaceId).toBeDefined();
+			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id).toBe(outcome.surfaceId);
+		});
+
+		it("returns just the echoed commandId (no surfaceId) for intents that don't create a Surface", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws"), commandId: commandId("cmd-2") });
+
+			expect(outcome).toEqual({ commandId: commandId("cmd-2") });
+		});
+
+		it("omits commandId when the caller didn't supply one", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+
+			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
+
+			expect(outcome.commandId).toBeUndefined();
 		});
 	});
 

@@ -144,6 +144,29 @@ describe("Agent Integration tool: zodiac_dispatch_command against a real daemon 
 		expect({ ...agentSurface, id: undefined }).toEqual({ ...humanSurface, id: undefined });
 	}, 30_000);
 
+	it("round-trips a commandId supplied by the agent's own tool call in the response details", async () => {
+		const url = await startDaemon();
+		await humanApply(url, { type: "workspace.create", workspaceId: "ws-agent", title: "Agent Workspace" });
+
+		piProcess = spawnAgent({
+			daemonUrl: url,
+			grant: { workspaceId: "ws-agent", allowedCommandTypes: ["surface.dock"] },
+			integrations: [ACTIVITY_INTEGRATION],
+			scriptArgs: { type: "surface.dock", workspaceId: "ws-agent", integrationId: "activity", title: "Activity Board", commandId: "agent-cmd-1" },
+		});
+		const events: AgentSessionEvent[] = [];
+		piProcess.onEvent((event) => events.push(event));
+		piProcess.sendPrompt("go");
+
+		const end = await waitForRpcEvent(events, (event) => event.type === "tool_execution_end", { timeoutMs: 20_000 });
+		expect(end.type).toBe("tool_execution_end");
+		if (end.type === "tool_execution_end") {
+			expect(end.isError).toBe(false);
+			const resultText = JSON.stringify(end.result);
+			expect(resultText).toContain("agent-cmd-1");
+		}
+	}, 30_000);
+
 	it("denies a tool call whose target Integration does not declare hasApi, before it ever reaches the daemon", async () => {
 		const url = await startDaemon();
 		await humanApply(url, { type: "workspace.create", workspaceId: "ws-agent", title: "Agent Workspace" });

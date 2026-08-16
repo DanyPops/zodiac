@@ -28,4 +28,20 @@ describe("CommandIntentSchema", () => {
 		expect(CommandIntentSchema.safeParse({ type: "window.next", workspaceId: "w1" }).success).toBe(true);
 		expect(CommandIntentSchema.safeParse({ type: "window.previous", workspaceId: "w1" }).success).toBe(true);
 	});
+
+	it("accepts an optional commandId on every variant, and round-trips it unchanged", () => {
+		const withId = CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", integrationId: "activity", title: "Activity", commandId: "cmd-1" });
+		expect(withId.success).toBe(true);
+		if (withId.success) expect(withId.data.commandId).toBe("cmd-1");
+
+		expect(CommandIntentSchema.safeParse({ type: "window.next", workspaceId: "w1", commandId: "cmd-2" }).success).toBe(true);
+	});
+
+	it("still accepts every variant without a commandId (optional, not required)", () => {
+		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", integrationId: "activity", title: "Activity" }).success).toBe(true);
+	});
+
+	it("rejects a blank commandId, same rule as every other branded id", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.next", workspaceId: "w1", commandId: "" }).success).toBe(false);
+	});
 });

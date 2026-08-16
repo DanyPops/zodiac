@@ -1,4 +1,5 @@
 import {
+	type CommandId,
 	type CommandIntent,
 	type IntegrationId,
 	type ParseResult,
@@ -47,8 +48,17 @@ export interface WorldStore {
 	dockSurfaceInto: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, windowId: WindowId) => DockIntoOutcome;
 	/** The current tile tree for one Window (see window/tile.ts) -- undefined if the Workspace or Window doesn't exist, null if the Window has no docked Surfaces yet. Web and the TUI project this through window/geometry.ts's computeTileRects; neither recalculates tiling itself. */
 	windowTile: (workspaceId: WorkspaceId, windowId: WindowId) => SurfaceTile | null | undefined;
-	/** Applies one typed CommandIntent -- the same path a keybinding, a palette entry, a script/RPC call, or an agent action all go through. */
-	apply: (intent: CommandIntent) => void;
+	/**
+	 * Applies one typed CommandIntent -- the same path a keybinding, a palette
+	 * entry, a script/RPC call, or an agent action all go through. Returns the
+	 * submitted intent's own commandId (if any) echoed back, plus whatever new
+	 * entity id the command produced (surface.dock's created Surface, today
+	 * the only variant that mints one) -- the request/response correlation a
+	 * caller needs once more than one caller can be dispatching concurrently.
+	 * A caller that ignores the return value (every pre-existing call site)
+	 * keeps working unchanged.
+	 */
+	apply: (intent: CommandIntent) => ApplyOutcome;
 	workspaceViewModel: (workspaceId: WorkspaceId) => WorkspaceViewModel | undefined;
 	worldViewModel: () => WorldViewModel;
 	/**
@@ -80,6 +90,14 @@ export interface DockWindowNotFound {
 }
 export type DockIntoFailure = DockWorkspaceNotFound | DockWindowNotFound | TileFailure;
 export type DockIntoOutcome = { readonly ok: true; readonly value: Surface } | DockIntoFailure;
+
+/** apply()'s own return value -- see WorldStore.apply's doc comment. */
+export interface ApplyOutcome {
+	/** The submitted intent's own commandId, echoed back unchanged; undefined if the caller didn't supply one. */
+	readonly commandId?: CommandId;
+	/** The id of the Surface surface.dock just created; absent for every other intent type. */
+	readonly surfaceId?: SurfaceId;
+}
 
 function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId, Workspace>): WorldStore {
 	const allWindows = [...initialWorkspaces.values()].flatMap((workspace) => workspace.windows);
@@ -207,30 +225,31 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, activeWindowIndex });
 	}
 
-	function apply(intent: CommandIntent): void {
+	function apply(intent: CommandIntent): ApplyOutcome {
 		switch (intent.type) {
 			case "workspace.create":
 				createWorkspace(intent.workspaceId, intent.title);
-				return;
-			case "surface.dock":
+				return { commandId: intent.commandId };
+			case "surface.dock": {
 				if (intent.windowId !== undefined) {
 					const result = dockSurfaceInto(intent.workspaceId, intent.integrationId, intent.title, intent.windowId);
 					if (!result.ok) throw new Error(`Cannot dock into Window "${intent.windowId}": ${result.reason}`);
-				} else {
-					dockSurface(intent.workspaceId, intent.integrationId, intent.title);
+					return { commandId: intent.commandId, surfaceId: result.value.id };
 				}
-				return;
+				const surface = dockSurface(intent.workspaceId, intent.integrationId, intent.title);
+				return { commandId: intent.commandId, surfaceId: surface.id };
+			}
 			case "surface.undock":
 				undockSurface(intent.workspaceId, intent.surfaceId);
-				return;
+				return { commandId: intent.commandId };
 			case "window.next":
 				moveActiveWindow(intent.workspaceId, 1);
 				emitChange();
-				return;
+				return { commandId: intent.commandId };
 			case "window.previous":
 				moveActiveWindow(intent.workspaceId, -1);
 				emitChange();
-				return;
+				return { commandId: intent.commandId };
 			default:
 				assertNeverIntent(intent);
 		}

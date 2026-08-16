@@ -95,15 +95,19 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 			// success/failure surface asynchronously instead: success arrives as
 			// the next SSE frame (worldViewModel() already reflects it once that
 			// lands), failure is reported to stderr since there is no synchronous
-			// caller left to hand a thrown error to.
+			// caller left to hand a thrown error to. The intent's own optional
+			// commandId (if the caller supplied one) is included in that
+			// diagnostic so a failure among several concurrent callers' commands
+			// is still attributable to the one that actually failed.
+			const label = intent.commandId ? `${intent.type} commandId=${intent.commandId}` : intent.type;
 			void fetcher(`${baseUrl}/api/world/commands`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ intent }),
 			}).then((response) => {
-				if (!response.ok) console.error(`connectRemoteWorldStore: apply(${intent.type}) rejected by the daemon (${response.status})`);
+				if (!response.ok) console.error(`connectRemoteWorldStore: apply(${label}) rejected by the daemon (${response.status})`);
 			}, (error: unknown) => {
-				console.error(`connectRemoteWorldStore: apply(${intent.type}) failed:`, error);
+				console.error(`connectRemoteWorldStore: apply(${label}) failed:`, error);
 			});
 		},
 		onChange(listener: (viewModel: WorldViewModel) => void): () => void {

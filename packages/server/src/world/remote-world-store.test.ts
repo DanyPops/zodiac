@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { workspaceId } from "@zodiac/protocol";
+import { commandId, workspaceId } from "@zodiac/protocol";
 import type { WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore } from "./remote-world-store.js";
 
@@ -77,6 +77,32 @@ describe("connectRemoteWorldStore", () => {
 		store.apply({ type: "workspace.create", workspaceId: workspaceId("w1"), title: "Bug Triage" });
 		await vi.waitFor(() => expect(daemon.posted).toHaveLength(1));
 		expect(daemon.posted[0]).toEqual({ intent: { type: "workspace.create", workspaceId: "w1", title: "Bug Triage" } });
+		store.dispose();
+	});
+
+	it("apply() posts the intent's own commandId when the caller supplies one", async () => {
+		const daemon = createFakeDaemon(EMPTY);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		store.apply({ type: "workspace.create", workspaceId: workspaceId("w1"), title: "Bug Triage", commandId: commandId("cmd-1") });
+		await vi.waitFor(() => expect(daemon.posted).toHaveLength(1));
+		expect(daemon.posted[0]).toEqual({ intent: { type: "workspace.create", workspaceId: "w1", title: "Bug Triage", commandId: "cmd-1" } });
+		store.dispose();
+	});
+
+	it("apply() includes the commandId in its diagnostic log when the daemon rejects the command", async () => {
+		const rejectingFetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+			const url = String(input);
+			if (url.endsWith("/api/world") && (!init || init.method === undefined)) return new Response(JSON.stringify(EMPTY), { status: 200 });
+			if (url.endsWith("/api/world/events")) return new Response(new ReadableStream(), { status: 200 });
+			if (url.endsWith("/api/world/commands")) return new Response(JSON.stringify({ code: "command-failed" }), { status: 400 });
+			throw new Error(`unhandled request ${url}`);
+		});
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: rejectingFetcher as unknown as typeof fetch });
+		store.apply({ type: "window.next", workspaceId: workspaceId("w1"), commandId: commandId("cmd-attributable") });
+		await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+		expect(errorSpy.mock.calls[0]?.[0]).toContain("cmd-attributable");
+		errorSpy.mockRestore();
 		store.dispose();
 	});
 

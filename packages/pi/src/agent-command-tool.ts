@@ -25,6 +25,7 @@ const AgentCommandArgsSchema = Type.Object({
 	integrationId: Type.Optional(Type.String({ description: "Required for surface.dock -- which Integration to dock." })),
 	surfaceId: Type.Optional(Type.String({ description: "Required for surface.undock -- which Surface to remove." })),
 	windowId: Type.Optional(Type.String({ description: "Optional for surface.dock -- defaults to the active Window." })),
+	commandId: Type.Optional(Type.String({ description: "Optional correlation id echoed back unchanged in the response -- lets this session tell its own command's outcome apart from another concurrent caller's (a human, another agent session)." })),
 });
 
 export interface CreateAgentCommandToolOptions {
@@ -75,7 +76,16 @@ export function createAgentCommandTool(options: CreateAgentCommandToolOptions): 
 				const body = (await response.json().catch(() => ({}))) as { message?: string };
 				throw new Error(`Zodiac command rejected by the daemon (${response.status}): ${body.message ?? "unknown error"}`);
 			}
-			return { content: [{ type: "text", text: `Applied ${intent.type} to Workspace "${intent.workspaceId}".` }], details: { intent } };
+			// commandId/result round-trip whatever the daemon's own postCommand
+			// echoed back (see world-routes.ts) -- lets the caller (and the LLM
+			// reading this tool's own response) see exactly what its own command
+			// produced, not just that some command succeeded.
+			const outcome = (await response.json().catch(() => ({}))) as { commandId?: string; result?: { surfaceId?: string } };
+			const createdSurfaceSuffix = outcome.result?.surfaceId ? ` (created Surface "${outcome.result.surfaceId}")` : "";
+			return {
+				content: [{ type: "text", text: `Applied ${intent.type} to Workspace "${intent.workspaceId}"${createdSurfaceSuffix}.` }],
+				details: { intent, commandId: outcome.commandId, result: outcome.result },
+			};
 		},
 	};
 }

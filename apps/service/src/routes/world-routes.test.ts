@@ -44,7 +44,43 @@ describe("createWorldRoutes", () => {
 			body: JSON.stringify({ intent: { type: "workspace.create", workspaceId: "ws", title: "WS" } }),
 		});
 		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ accepted: true });
 		expect(world.getWorkspace(workspaceId("ws"))).toBeDefined();
+	});
+
+	it("postCommand echoes the submitted commandId back, and reports the created Surface id for surface.dock", async () => {
+		const world = createWorldStore(worldId("w1"));
+		world.createWorkspace(workspaceId("ws"), "WS");
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => {
+			void routes.postCommand(req, res);
+		});
+
+		const response = await fetch(`${base}/api/world/commands`, {
+			method: "POST",
+			body: JSON.stringify({ intent: { type: "surface.dock", workspaceId: "ws", integrationId: "activity", title: "Activity", commandId: "cmd-1" } }),
+		});
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { accepted: boolean; commandId?: string; result?: { surfaceId?: string } };
+		expect(body.accepted).toBe(true);
+		expect(body.commandId).toBe("cmd-1");
+		const dockedSurfaceId = world.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id;
+		expect(body.result).toEqual({ surfaceId: dockedSurfaceId });
+	});
+
+	it("postCommand omits commandId/result entirely when there is nothing to report", async () => {
+		const world = createWorldStore(worldId("w1"));
+		world.createWorkspace(workspaceId("ws"), "WS");
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => {
+			void routes.postCommand(req, res);
+		});
+
+		const response = await fetch(`${base}/api/world/commands`, {
+			method: "POST",
+			body: JSON.stringify({ intent: { type: "window.next", workspaceId: "ws" } }),
+		});
+		expect(await response.json()).toEqual({ accepted: true });
 	});
 
 	it("postCommand rejects a malformed intent with 400, without touching the store", async () => {

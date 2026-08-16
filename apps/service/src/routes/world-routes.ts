@@ -58,13 +58,23 @@ export function createWorldRoutes(world: WorldStore) {
 				writeJson(res, 400, { code: "invalid-intent", message: "Request body was not a recognized CommandIntent.", issues: parsed.issues });
 				return;
 			}
+			let outcome: ReturnType<WorldStore["apply"]>;
 			try {
-				world.apply(parsed.value);
+				outcome = world.apply(parsed.value);
 			} catch (error) {
 				writeJson(res, 400, { code: "command-failed", message: error instanceof Error ? error.message : String(error) });
 				return;
 			}
-			writeJson(res, 200, { accepted: true });
+			// commandId/result round-trip the request/response correlation a
+			// caller needs once more than one caller (a human and an agent, two
+			// browser tabs) can be dispatching concurrently -- see WorldStore.apply's
+			// own doc comment. Both are omitted entirely (not just undefined) when
+			// there is nothing to report, rather than sending null noise.
+			writeJson(res, 200, {
+				accepted: true,
+				...(outcome.commandId !== undefined ? { commandId: outcome.commandId } : {}),
+				...(outcome.surfaceId !== undefined ? { result: { surfaceId: outcome.surfaceId } } : {}),
+			});
 		},
 
 		streamEvents(req: IncomingMessage, res: ServerResponse): void {
