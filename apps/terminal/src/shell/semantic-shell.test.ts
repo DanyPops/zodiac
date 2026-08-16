@@ -1,5 +1,5 @@
 import { createWorldStore } from "@zodiac/server/world";
-import { layoutWorldRegions, worldId } from "@zodiac/protocol";
+import { integrationId, layoutWorldRegions, workspaceId, worldId } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it } from "vitest";
 import { diffFrames, type GridFrame } from "../frame/index.js";
@@ -587,5 +587,52 @@ describe("semantic empty Zodiac shell", () => {
       shell.enterExternal(component);
       expect(shell.externalComponentHandle()).toBe(component);
     });
+  });
+});
+
+async function renderText(width: number, height: number, world: ReturnType<typeof createWorldStore>): Promise<string> {
+  const shell = new SemanticShell();
+  const frame = shell.project(world.worldViewModel(), width, height);
+  if (!frame.ok) throw new Error(frame.error.message);
+  const update = diffFrames(undefined, frame.value);
+  if (!update.ok) throw new Error(update.error.message);
+  const encoded = encodeGridUpdate(update.value);
+  if (!encoded.ok) throw new Error(encoded.error.message);
+  const terminal = await renderToTerminal([encoded.value], { cols: width, rows: height });
+  try {
+    return terminal.plainLines().join("\n");
+  } finally {
+    terminal.dispose();
+  }
+}
+
+describe("semantic Zodiac shell body region renders live docked Surfaces", () => {
+  it("paints each docked Surface's own title as a separate box, not the single Workspace-title placeholder", async () => {
+    const world = createWorldStore(worldId("w"));
+    const workspace = world.createWorkspace(workspaceId("ws"), "My Workspace");
+    world.dockSurface(workspace.id, integrationId("terminal"), "Terminal");
+    world.dockSurface(workspace.id, integrationId("editor"), "Editor");
+    const text = await renderText(80, 24, world);
+    // A real bordered, titled box for each Surface -- not the plain centered-label placeholder.
+    expect(text).toMatch(/\u250c\u2500+ Terminal \u2500+\u2510/);
+    expect(text).toMatch(/\u250c\u2500+ Editor \u2500+\u2510/);
+  });
+
+  it("falls back to the Workspace title placeholder when the active Window has no docked Surfaces yet", async () => {
+    const world = createWorldStore(worldId("w"));
+    world.createWorkspace(workspaceId("ws"), "My Workspace");
+    const text = await renderText(80, 24, world);
+    expect(text).toContain("My Workspace");
+  });
+
+  it("undocking a Surface removes its box and leaves the remaining Surface's box painted", async () => {
+    const world = createWorldStore(worldId("w"));
+    const workspace = world.createWorkspace(workspaceId("ws"), "My Workspace");
+    const terminal = world.dockSurface(workspace.id, integrationId("terminal"), "Terminal");
+    world.dockSurface(workspace.id, integrationId("editor"), "Editor");
+    world.undockSurface(workspace.id, terminal.id);
+    const text = await renderText(80, 24, world);
+    expect(text).not.toContain("Terminal");
+    expect(text).toContain("Editor");
   });
 });

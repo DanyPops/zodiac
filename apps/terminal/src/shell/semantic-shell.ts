@@ -1,8 +1,10 @@
-import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type WorldViewModel } from "@zodiac/protocol";
+import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type SurfaceId, type WorldViewModel } from "@zodiac/protocol";
+import { computeTileRects } from "@zodiac/server/window";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
 import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { createGridFrame, createRect, gridId, paintText, type CellStyle, type GridFrame, type Outcome, type Rect } from "../frame/index.js";
+import { paintSurfaceTiles } from "../frame/surface-tiles.js";
 import type { FooterChatStatus } from "../pi/footer-chat-controller.js";
 import { mountComponent } from "./component-mount.js";
 import { wrapFooterHistory } from "./footer-history-wrap.js";
@@ -272,6 +274,23 @@ export class SemanticShell {
     return labelSegment(frame, area.value, 1, width - 1, 0, label, BORDER_ACTIVE);
   }
 
+  /** Paints the active Window's live tile as bordered, titled Surface boxes; falls back to a single centered label when the world is empty or the Window has no docked Surfaces yet. */
+  private paintBody(frame: GridFrame, area: Rect, region: Extract<Region, { kind: "body" }>, title: CellStyle): Outcome<void> {
+    const content = region.content;
+    if (content.state === "empty" || content.tile === null) {
+      const label = content.state === "empty" ? content.watermark : content.title;
+      return paint(frame, area, Math.max(0, Math.floor((area.width - label.length) / 2)), Math.floor(area.height / 2), label, title);
+    }
+    const titled = paint(frame, area, 1, 1, content.title, title);
+    if (!titled.ok) return titled;
+    const inner = createRect(area.x + 1, area.y + 2, Math.max(0, area.width - 2), Math.max(0, area.height - 3));
+    if (!inner.ok) return inner;
+    const placements = computeTileRects(content.tile, inner.value);
+    if (!placements.ok) return { ok: false, error: { code: "invalid-dimensions", message: `tile geometry failed: ${placements.reason}`, context: { width: inner.value.width, height: inner.value.height } } };
+    const titleFor = (surfaceId: SurfaceId): string => content.surfaces.find((surface) => surface.id === surfaceId)?.title ?? surfaceId;
+    return paintSurfaceTiles(frame, placements.value, titleFor, { border: MUTED, title });
+  }
+
   private paintRegion(frame: GridFrame, area: Rect, region: Region, title: CellStyle, footerChat?: FooterChatStatus): Outcome<void> {
     if (region.kind === "header") return { ok: true, value: undefined }; // embedded into the top border row by paintFrameBorders
     if (region.kind === "pillar") {
@@ -281,10 +300,7 @@ export class SemanticShell {
       // so the panel's own content starts immediately at row 1, not row 3.
       return paint(frame, area, 1, 1, region.items.length === 0 ? "(none)" : region.items[0]!.label, MUTED);
     }
-    if (region.kind === "body") {
-      const label = region.content.state === "empty" ? region.content.watermark : region.content.title;
-      return paint(frame, area, Math.max(0, Math.floor((area.width - label.length) / 2)), Math.floor(area.height / 2), label, title);
-    }
+    if (region.kind === "body") return this.paintBody(frame, area, region, title);
     // Footer row 0 is the border separator and row (height-1) is the bottom
     // border. At the default MIN_FOOTER_HEIGHT there's exactly one content
     // row, holding the live status line. Once expanded past that (see

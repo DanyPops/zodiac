@@ -1,5 +1,6 @@
 import type { ResourceStatus } from "./status.js";
 import type { IntegrationId, SurfaceId, WindowId, WorkspaceId } from "./ids.js";
+import type { SurfaceTile } from "./tile.js";
 
 /**
  * Runtime-validated entities (entities.ts) describe what a World *stores*.
@@ -22,6 +23,8 @@ export interface WindowViewModel {
 	readonly title: string;
 	readonly active: boolean;
 	readonly surfaces: readonly SurfaceViewModel[];
+	/** This Window's current tile layout, or null if it has no docked Surfaces. */
+	readonly tile: SurfaceTile | null;
 }
 
 export interface WorkspaceViewModel {

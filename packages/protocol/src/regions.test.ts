@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { layoutWorldRegions, MIN_FOOTER_HEIGHT, RegionSchema, type EmptyWorldViewModel } from "./regions.js";
+import { layoutWorldRegions, MIN_FOOTER_HEIGHT, RegionSchema, type EmptyWorldViewModel, type ReadyWorldViewModel } from "./regions.js";
+import { surfaceId, windowId, workspaceId } from "./ids.js";
 
 const emptyWorld: EmptyWorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
+
+const TWO_SURFACES = [
+	{ id: surfaceId("s1"), integrationId: "terminal" as never, title: "Terminal", status: "idle" as const, selected: false },
+	{ id: surfaceId("s2"), integrationId: "editor" as never, title: "Editor", status: "idle" as const, selected: false },
+];
+
+function readyWorld(tile: ReadyWorldViewModel["workspaces"][number]["windows"][number]["tile"], surfaces = tile === null ? [] : TWO_SURFACES): ReadyWorldViewModel {
+	const window = { id: windowId("w1"), title: "Window 1", active: true, tile, surfaces };
+	return {
+		state: "ready",
+		activeWorkspaceId: workspaceId("ws1"),
+		workspaces: [{ id: workspaceId("ws1"), title: "My Workspace", activeWindowId: window.id, windows: [window] }],
+	};
+}
 
 describe("semantic Region protocol", () => {
   it.each([
@@ -48,6 +63,32 @@ describe("semantic Region protocol", () => {
 
   it("rejects a Region kind outside the closed union", () => {
     expect(RegionSchema.safeParse({ kind: "sidebar", rect: { x: 0, y: 0, width: 1, height: 1 } }).success).toBe(false);
+  });
+
+  it("projects the active Window's live tile and Surface titles into the body region when a Workspace is open", () => {
+    const tile = { kind: "row" as const, children: [{ tile: { kind: "leaf" as const, surfaceId: surfaceId("s1") }, constraint: { kind: "fill" as const, weight: 1 } }, { tile: { kind: "leaf" as const, surfaceId: surfaceId("s2") }, constraint: { kind: "fill" as const, weight: 1 } }] };
+    const result = layoutWorldRegions(readyWorld(tile), 80, 24);
+    if (!result.ok) throw new Error(result.issues.join("; "));
+    const body = result.value.find((region) => region.kind === "body")!;
+    expect(RegionSchema.safeParse(body).success).toBe(true);
+    expect(body).toMatchObject({
+      content: {
+        state: "active",
+        title: "My Workspace",
+        tile,
+        surfaces: [
+          { id: surfaceId("s1"), title: "Terminal" },
+          { id: surfaceId("s2"), title: "Editor" },
+        ],
+      },
+    });
+  });
+
+  it("projects a null tile and empty Surface list when the active Window has no docked Surfaces", () => {
+    const result = layoutWorldRegions(readyWorld(null), 80, 24);
+    if (!result.ok) throw new Error(result.issues.join("; "));
+    const body = result.value.find((region) => region.kind === "body")!;
+    expect(body).toMatchObject({ content: { state: "active", tile: null, surfaces: [] } });
   });
 
   it("grows the footer and shrinks header/body/pillars to match, when given a taller footerHeight", () => {

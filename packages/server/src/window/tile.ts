@@ -1,49 +1,22 @@
-import type { SurfaceId } from "@zodiac/protocol";
+import type { SurfaceId, Constraint, TileChild, SurfaceTile } from "@zodiac/protocol";
+import { MAX_TILE_DEPTH, MAX_CHILDREN_PER_TILE, MAX_SURFACES_PER_TILE } from "@zodiac/protocol";
 
 /**
- * A Window's docked Surfaces as a Neovim/Pop-Shell-shaped recursive tile
- * tree -- the layout/tiling concern, kept entirely separate from
- * WorldStore's own aggregate bookkeeping (which Integration state exists
- * per Workspace) and from geometry projection (./geometry.ts's
- * computeTileRects, which turns a tile plus a pixel/cell area into
+ * Mutates a Window's docked-Surface tile tree -- kept separate from
+ * WorldStore's own aggregate bookkeeping and from geometry projection
+ * (./geometry.ts's computeTileRects, which turns a tile plus an area into
  * concrete rectangles). This module never imports a renderer.
  *
- * Every mutation returns a fresh tree (or null for an emptied Window) --
- * insertTile/removeTile never mutate their input in place -- and every
- * expected failure (a duplicate Surface, a missing Surface, an exceeded
- * bound) is a typed value, never a thrown exception, per this workspace's
- * "model expected failures as typed values" convention.
+ * Every mutation returns a fresh tree (or null for an emptied Window);
+ * every expected failure is a typed value, never a thrown exception.
  *
- * This story deliberately does not add stack/tab nodes or a
- * layout-strategy hierarchy -- both have real prior art, but neither
- * belongs to the confirmed walking skeleton (Papyrus task
- * ab2cab7c-9d68-498b-9e2b-04f42831ee22).
+ * The tile/constraint types themselves live in @zodiac/protocol (see
+ * tile.ts there) so a WindowViewModel can carry a live tile as
+ * schema-validated data -- re-exported here for this module's existing
+ * callers.
  */
-
-/** A ratatui-shaped sizing constraint for one child along its parent's tiling axis. */
-export type Constraint =
-	| { readonly kind: "length"; readonly value: number }
-	| { readonly kind: "percentage"; readonly value: number }
-	| { readonly kind: "ratio"; readonly numerator: number; readonly denominator: number }
-	| { readonly kind: "min"; readonly value: number }
-	| { readonly kind: "max"; readonly value: number }
-	| { readonly kind: "fill"; readonly weight: number };
-
-/** One child slot of a row/col tile: the nested tile plus how much of the parent's axis it claims. */
-export interface TileChild {
-	readonly tile: SurfaceTile;
-	readonly constraint: Constraint;
-}
-
-/** A Window's tiling tree: a single docked Surface, or a row/col split of two or more weighted children. */
-export type SurfaceTile = { readonly kind: "leaf"; readonly surfaceId: SurfaceId } | { readonly kind: "row" | "col"; readonly children: readonly TileChild[] };
-
-/** How deep a tile tree may nest -- bounds recursive traversal cost (parse, geometry projection, rendering) against a pathological or adversarial dock sequence. */
-export const MAX_TILE_DEPTH = 12;
-/** How many direct children a single row/col node may hold. */
-export const MAX_CHILDREN_PER_TILE = 16;
-/** How many Surfaces one Window's whole tile tree may track in total. */
-export const MAX_SURFACES_PER_TILE = 64;
+export type { Constraint, TileChild, SurfaceTile };
+export { MAX_TILE_DEPTH, MAX_CHILDREN_PER_TILE, MAX_SURFACES_PER_TILE };
 
 const EVEN_FILL: Constraint = { kind: "fill", weight: 1 };
 
