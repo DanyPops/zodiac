@@ -37,6 +37,7 @@ export function seedBuiltinApplets(registry: AppletRegistry): void {
 		{ id: appletId("workspace-nav"), title: "Workspace navigation", slot: "body", supportedFormFactors: new Set(["vertical"]), maxInstances: 1 },
 		{ id: appletId("window-carousel"), title: "Window carousel", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 },
 		{ id: appletId("chat"), title: "Chat", slot: "body", supportedFormFactors: HORIZONTAL_AND_VERTICAL, maxInstances: 1 },
+		{ id: appletId("surface-templates"), title: "Surface Templates", slot: "body", supportedFormFactors: new Set(["vertical"]), maxInstances: 1 },
 	];
 	for (const applet of [...caps, ...body]) registry.registerApplet(applet);
 }

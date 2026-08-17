@@ -130,6 +130,26 @@ describe("zodiacd: a real decoupled daemon process, multiple parallel UI clients
 		expect(daemon.pid).not.toBe(process.pid);
 	});
 
+	it("boots with real World-chrome Panels seeded (workspace-nav left, surface-templates right), not an empty list", async () => {
+		const res = await fetch(`${baseUrl}/api/world/panels`);
+		const body = (await res.json()) as { panels: { id: string; location: string; body: string[] }[] };
+		const byLocation = new Map(body.panels.map((panel) => [panel.location, panel]));
+		expect(byLocation.get("left")).toMatchObject({ id: "workspace-nav", body: ["workspace-nav"] });
+		expect(byLocation.get("right")).toMatchObject({ id: "surface-templates", body: ["surface-templates"] });
+	});
+
+	it("the real built-in Applet registry is actually wired in -- panel.move rejects a FormFactor violation, not silently accepted", async () => {
+		// workspace-nav is vertical-only; "top" is horizontal -- this only rejects
+		// if getApplet resolves a real AppletDefinition, proving seedBuiltinApplets
+		// is live in this process, not the pre-this-task no-op.
+		const res = await fetch(`${baseUrl}/api/world/commands`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ intent: { type: "panel.move", panelId: "workspace-nav", placement: { location: "top", alignment: "center", offset: 0 } } }),
+		});
+		expect(res.status).toBe(400);
+	});
+
 	it("a change made through one UI client is observed, live, by another already-connected UI client", async () => {
 		const uiA = await connectUiClient();
 		const uiB = await connectUiClient();

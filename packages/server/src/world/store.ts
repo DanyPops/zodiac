@@ -408,9 +408,17 @@ export function createWorldStoreFromWorld(world: World, panelOptions?: WorldStor
 	);
 }
 
-/** The one entry point for loading a World from outside this process's own control (a persisted snapshot, an RPC payload): fails closed with a typed outcome instead of throwing on malformed input. */
-export function hydrateWorldStore(input: unknown): ParseResult<WorldStore> {
+/**
+ * The one entry point for loading a World from outside this process's own
+ * control (a persisted snapshot, an RPC payload): fails closed with a typed
+ * outcome instead of throwing on malformed input. `panelOptions` is a
+ * second, independent input -- a persisted World snapshot never carries
+ * Panel state at all (`WorldStore.snapshot()`'s own return shape omits it),
+ * so a caller re-seeding chrome Panels on every boot (fresh or rehydrated
+ * alike) passes the same `panelOptions` it would to `createWorldStore`.
+ */
+export function hydrateWorldStore(input: unknown, panelOptions?: WorldStorePanelOptions): ParseResult<WorldStore> {
 	const parsed = parseWithSchema(WorldSchema, input);
 	if (!parsed.ok) return parsed;
-	return { ok: true, value: createWorldStoreFromWorld(parsed.value) };
+	return { ok: true, value: createWorldStoreFromWorld(parsed.value, panelOptions) };
 }

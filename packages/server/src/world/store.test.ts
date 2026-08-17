@@ -357,6 +357,13 @@ describe("WorldStore walking skeleton", () => {
 			expect(surface.id).not.toBe("surface-7");
 			expect(result.value.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(2);
 		});
+
+		it("hydrateWorldStore forwards panelOptions -- a rehydrated store gets the same seeded Panels/getApplet a fresh one would", () => {
+			const footer: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 3, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
+			const result = hydrateWorldStore({ id: "w1", workspaces: [] }, { panels: [footer] });
+			expect(result.ok).toBe(true);
+			if (result.ok) expect(result.value.panels()).toEqual([footer]);
+		});
 	});
 });
 

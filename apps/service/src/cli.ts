@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { worldId, type IntegrationDefinition, type IntegrationId } from "@zodiac/protocol";
-import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore } from "@zodiac/server/world";
+import { appletId, panelId, worldId, type IntegrationDefinition, type IntegrationId, type Panel } from "@zodiac/protocol";
+import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
+import { createAppletRegistry, seedBuiltinApplets } from "@zodiac/server";
 import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
 import { createZodiacAgentSession } from "@zodiac/pi";
 import type { AgentIntegrationPort } from "@zodiac/agent";
@@ -13,6 +14,41 @@ import { createNodePtyFactory } from "./terminal/terminal-pty-port.js";
 
 const DEFAULT_SESSIONS_ROOT = join(homedir(), ".local", "share", "alef", "sessions");
 const WORLD_ID = worldId("zodiac");
+
+/**
+ * Real starting World chrome -- apps/terminal's own DEFAULT_CHAT_PANEL
+ * precedent, applied to the two real Web pillars for the first time. `left`
+ * matches the TUI's own DEFAULT_EDGE_APPLET_IDS.left fallback exactly (both
+ * already default to workspace-nav), so this changes nothing visually for
+ * either client until something moves it. `right` replaces the TUI's own
+ * always-empty "integrations-nav" placeholder (appletContentFor has no real
+ * content for it either) with "surface-templates" -- a real Web feature
+ * with nothing to show on the TUI, which is why it isn't taught to
+ * appletContentFor: rendering blank there is correct, not a bug, the same
+ * as the placeholder it replaced.
+ *
+ * thicknessUnit: "px" on both -- these values are Web's own CSS pixels
+ * (256 matches WorkspaceSelection's default *expanded* width exactly,
+ * see preferences.ts's own readCollapsed() default of false; 56 matches
+ * SurfaceTemplatesPillar's fixed w-14), ignored by the TUI's own geometry
+ * per PanelThicknessUnit's own doc comment (packages/protocol/src/panel.ts).
+ *
+ * Not persisted across a restart: WorldStore.snapshot() carries no Panel
+ * state at all today, so a real panel.move survives only until the next
+ * daemon restart, which re-seeds these defaults -- a known, accepted gap
+ * for this first cut (Panel persistence is its own separate task).
+ */
+const DEFAULT_WORLD_PANELS: readonly Panel[] = [
+	{ id: panelId("workspace-nav"), location: "left", alignment: "start", offset: 0, thickness: 256, thicknessUnit: "px", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: appletId("settings"), body: [appletId("workspace-nav")] },
+	{ id: panelId("surface-templates"), location: "right", alignment: "start", offset: 0, thickness: 56, thicknessUnit: "px", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("surface-templates")] },
+];
+
+function defaultWorldPanelOptions(): WorldStorePanelOptions {
+	const registry = createAppletRegistry();
+	seedBuiltinApplets(registry);
+	const byId = new Map(registry.applets().map((applet) => [applet.id, applet]));
+	return { panels: DEFAULT_WORLD_PANELS, getApplet: (id) => byId.get(id) };
+}
 
 /** Constructs a real, live agent session per zodiacd agent-session request -- "rpc" mode, the same headless character pi's own `pi --mode rpc` subprocess has, since a daemon session has no interactive TUI of its own. Falls back to the daemon's own process cwd when a client doesn't request one. */
 async function createDaemonAgentIntegration(cwd?: string): Promise<AgentIntegrationPort> {
@@ -32,10 +68,11 @@ function loadToolGrantConfig(): { getIntegration: (id: IntegrationId) => Integra
 
 /** Loads the persisted World if one exists, exiting loudly on a corrupted snapshot rather than silently discarding it (see the JSON-file WorldSnapshotPort's own doc comment). */
 async function loadOrCreateWorld(snapshotPort: ReturnType<typeof createJsonFileSnapshotPort>): Promise<WorldStore> {
+	const panelOptions = defaultWorldPanelOptions();
 	const loaded = await snapshotPort.load();
-	if (loaded === undefined) return createWorldStore(WORLD_ID);
+	if (loaded === undefined) return createWorldStore(WORLD_ID, panelOptions);
 
-	const result = hydrateWorldStore(loaded);
+	const result = hydrateWorldStore(loaded, panelOptions);
 	if (!result.ok) {
 		console.error(`[zodiacd] persisted World snapshot failed validation: ${result.issues.join("; ")}`);
 		process.exit(1);

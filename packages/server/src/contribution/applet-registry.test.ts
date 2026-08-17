@@ -23,7 +23,7 @@ describe("seedBuiltinApplets", () => {
 		const registry = createAppletRegistry();
 		seedBuiltinApplets(registry);
 		const applets = registry.applets();
-		expect(applets.map((applet) => applet.id).sort()).toEqual(["chat", "integrations", "notifications", "profile", "settings", "time-jobs", "window-carousel", "workspace-nav"]);
+		expect(applets.map((applet) => applet.id).sort()).toEqual(["chat", "integrations", "notifications", "profile", "settings", "surface-templates", "time-jobs", "window-carousel", "workspace-nav"]);
 		for (const applet of applets) expect(AppletDefinitionSchema.safeParse(applet).success).toBe(true);
 	});
 
