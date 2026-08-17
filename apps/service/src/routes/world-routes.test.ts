@@ -94,6 +94,41 @@ describe("createWorldRoutes", () => {
 		expect(await response.json()).toEqual({ accepted: true });
 	});
 
+	it("postCommand dispatches integration.invoke through a registered fixture Integration handler and surfaces its outcome as result.invoke", async () => {
+		const world = createWorldStore(worldId("w1"));
+		world.createWorkspace(workspaceId("ws"), "WS");
+		world.registerIntegrationInvokeHandler(integrationId("lector"), (action, input) => {
+			if (action !== "symbol.search") return { ok: false, code: "unknown-action", message: "nope" };
+			return { ok: true, value: { echoedInput: input } };
+		});
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => {
+			void routes.postCommand(req, res);
+		});
+
+		const response = await fetch(`${base}/api/world/commands`, {
+			method: "POST",
+			body: JSON.stringify({ intent: { type: "integration.invoke", workspaceId: "ws", integrationId: "lector", action: "symbol.search", input: { query: "x" }, commandId: "cmd-1" } }),
+		});
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ accepted: true, commandId: "cmd-1", result: { invoke: { ok: true, value: { echoedInput: { query: "x" } } } } });
+	});
+
+	it("postCommand surfaces integration.invoke against an unregistered Integration as a 400, not a 500 crash", async () => {
+		const world = createWorldStore(worldId("w1"));
+		world.createWorkspace(workspaceId("ws"), "WS");
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => {
+			void routes.postCommand(req, res);
+		});
+
+		const response = await fetch(`${base}/api/world/commands`, {
+			method: "POST",
+			body: JSON.stringify({ intent: { type: "integration.invoke", workspaceId: "ws", integrationId: "lector", action: "symbol.search" } }),
+		});
+		expect(response.status).toBe(400);
+	});
+
 	it("postCommand rejects a malformed intent with 400, without touching the store", async () => {
 		const world = createWorldStore(worldId("w1"));
 		const routes = createWorldRoutes(world);

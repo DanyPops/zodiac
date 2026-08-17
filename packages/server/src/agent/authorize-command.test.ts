@@ -74,4 +74,24 @@ describe("authorizeAgentCommand", () => {
 		const intent: CommandIntent = { type: "panel.move", panelId: panelId("footer"), placement: { location: "bottom", alignment: "start", offset: 0 } };
 		expect(authorizeAgentCommand(intent, context())).toEqual({ ok: false, reason: "command-not-granted" });
 	});
+
+	it("allows integration.invoke once granted, targeting an Integration that declares hasApi", () => {
+		const intent: CommandIntent = { type: "integration.invoke", workspaceId: WORKSPACE, integrationId: ACTIVITY, action: "symbol.search", input: { query: "x" } };
+		const outcome = authorizeAgentCommand(intent, context({ grant: grant({ allowedCommandTypes: new Set(["integration.invoke"]) }) }));
+		expect(outcome).toEqual({ ok: true });
+	});
+
+	it("denies integration.invoke against an Integration that does not declare hasApi -- the same rationale as surface.dock's own check, since hasApi means exactly 'commands callable through this dispatch path'", () => {
+		const intent: CommandIntent = { type: "integration.invoke", workspaceId: WORKSPACE, integrationId: TERMINAL, action: "anything", input: {} };
+		const outcome = authorizeAgentCommand(
+			intent,
+			context({ grant: grant({ allowedCommandTypes: new Set(["integration.invoke"]) }), getIntegration: integrations({ id: TERMINAL, title: "Terminal", capabilities: { renderable: true, hasApi: false } }) }),
+		);
+		expect(outcome).toEqual({ ok: false, reason: "integration-lacks-api" });
+	});
+
+	it("denies integration.invoke when the grant never listed it, even though the target Integration has an API", () => {
+		const intent: CommandIntent = { type: "integration.invoke", workspaceId: WORKSPACE, integrationId: ACTIVITY, action: "symbol.search", input: {} };
+		expect(authorizeAgentCommand(intent, context())).toEqual({ ok: false, reason: "command-not-granted" });
+	});
 });

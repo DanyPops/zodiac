@@ -64,6 +64,26 @@ describe("CommandIntentSchema", () => {
 		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "diagonal", alignment: "center", offset: 0 } }).success).toBe(false);
 		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "top", alignment: "justify", offset: 0 } }).success).toBe(false);
 	});
+
+	it("accepts a well-formed integration.invoke intent, with an arbitrary action string and an opaque input payload this schema never inspects", () => {
+		const result = CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search", input: { query: "createWorldStore", limit: 10 } });
+		expect(result.success).toBe(true);
+		if (result.success && result.data.type === "integration.invoke") expect(result.data.input).toEqual({ query: "createWorldStore", limit: 10 });
+	});
+
+	it("accepts integration.invoke with input omitted (unknown, not required to be an object)", () => {
+		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search" }).success).toBe(true);
+	});
+
+	it("rejects integration.invoke missing a required field (workspaceId, integrationId, or action)", () => {
+		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", integrationId: "lector", action: "symbol.search" }).success).toBe(false);
+		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", action: "symbol.search" }).success).toBe(false);
+		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector" }).success).toBe(false);
+	});
+
+	it("rejects a blank action string, same rule as every other non-empty string field in this union", () => {
+		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "" }).success).toBe(false);
+	});
 });
 
 describe("CommandIntentSchema version/capability negotiation", () => {
@@ -84,5 +104,13 @@ describe("CommandIntentSchema version/capability negotiation", () => {
 		// older than every real variant's own recorded minimum -- must reject
 		// this intent rather than dispatch it into undefined behavior.
 		expect(isSupportedCommandIntent(intent, 0)).toBe(false);
+	});
+
+	it("a real, live version skew: a dispatcher that only understands protocol version 1 (before integration.invoke existed) rejects an integration.invoke intent, but still accepts every version-1 variant", () => {
+		const invoke = { type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search", input: {} } as CommandIntent;
+		const windowNext = { type: "window.next", workspaceId: "w1" } as CommandIntent;
+		expect(isSupportedCommandIntent(invoke, 1)).toBe(false);
+		expect(isSupportedCommandIntent(windowNext, 1)).toBe(true);
+		expect(isSupportedCommandIntent(invoke, COMMAND_INTENT_PROTOCOL_VERSION)).toBe(true);
 	});
 });

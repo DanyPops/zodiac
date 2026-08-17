@@ -28,6 +28,20 @@ export const CommandIntentSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("window.previous"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	// No workspaceId -- a Panel is global World chrome, not owned by any one Workspace (mirrors today's header/pillar/footer regions, which are also global).
 	z.object({ type: z.literal("panel.move"), panelId: PanelIdSchema, placement: z.object({ location: LocationSchema, alignment: PanelAlignmentSchema, offset: z.number().int().nonnegative() }), ...commandIdField }),
+	/**
+	 * The generic, opaque-payload escape hatch for an external Integration
+	 * (a Vehicle) to contribute a new command without a packages/protocol
+	 * release -- MCP's "Composability over specificity" applied to this
+	 * union: don't grow this schema per external capability, add one variant
+	 * whose own action vocabulary is owned and versioned by the target
+	 * Integration, not by this package. `action`/`input` are deliberately
+	 * `unknown` to this schema -- validated by the target Integration itself
+	 * (see world/store.ts's IntegrationInvokeHandler), consistent with
+	 * ContributionOutcome<T>'s own fail-loud-not-silent result shape. The
+	 * dispatcher's job is routing to the Integration by `integrationId`, not
+	 * interpreting `action`/`input` -- see world/store.ts's `apply`.
+	 */
+	z.object({ type: z.literal("integration.invoke"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, action: z.string().trim().min(1), input: z.unknown().optional(), ...commandIdField }),
 ]);
 
 export type CommandIntent = z.infer<typeof CommandIntentSchema>;
@@ -42,14 +56,16 @@ export type CommandIntent = z.infer<typeof CommandIntentSchema>;
  * older protocol version can reject/degrade an intent it doesn't understand
  * instead of silently misinterpreting it).
  */
-export const COMMAND_INTENT_PROTOCOL_VERSION = 1;
+export const COMMAND_INTENT_PROTOCOL_VERSION = 2;
 
 /**
  * The minimum COMMAND_INTENT_PROTOCOL_VERSION a dispatcher must declare
  * support for to safely handle each CommandIntent variant. Every variant
- * shipped so far was introduced at version 1; a future variant records
- * whatever COMMAND_INTENT_PROTOCOL_VERSION it ships at, never editing an
- * existing entry.
+ * shipped before `integration.invoke` was introduced at version 1;
+ * `integration.invoke` is the first variant added after this versioning
+ * scheme existed, so it records 2. A future variant records whatever
+ * COMMAND_INTENT_PROTOCOL_VERSION it ships at, never editing an existing
+ * entry.
  */
 export const COMMAND_INTENT_MIN_VERSION: Readonly<Record<CommandIntent["type"], number>> = {
 	"workspace.create": 1,
@@ -58,6 +74,7 @@ export const COMMAND_INTENT_MIN_VERSION: Readonly<Record<CommandIntent["type"], 
 	"window.next": 1,
 	"window.previous": 1,
 	"panel.move": 1,
+	"integration.invoke": 2,
 };
 
 /**

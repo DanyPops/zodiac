@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appletId, commandId, integrationId, panelId, surfaceId, windowId, workspaceId, worldId, type AppletDefinition, type Panel } from "@zodiac/protocol";
+import { appletId, commandId, integrationId, panelId, surfaceId, windowId, workspaceId, worldId, type AppletDefinition, type ContributionOutcome, type Panel } from "@zodiac/protocol";
 import { authorizeAgentCommand } from "../agent/authorize-command.js";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
@@ -412,5 +412,75 @@ describe("panel.move", () => {
 		agentStore.apply(intent);
 
 		expect(agentStore.panels()).toEqual(humanStore.panels());
+	});
+});
+
+describe("integration.invoke", () => {
+	/** A fake/fixture Integration contributing a brand-new command purely through integration.invoke -- no change to packages/protocol's existing named variants required. */
+	function fixtureSymbolSearchIntegration() {
+		const calls: { action: string; input: unknown }[] = [];
+		const handler = (action: string, input: unknown): ContributionOutcome<unknown> => {
+			calls.push({ action, input });
+			if (action !== "symbol.search") return { ok: false, code: "unknown-action", message: `Fixture Integration doesn't understand action "${action}"` };
+			const { query } = input as { query?: string };
+			if (!query) return { ok: false, code: "invalid-input", message: "query is required" };
+			return { ok: true, value: { matches: [`${query}#1`, `${query}#2`] } };
+		};
+		return { handler, calls };
+	}
+
+	it("dispatches, executes, and returns a typed outcome through a registered fixture Integration's own handler", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		const fixture = fixtureSymbolSearchIntegration();
+		store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
+
+		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "createWorldStore" }, commandId: commandId("cmd-1") });
+
+		expect(outcome).toEqual({ commandId: commandId("cmd-1"), invokeResult: { ok: true, value: { matches: ["createWorldStore#1", "createWorldStore#2"] } } });
+		expect(fixture.calls).toEqual([{ action: "symbol.search", input: { query: "createWorldStore" } }]);
+	});
+
+	it("routes purely by integrationId -- never inspects action/input itself, so the dispatcher stays ignorant of any specific Integration's action vocabulary", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		const fixture = fixtureSymbolSearchIntegration();
+		store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
+
+		// A structurally valid intent whose action the fixture Integration itself doesn't recognize -- the dispatcher still routes it through; only the target Integration is in a position to reject it.
+		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "something.else", input: {} });
+		expect(outcome.invokeResult).toEqual({ ok: false, code: "unknown-action", message: 'Fixture Integration doesn\'t understand action "something.else"' });
+	});
+
+	it("throws for an integrationId with no registered handler -- fails loud rather than silently dropping the command", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		expect(() => store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: {} })).toThrow(/no registered integration\.invoke handler/);
+	});
+
+	it("throws for an unknown Workspace, same fail-loud contract as every other CommandIntent variant", () => {
+		const store = createWorldStore(worldId("w1"));
+		const fixture = fixtureSymbolSearchIntegration();
+		store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
+		expect(() => store.apply({ type: "integration.invoke", workspaceId: workspaceId("ghost"), integrationId: integrationId("lector"), action: "symbol.search", input: {} })).toThrow();
+	});
+
+	it("registerIntegrationInvokeHandler refuses a second handler for the same integrationId already registered", () => {
+		const store = createWorldStore(worldId("w1"));
+		const fixture = fixtureSymbolSearchIntegration();
+		store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
+		expect(() => store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler)).toThrow();
+	});
+
+	it("the returned unregister function removes the handler, and re-registering afterward succeeds", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		const fixture = fixtureSymbolSearchIntegration();
+		const unregister = store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
+		unregister();
+		expect(() => store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: {} })).toThrow(/no registered integration\.invoke handler/);
+
+		const secondFixture = fixtureSymbolSearchIntegration();
+		expect(() => store.registerIntegrationInvokeHandler(integrationId("lector"), secondFixture.handler)).not.toThrow();
 	});
 });

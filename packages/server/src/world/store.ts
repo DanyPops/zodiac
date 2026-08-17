@@ -3,6 +3,7 @@ import {
 	type AppletId,
 	type CommandId,
 	type CommandIntent,
+	type ContributionOutcome,
 	type IntegrationId,
 	type Panel,
 	type PanelId,
@@ -66,6 +67,18 @@ export interface WorldStore {
 	 * keeps working unchanged.
 	 */
 	apply: (intent: CommandIntent) => ApplyOutcome;
+	/**
+	 * Registers the handler that `apply()` routes an `integration.invoke`
+	 * CommandIntent to for this `integrationId`. Exactly one handler per
+	 * `integrationId` at a time -- a second registration for the same id
+	 * throws (the same "registration is exclusive" contract as
+	 * ContributionHost.registerCommand/registerResourceProvider in
+	 * @zodiac/protocol). Returns an unregister function. `apply()` throws
+	 * a clear "no registered handler" error for an `integration.invoke`
+	 * naming an `integrationId` nothing has registered -- fail loud, per
+	 * Raymond's Rule of Repair, rather than silently drop the command.
+	 */
+	registerIntegrationInvokeHandler: (integrationId: IntegrationId, handler: IntegrationInvokeHandler) => () => void;
 	/** Global World chrome, not owned by any one Workspace -- see panel.move's own CommandIntent doc comment. Empty unless seeded via createWorldStore's own options. */
 	panels: () => readonly Panel[];
 	workspaceViewModel: (workspaceId: WorkspaceId) => WorkspaceViewModel | undefined;
@@ -112,12 +125,28 @@ export interface WorldStorePanelOptions {
 	readonly getApplet?: (id: AppletId) => AppletDefinition | undefined;
 }
 
+/**
+ * A registered Integration's own handler for `integration.invoke` -- the
+ * dispatcher (`apply()`) routes by `integrationId` alone and never inspects
+ * `action`/`input` itself; the target Integration owns and validates its own
+ * action vocabulary and input shape (see CommandIntentSchema's own doc
+ * comment for the full "Composability over specificity" rationale).
+ * Deliberately synchronous: this task defines the generic command's shape
+ * and in-process routing, not the real Vehicle-backed process/trust
+ * boundary for where an Integration's execute actually runs (a separate,
+ * not-yet-built task) -- a future async out-of-process handler is expected
+ * to land as part of that boundary, not here.
+ */
+export type IntegrationInvokeHandler = (action: string, input: unknown) => ContributionOutcome<unknown>;
+
 /** apply()'s own return value -- see WorldStore.apply's doc comment. */
 export interface ApplyOutcome {
 	/** The submitted intent's own commandId, echoed back unchanged; undefined if the caller didn't supply one. */
 	readonly commandId?: CommandId;
 	/** The id of the Surface surface.dock just created; absent for every other intent type. */
 	readonly surfaceId?: SurfaceId;
+	/** The registered IntegrationInvokeHandler's own returned outcome for integration.invoke; absent for every other intent type. */
+	readonly invokeResult?: ContributionOutcome<unknown>;
 }
 
 function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId, Workspace>, panelOptions: WorldStorePanelOptions = {}): WorldStore {
@@ -134,6 +163,15 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
 	const panels = new Map((panelOptions.panels ?? []).map((panel) => [panel.id, panel]));
 	const getApplet = panelOptions.getApplet ?? (() => undefined);
+	const integrationInvokeHandlers = new Map<IntegrationId, IntegrationInvokeHandler>();
+
+	function registerIntegrationInvokeHandler(targetIntegrationId: IntegrationId, handler: IntegrationInvokeHandler): () => void {
+		if (integrationInvokeHandlers.has(targetIntegrationId)) throw new Error(`World "${worldId}" already has an integration.invoke handler registered for Integration "${targetIntegrationId}"`);
+		integrationInvokeHandlers.set(targetIntegrationId, handler);
+		return () => {
+			if (integrationInvokeHandlers.get(targetIntegrationId) === handler) integrationInvokeHandlers.delete(targetIntegrationId);
+		};
+	}
 
 	/**
 	 * One tile tree per Window, live/derived state kept in lockstep with each
@@ -300,6 +338,13 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 			case "panel.move":
 				movePanel(intent.panelId, intent.placement);
 				return { commandId: intent.commandId };
+			case "integration.invoke": {
+				requireWorkspace(intent.workspaceId);
+				const handler = integrationInvokeHandlers.get(intent.integrationId);
+				if (!handler) throw new Error(`World "${worldId}" has no registered integration.invoke handler for Integration "${intent.integrationId}"`);
+				const invokeResult = handler(intent.action, intent.input);
+				return { commandId: intent.commandId, invokeResult };
+			}
 			default:
 				assertNeverIntent(intent);
 		}
@@ -339,6 +384,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		dockSurfaceInto,
 		windowTile,
 		apply,
+		registerIntegrationInvokeHandler,
 		panels: () => [...panels.values()],
 		workspaceViewModel,
 		worldViewModel,

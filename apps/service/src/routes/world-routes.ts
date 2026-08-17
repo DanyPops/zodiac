@@ -74,11 +74,16 @@ export function createWorldRoutes(world: WorldStore) {
 			// caller needs once more than one caller (a human and an agent, two
 			// browser tabs) can be dispatching concurrently -- see WorldStore.apply's
 			// own doc comment. Both are omitted entirely (not just undefined) when
-			// there is nothing to report, rather than sending null noise.
+			// there is nothing to report, rather than sending null noise. surfaceId
+			// and invokeResult are mutually exclusive in practice (one per
+			// CommandIntent variant), but both are spread into the same `result`
+			// object rather than picking one, so a future variant that legitimately
+			// produces both isn't blocked by this shape.
+			const result = { ...(outcome.surfaceId !== undefined ? { surfaceId: outcome.surfaceId } : {}), ...(outcome.invokeResult !== undefined ? { invoke: outcome.invokeResult } : {}) };
 			writeJson(res, 200, {
 				accepted: true,
 				...(outcome.commandId !== undefined ? { commandId: outcome.commandId } : {}),
-				...(outcome.surfaceId !== undefined ? { result: { surfaceId: outcome.surfaceId } } : {}),
+				...(Object.keys(result).length > 0 ? { result } : {}),
 			});
 		},
 

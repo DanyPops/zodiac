@@ -39,7 +39,8 @@ export function authorizeAgentCommand(intent: CommandIntent, context: AuthorizeA
 	// panel.move carries no workspaceId -- a Panel is global World chrome, not owned by any one Workspace, so there is nothing to check a grant's own workspaceId against.
 	if ("workspaceId" in intent && intent.workspaceId !== context.grant.workspaceId) return { ok: false, reason: "workspace-not-granted" };
 	if (!context.grant.allowedCommandTypes.has(intent.type)) return { ok: false, reason: "command-not-granted" };
-	if (intent.type === "surface.dock") {
+	// integration.invoke is, by IntegrationCapabilities' own doc comment, exactly "commands callable through the same dispatch path a human or an agent uses" -- the same hasApi gate surface.dock's dock-time check already enforces.
+	if (intent.type === "surface.dock" || intent.type === "integration.invoke") {
 		const integration = context.getIntegration(intent.integrationId);
 		if (!integration || !integration.capabilities.hasApi) return { ok: false, reason: "integration-lacks-api" };
 	}
