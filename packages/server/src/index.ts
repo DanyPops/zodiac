@@ -4,6 +4,9 @@ export { createCommandDispatcher } from "./command/dispatcher.js";
 export type { ContributionApi, Contribution, ContributionRegistry } from "./contribution/registry.js";
 export { createContributionRegistry } from "./contribution/registry.js";
 
+export type { AppletRegistry } from "./contribution/applet-registry.js";
+export { createAppletRegistry, seedBuiltinApplets } from "./contribution/applet-registry.js";
+
 export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 
 export type { BusChannelName, BusMessage, BusMessageInput, BusHandler, Unsubscribe, BusListenerLimitExceeded, BusSubscribeResult, EventBus, EventBusOptions } from "./event/bus.js";
