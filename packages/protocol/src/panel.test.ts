@@ -64,6 +64,7 @@ function validPanel(overrides: Partial<Parameters<typeof PanelSchema.parse>[0]> 
 		alignment: "start" as const,
 		offset: 0,
 		thickness: 3,
+		thicknessUnit: "terminal-cells" as const,
 		lengthMode: "fill" as const,
 		visibilityMode: "normal" as const,
 		startCap: null,
@@ -89,6 +90,12 @@ describe("PanelSchema", () => {
 
 	it("rejects an unknown lengthMode", () => {
 		expect(PanelSchema.safeParse(validPanel({ lengthMode: "auto" })).success).toBe(false);
+	});
+
+	it("accepts both real thickness units, rejects an unknown one", () => {
+		expect(PanelSchema.safeParse(validPanel({ thicknessUnit: "px" })).success).toBe(true);
+		expect(PanelSchema.safeParse(validPanel({ thicknessUnit: "terminal-cells" })).success).toBe(true);
+		expect(PanelSchema.safeParse(validPanel({ thicknessUnit: "rem" })).success).toBe(false);
 	});
 });
 

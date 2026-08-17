@@ -25,6 +25,7 @@ const DEFAULT_CHAT_PANEL: Panel = {
   alignment: "start",
   offset: 0,
   thickness: MIN_FOOTER_HEIGHT,
+  thicknessUnit: "terminal-cells",
   lengthMode: "fill",
   visibilityMode: "normal",
   startCap: null,

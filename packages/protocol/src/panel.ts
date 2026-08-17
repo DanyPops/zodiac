@@ -43,6 +43,21 @@ export const AppletDefinitionSchema = z
 	.refine((applet) => applet.slot !== "cap" || applet.maxInstances === 1, { message: "A slot:\"cap\" AppletDefinition must have maxInstances 1", path: ["maxInstances"] });
 export type AppletDefinition = z.infer<typeof AppletDefinitionSchema>;
 
+/**
+ * A Panel's own `thickness` is one number two geometrically incompatible
+ * renderers read directly: a terminal's own cell grid (regions.ts's
+ * layoutWorldRegions feeds it straight into column/row math) and a
+ * browser's CSS pixels (WorldShell.tsx's own grid track sizing). The same
+ * seeded/moved Panel is visible to both a Web session and a --daemon-
+ * attached terminal against one shared zodiacd -- `thicknessUnit` is a
+ * renderer's own guard: it trusts `thickness` only when the unit is its
+ * own, otherwise treats the Panel exactly like one with no thickness
+ * override at all (falls back to its own computed default), the same
+ * degrade-gracefully policy a Location with no Panel already gets.
+ */
+export const PanelThicknessUnitSchema = z.enum(["terminal-cells", "px"]);
+export type PanelThicknessUnit = z.infer<typeof PanelThicknessUnitSchema>;
+
 /** Pure placement/container: one Panel per Location, Cap-Body-Cap anatomy (two system-owned Caps, an ordered Body of flexible Applets). */
 export const PanelSchema = z.object({
 	id: PanelIdSchema,
@@ -50,6 +65,7 @@ export const PanelSchema = z.object({
 	alignment: PanelAlignmentSchema,
 	offset: z.number().int().nonnegative(),
 	thickness: z.number().int().positive(),
+	thicknessUnit: PanelThicknessUnitSchema,
 	lengthMode: LengthModeSchema,
 	length: z.number().int().positive().optional(),
 	visibilityMode: VisibilityModeSchema,

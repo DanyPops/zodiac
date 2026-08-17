@@ -79,7 +79,7 @@ describe("connectRemoteWorldStore", () => {
 	});
 
 	it("panels() returns the daemon's Panel list fetched at connect", async () => {
-		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
+		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
 		const daemon = createFakeDaemon(EMPTY, [panel]);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
 		expect(store.panels()).toEqual([panel]);
@@ -87,7 +87,7 @@ describe("connectRemoteWorldStore", () => {
 	});
 
 	it("panels() picks up a change once an unrelated WorldViewModel change also arrives over SSE", async () => {
-		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
+		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
 		const daemon = createFakeDaemon(EMPTY, []);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
 		expect(store.panels()).toEqual([]);

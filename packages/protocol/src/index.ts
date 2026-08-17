@@ -24,8 +24,8 @@ export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions }
 
 export type { SurfaceRenderer } from "./renderer.js";
 
-export type { Location, EdgeLocation, PanelAlignment, FormFactor, LengthMode, VisibilityMode, AppletSlot, AppletDefinition, Panel } from "./panel.js";
-export { LocationSchema, EdgeLocationSchema, PanelAlignmentSchema, FormFactorSchema, LengthModeSchema, VisibilityModeSchema, AppletSlotSchema, AppletDefinitionSchema, PanelSchema, formFactorForLocation, validatePanelAppletAssignment } from "./panel.js";
+export type { Location, EdgeLocation, PanelAlignment, FormFactor, LengthMode, VisibilityMode, AppletSlot, AppletDefinition, Panel, PanelThicknessUnit } from "./panel.js";
+export { LocationSchema, EdgeLocationSchema, PanelAlignmentSchema, FormFactorSchema, LengthModeSchema, VisibilityModeSchema, AppletSlotSchema, AppletDefinitionSchema, PanelSchema, PanelThicknessUnitSchema, formFactorForLocation, validatePanelAppletAssignment } from "./panel.js";
 
 export type { ZodiacContribution, ContributionCapability, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
 export { ContributionReadBoundsSchema, ContributionResourceReferenceSchema } from "./contributions.js";

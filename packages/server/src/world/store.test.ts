@@ -361,7 +361,7 @@ describe("WorldStore walking skeleton", () => {
 });
 
 describe("panel.move", () => {
-	const FOOTER: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
+	const FOOTER: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 3, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
 	const CHAT_APPLET: AppletDefinition = { id: appletId("chat"), title: "Chat", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 };
 
 	it("moves a real Panel to a new Location, updating panels()", () => {

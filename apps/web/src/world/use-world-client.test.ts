@@ -68,7 +68,7 @@ describe("useWorldClient", () => {
 	});
 
 	it("reflects the daemon's Panel list once connected, and picks up a later change via the next onChange", async () => {
-		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
+		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
 		const daemon = createFakeDaemon(EMPTY, [panel]);
 		const { result } = renderHook(() => useWorldClient("http://fake", { fetcher: daemon.fetcher }));
 		await waitFor(() => expect(result.current.panels).toEqual([panel]));

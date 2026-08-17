@@ -133,7 +133,7 @@ describe("semantic Region protocol", () => {
 
   describe("Panel-driven geometry", () => {
     function panel(overrides: Partial<Panel> = {}): Panel {
-      return { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: MIN_FOOTER_HEIGHT, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")], ...overrides };
+      return { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: MIN_FOOTER_HEIGHT, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")], ...overrides };
     }
 
     it("an empty panels array reproduces today's exact default layout", () => {
@@ -193,6 +193,19 @@ describe("semantic Region protocol", () => {
       const bottom = result.value.find((region) => region.kind === "panel" && region.location === "bottom")!;
       expect(right).toMatchObject({ body: [{ appletId: "chat" }] });
       expect(bottom).toMatchObject({ body: [] });
+    });
+
+    it("a Panel's thickness declared in Web's own unit (px) is ignored for terminal geometry -- falls back to this renderer's own default", () => {
+      const pxPanel = panel({ location: "left", thickness: 999, thicknessUnit: "px", body: [appletId("workspace-nav")] });
+      const withPxPanel = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [pxPanel]);
+      const withoutPanels = layoutWorldRegions(emptyWorld, 80, 24);
+      if (!withPxPanel.ok || !withoutPanels.ok) throw new Error("expected both layouts to succeed");
+      const left = withPxPanel.value.find((region) => region.kind === "panel" && region.location === "left")!;
+      const defaultLeft = withoutPanels.value.find((region) => region.kind === "panel" && region.location === "left")!;
+      // Same reserved width as the no-Panel default (999 would otherwise leave no room for Body at all) --
+      // but the real Panel's own body content (workspace-nav) still renders, only its thickness is ignored.
+      expect(left.rect.width).toBe(defaultLeft.rect.width);
+      expect(left).toMatchObject({ body: [{ appletId: "workspace-nav" }] });
     });
   });
 });

@@ -198,7 +198,7 @@ describe("SemanticShellApplication lifecycle", () => {
   });
 
   it("Ctrl+G moves a real chat Panel through every edge Location and back, end-to-end -- its border title actually follows, not just geometry, and its old Location goes genuinely blank rather than re-showing a stale default", async () => {
-    const chatPanel: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 20, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
+    const chatPanel: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 20, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
     const writes: string[] = [];
     const app = new SemanticShellApplication(createWorldStore(worldId("empty"), { panels: [chatPanel] }), { write: data => writes.push(data) });
 

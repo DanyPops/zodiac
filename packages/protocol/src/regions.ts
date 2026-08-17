@@ -140,7 +140,15 @@ export function layoutWorldRegions(world: WorldViewModel, width: number, height:
 	const edgePanelsResult = edgePanelsByLocation(panels);
 	if (!edgePanelsResult.ok) return edgePanelsResult;
 	const edgePanels = edgePanelsResult.value;
-	const headerThickness = edgePanels.top?.thickness ?? DEFAULT_HEADER_THICKNESS;
+	// A Panel's own thickness is trusted only when it's declared in this
+	// renderer's own unit ("terminal-cells") -- a Panel seeded/moved by Web
+	// ("px") is treated exactly like a Panel with no thickness override at
+	// all, never fed into terminal column/row math. See PanelThicknessUnit's
+	// own doc comment (panel.ts) for why this guard exists.
+	function terminalThickness(panel: Panel | undefined): number | undefined {
+		return panel && panel.thicknessUnit === "terminal-cells" ? panel.thickness : undefined;
+	}
+	const headerThickness = terminalThickness(edgePanels.top) ?? DEFAULT_HEADER_THICKNESS;
 	// "bottom" is the one Location with its own pre-existing live-adjustable
 	// thickness (footerHeight, driven by expand/collapse) -- footerHeight
 	// always wins there, even once a real Panel is seeded/moved into "bottom",
@@ -148,8 +156,8 @@ export function layoutWorldRegions(world: WorldViewModel, width: number, height:
 	// occupies the edge. A moved Panel's own `thickness` field only matters at
 	// the other three Locations, which have no competing live value.
 	const footerThickness = footerHeight;
-	const leftThickness = edgePanels.left?.thickness ?? defaultPillarThickness(width);
-	const rightThickness = edgePanels.right?.thickness ?? defaultPillarThickness(width);
+	const leftThickness = terminalThickness(edgePanels.left) ?? defaultPillarThickness(width);
+	const rightThickness = terminalThickness(edgePanels.right) ?? defaultPillarThickness(width);
 	const contentHeight = height - headerThickness - footerThickness;
 	const bodyWidth = width - leftThickness - rightThickness;
 	if (contentHeight < 1 || bodyWidth < 1) return { ok: false, issues: [`Panel thickness leaves no room for Body content in a ${width}x${height} viewport (header ${headerThickness}, footer ${footerThickness}, left ${leftThickness}, right ${rightThickness})`] };

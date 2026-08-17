@@ -8,7 +8,7 @@ import { WorldShell } from "./WorldShell.js";
 afterEach(cleanup);
 
 function panel(overrides: Partial<Panel> & Pick<Panel, "location" | "thickness">): Panel {
-	return { id: panelId("p1"), alignment: "center", offset: 0, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [], ...overrides };
+	return { id: panelId("p1"), alignment: "center", offset: 0, thicknessUnit: "px", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [], ...overrides };
 }
 
 describe("WorldShell", () => {
@@ -46,6 +46,17 @@ describe("WorldShell", () => {
 		);
 		const shell = screen.getByTestId("world-shell");
 		expect(shell.style.gridTemplateColumns).toBe("72px 1fr auto");
+	});
+
+	it("ignores a Panel's thickness declared in the TUI's own unit (terminal-cells) -- falls back to auto", () => {
+		const leftPanel = panel({ location: "left", thickness: 72, thicknessUnit: "terminal-cells" });
+		render(
+			<WorldShell panels={[leftPanel]} left={<nav aria-label="Left" />}>
+				content
+			</WorldShell>,
+		);
+		const shell = screen.getByTestId("world-shell");
+		expect(shell.style.gridTemplateColumns).toBe("auto 1fr auto");
 	});
 
 	it("sizes top/bottom rows the same way, independently of left/right columns", () => {

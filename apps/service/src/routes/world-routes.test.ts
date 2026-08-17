@@ -33,7 +33,7 @@ describe("createWorldRoutes", () => {
 	});
 
 	it("getPanels returns the World's current Panel list", async () => {
-		const panel = { id: panelId("p1"), location: "bottom" as const, alignment: "center" as const, offset: 0, thickness: 3, lengthMode: "fill" as const, visibilityMode: "normal" as const, startCap: null, endCap: null, body: [] };
+		const panel = { id: panelId("p1"), location: "bottom" as const, alignment: "center" as const, offset: 0, thickness: 3, thicknessUnit: "terminal-cells" as const, lengthMode: "fill" as const, visibilityMode: "normal" as const, startCap: null, endCap: null, body: [] };
 		const world = createWorldStore(worldId("w1"), { panels: [panel] });
 		const routes = createWorldRoutes(world);
 		const base = await listen((req, res) => routes.getPanels(req, res));

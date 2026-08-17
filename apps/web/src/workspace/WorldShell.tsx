@@ -16,9 +16,19 @@ function panelAt(panels: readonly Panel[], location: EdgeLocation): Panel | unde
 	return panels.find((panel) => panel.location === location);
 }
 
-/** A Panel's own thickness overrides its slot's track size; with no Panel there yet, the slot's own content still renders and sizes itself (matches today's WorkspaceSelection/SurfaceTemplatesPillar, which already manage their own width/height independently of any container). */
+/**
+ * A Panel's own thickness overrides its slot's track size, but only when
+ * declared in this renderer's own unit ("px") -- a Panel seeded/moved by
+ * the TUI ("terminal-cells") is treated exactly like a Panel with no
+ * thickness override at all, never fed into a CSS track size. See
+ * PanelThicknessUnit's own doc comment (packages/protocol/src/panel.ts)
+ * for why this guard exists. With no usable thickness, the slot's own
+ * content still renders and sizes itself (matches today's
+ * WorkspaceSelection/SurfaceTemplatesPillar, which already manage their
+ * own width/height independently of any container).
+ */
 function trackSize(panel: Panel | undefined): string {
-	return panel ? `${panel.thickness}px` : "auto";
+	return panel && panel.thicknessUnit === "px" ? `${panel.thickness}px` : "auto";
 }
 
 /**
