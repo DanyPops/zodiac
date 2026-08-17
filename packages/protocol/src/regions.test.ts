@@ -175,5 +175,17 @@ describe("semantic Region protocol", () => {
       const result = layoutWorldRegions(emptyWorld, 40, 12, MIN_FOOTER_HEIGHT, [panel({ location: "left", id: panelId("huge-left"), thickness: 39 })]);
       expect(result).toMatchObject({ ok: false });
     });
+
+    it("a real Applet moved away from its default Location never also renders at that Location's own default fallback", () => {
+      // chat's real Panel now lives at "right" -- "bottom" has no Panel of its
+      // own, and must not fall back to DEFAULT_EDGE_APPLET_IDS's own "chat"
+      // default, or chat would render twice at once.
+      const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ location: "right", thickness: 20 })]);
+      if (!result.ok) throw new Error(result.issues.join("; "));
+      const right = result.value.find((region) => region.kind === "panel" && region.location === "right")!;
+      const bottom = result.value.find((region) => region.kind === "panel" && region.location === "bottom")!;
+      expect(right).toMatchObject({ body: [{ appletId: "chat" }] });
+      expect(bottom).toMatchObject({ body: [] });
+    });
   });
 });

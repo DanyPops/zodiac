@@ -98,9 +98,8 @@ function appletContentFor(id: AppletId, world: WorldViewModel): AppletContent | 
 	}
 }
 
-/** The AppletIds occupying one edge Location: a real Panel's own startCap/body/endCap (in that order) if one is assigned there, else today's single-Applet default. */
-function bodyAppletIdsFor(location: EdgeLocation, panel: Panel | undefined): readonly AppletId[] {
-	if (!panel) return DEFAULT_EDGE_APPLET_IDS[location];
+/** A real Panel's own AppletIds, startCap/body/endCap in that order. */
+function bodyAppletIdsOfPanel(panel: Panel): readonly AppletId[] {
 	return [...(panel.startCap ? [panel.startCap] : []), ...panel.body, ...(panel.endCap ? [panel.endCap] : [])];
 }
 
@@ -158,10 +157,19 @@ export function layoutWorldRegions(world: WorldViewModel, width: number, height:
 		right: { x: width - rightThickness, y: headerThickness, width: rightThickness, height: contentHeight },
 		bottom: { x: 0, y: height - footerThickness, width, height: footerThickness },
 	};
+	// An AppletId already explicitly placed by some real Panel must never also
+	// get re-added by another Location's *default* fallback below -- e.g. once
+	// "chat" has moved from its default "bottom" to a real Panel at "right",
+	// "bottom" (now genuinely Panel-less) must render empty, not silently
+	// duplicate "chat" there via DEFAULT_EDGE_APPLET_IDS.
+	const explicitlyPlacedAppletIds = new Set<AppletId>();
+	for (const panel of Object.values(edgePanels)) {
+		if (panel) for (const id of bodyAppletIdsOfPanel(panel)) explicitlyPlacedAppletIds.add(id);
+	}
 	function panelBodyFor(location: EdgeLocation): AppletContent[] {
-		return bodyAppletIdsFor(location, edgePanels[location])
-			.map((id) => appletContentFor(id, world))
-			.filter((content): content is AppletContent => content !== undefined);
+		const panel = edgePanels[location];
+		const ids = panel ? bodyAppletIdsOfPanel(panel) : DEFAULT_EDGE_APPLET_IDS[location].filter((id) => !explicitlyPlacedAppletIds.has(id));
+		return ids.map((id) => appletContentFor(id, world)).filter((content): content is AppletContent => content !== undefined);
 	}
 	const empty = world.state === "empty";
 	const regions: Region[] = [
