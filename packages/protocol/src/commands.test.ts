@@ -65,6 +65,14 @@ describe("CommandIntentSchema", () => {
 		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "top", alignment: "justify", offset: 0 } }).success).toBe(false);
 	});
 
+	it("accepts a well-formed panel.resize intent", () => {
+		expect(CommandIntentSchema.safeParse({ type: "panel.resize", panelId: "workspace-nav", thickness: 256 }).success).toBe(true);
+	});
+
+	it("rejects a non-positive panel.resize thickness", () => {
+		expect(CommandIntentSchema.safeParse({ type: "panel.resize", panelId: "workspace-nav", thickness: 0 }).success).toBe(false);
+	});
+
 	it("accepts a well-formed integration.invoke intent, with an arbitrary action string and an opaque input payload this schema never inspects", () => {
 		const result = CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search", input: { query: "createWorldStore", limit: 10 } });
 		expect(result.success).toBe(true);
@@ -112,5 +120,13 @@ describe("CommandIntentSchema version/capability negotiation", () => {
 		expect(isSupportedCommandIntent(invoke, 1)).toBe(false);
 		expect(isSupportedCommandIntent(windowNext, 1)).toBe(true);
 		expect(isSupportedCommandIntent(invoke, COMMAND_INTENT_PROTOCOL_VERSION)).toBe(true);
+	});
+
+	it("a dispatcher that only understands protocol version 2 (before panel.resize existed) rejects panel.resize, but still accepts integration.invoke", () => {
+		const resize = { type: "panel.resize", panelId: "workspace-nav", thickness: 256 } as CommandIntent;
+		const invoke = { type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search" } as CommandIntent;
+		expect(isSupportedCommandIntent(resize, 2)).toBe(false);
+		expect(isSupportedCommandIntent(invoke, 2)).toBe(true);
+		expect(isSupportedCommandIntent(resize, COMMAND_INTENT_PROTOCOL_VERSION)).toBe(true);
 	});
 });

@@ -29,6 +29,18 @@ export const CommandIntentSchema = z.discriminatedUnion("type", [
 	// No workspaceId -- a Panel is global World chrome, not owned by any one Workspace (mirrors today's header/pillar/footer regions, which are also global).
 	z.object({ type: z.literal("panel.move"), panelId: PanelIdSchema, placement: z.object({ location: LocationSchema, alignment: PanelAlignmentSchema, offset: z.number().int().nonnegative() }), ...commandIdField }),
 	/**
+	 * A separate variant from panel.move rather than an overload -- matches
+	 * this union's own one-intent-per-verb convention (move vs. resize are
+	 * different real actions, e.g. a drag-resize never changes location).
+	 * `thickness` is carried in whatever unit the target Panel's own
+	 * thicknessUnit already declares -- see PanelThicknessUnit's own doc
+	 * comment (panel.ts): a caller resizing a Panel it doesn't own the unit
+	 * space for (the TUI dispatching against a "px" Panel, or vice versa) is
+	 * a caller bug this schema doesn't police, the same way panel.move
+	 * doesn't police FormFactor here either (that's WorldStore.apply's own job).
+	 */
+	z.object({ type: z.literal("panel.resize"), panelId: PanelIdSchema, thickness: z.number().int().positive(), ...commandIdField }),
+	/**
 	 * The generic, opaque-payload escape hatch for an external Integration
 	 * (a Vehicle) to contribute a new command without a packages/protocol
 	 * release -- MCP's "Composability over specificity" applied to this
@@ -56,7 +68,7 @@ export type CommandIntent = z.infer<typeof CommandIntentSchema>;
  * older protocol version can reject/degrade an intent it doesn't understand
  * instead of silently misinterpreting it).
  */
-export const COMMAND_INTENT_PROTOCOL_VERSION = 2;
+export const COMMAND_INTENT_PROTOCOL_VERSION = 3;
 
 /**
  * The minimum COMMAND_INTENT_PROTOCOL_VERSION a dispatcher must declare
@@ -75,6 +87,7 @@ export const COMMAND_INTENT_MIN_VERSION: Readonly<Record<CommandIntent["type"], 
 	"window.previous": 1,
 	"panel.move": 1,
 	"integration.invoke": 2,
+	"panel.resize": 3,
 };
 
 /**

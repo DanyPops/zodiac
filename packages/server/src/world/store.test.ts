@@ -422,6 +422,29 @@ describe("panel.move", () => {
 	});
 });
 
+describe("panel.resize", () => {
+	const PILLAR: Panel = { id: panelId("workspace-nav"), location: "left", alignment: "start", offset: 0, thickness: 56, thicknessUnit: "px", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("workspace-nav")] };
+
+	it("updates a real Panel's own thickness, leaving its thicknessUnit and everything else untouched", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [PILLAR] });
+		const outcome = store.apply({ type: "panel.resize", panelId: PILLAR.id, thickness: 256 });
+		expect(outcome).toEqual({ commandId: undefined });
+		expect(store.panels()).toEqual([{ ...PILLAR, thickness: 256 }]);
+	});
+
+	it("echoes back the caller's own commandId", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [PILLAR] });
+		const outcome = store.apply({ type: "panel.resize", panelId: PILLAR.id, thickness: 256, commandId: commandId("cmd-1") });
+		expect(outcome).toEqual({ commandId: commandId("cmd-1") });
+	});
+
+	it("throws for an unknown panelId, without mutating any existing Panel", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [PILLAR] });
+		expect(() => store.apply({ type: "panel.resize", panelId: panelId("nonexistent"), thickness: 256 })).toThrow();
+		expect(store.panels()).toEqual([PILLAR]);
+	});
+});
+
 describe("integration.invoke", () => {
 	/** A fake/fixture Integration contributing a brand-new command purely through integration.invoke -- no change to packages/protocol's existing named variants required. */
 	function fixtureSymbolSearchIntegration() {

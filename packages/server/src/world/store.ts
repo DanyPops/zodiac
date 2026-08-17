@@ -310,6 +310,14 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		emitChange();
 	}
 
+	/** Never touches thicknessUnit -- a resize only ever changes magnitude, never which unit space it's declared in. See PanelThicknessUnit's own doc comment (panel.ts): a caller resizing a Panel outside its own unit space is a caller bug this function doesn't police. */
+	function resizePanel(targetPanelId: PanelId, thickness: number): void {
+		const panel = panels.get(targetPanelId);
+		if (!panel) throw new Error(`World "${worldId}" has no Panel "${targetPanelId}"`);
+		panels.set(targetPanelId, { ...panel, thickness });
+		emitChange();
+	}
+
 	function apply(intent: CommandIntent): ApplyOutcome {
 		switch (intent.type) {
 			case "workspace.create":
@@ -337,6 +345,9 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				return { commandId: intent.commandId };
 			case "panel.move":
 				movePanel(intent.panelId, intent.placement);
+				return { commandId: intent.commandId };
+			case "panel.resize":
+				resizePanel(intent.panelId, intent.thickness);
 				return { commandId: intent.commandId };
 			case "integration.invoke": {
 				requireWorkspace(intent.workspaceId);
