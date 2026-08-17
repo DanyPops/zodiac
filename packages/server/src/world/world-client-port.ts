@@ -1,14 +1,15 @@
-import type { CommandIntent, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import type { CommandIntent, Panel, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
 
 /**
  * The wire-safe subset of `WorldStore` (./store.ts) any client-side
- * consumer can depend on -- exactly the four members a real zodiacd HTTP
+ * consumer can depend on -- exactly the five members a real zodiacd HTTP
  * API actually exposes (apps/service's own world-routes.ts: GET
- * /api/world, POST .../commands, GET .../events -- nothing else). `WorldStore`
- * itself carries six further members (`snapshot`, `createWorkspace`,
- * `getWorkspace`, `dockSurface`, `undockSurface`, `dockSurfaceInto`,
- * `windowTile`) that exist only for the daemon's own in-process
- * seeding/admin use and were never meant to cross a wire boundary.
+ * /api/world, GET .../panels, POST .../commands, GET .../events -- nothing
+ * else). `WorldStore` itself carries six further members (`snapshot`,
+ * `createWorkspace`, `getWorkspace`, `dockSurface`, `undockSurface`,
+ * `dockSurfaceInto`, `windowTile`) that exist only for the daemon's own
+ * in-process seeding/admin use and were never meant to cross a wire
+ * boundary.
  *
  * Depending on this narrower port instead of the full `WorldStore` is what
  * lets a client-side test substitute a trivial in-memory fake, or the real
@@ -24,6 +25,8 @@ import type { CommandIntent, WorkspaceId, WorkspaceViewModel, WorldViewModel } f
 export interface WorldClientPort {
 	readonly worldViewModel: () => WorldViewModel;
 	readonly workspaceViewModel: (workspaceId: WorkspaceId) => WorkspaceViewModel | undefined;
+	/** Global World chrome -- see WorldStore.panels' own doc comment. On a remote connection, reflects the last GET /api/world/panels response; a panel.move triggers a real onChange broadcast the same as any other mutation, so a caller re-reading panels() from inside its own onChange listener sees it (onChange may fire a second time for the same WorldViewModel once the background refresh lands -- not a live per-command reconciliation, see this port's own limitations noted on the WorldShell task). */
+	readonly panels: () => readonly Panel[];
 	/** Applies one typed CommandIntent -- the same path a keybinding, a palette entry, a script/RPC call, or an agent action all go through. */
 	readonly apply: (intent: CommandIntent) => void;
 	/** Subscribes to every state change; called with the fresh worldViewModel. Returns an unsubscribe function. */

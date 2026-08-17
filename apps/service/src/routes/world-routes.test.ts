@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorldStore } from "@zodiac/server/world";
-import { worldId, workspaceId, integrationId, surfaceId } from "@zodiac/protocol";
+import { worldId, workspaceId, integrationId, surfaceId, panelId } from "@zodiac/protocol";
 import { createWorldRoutes } from "./world-routes.js";
 
 let server: Server | undefined;
@@ -30,6 +30,17 @@ describe("createWorldRoutes", () => {
 		expect(response.status).toBe(200);
 		const body = await response.json();
 		expect(body).toEqual(world.worldViewModel());
+	});
+
+	it("getPanels returns the World's current Panel list", async () => {
+		const panel = { id: panelId("p1"), location: "bottom" as const, alignment: "center" as const, offset: 0, thickness: 3, lengthMode: "fill" as const, visibilityMode: "normal" as const, startCap: null, endCap: null, body: [] };
+		const world = createWorldStore(worldId("w1"), { panels: [panel] });
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => routes.getPanels(req, res));
+
+		const response = await fetch(`${base}/api/world/panels`);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ panels: [panel] });
 	});
 
 	it("postCommand dispatches a valid CommandIntent through WorldStore.apply", async () => {

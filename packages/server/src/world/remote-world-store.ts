@@ -1,4 +1,4 @@
-import type { CommandId, CommandIntent, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import type { CommandId, CommandIntent, Panel, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
 import { readSseFrames } from "../net/sse-client.js";
 import type { WorldClientPort } from "./world-client-port.js";
 
@@ -81,6 +81,19 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 	if (!initial.ok) throw new Error(`connectRemoteWorldStore: GET /api/world returned ${initial.status}`);
 	let latest = (await initial.json()) as WorldViewModel;
 
+	/** Best-effort: keeps the last-known-good Panel list on a failed fetch, the same degrade-gracefully policy the SSE loop below applies to a malformed WorldViewModel frame. */
+	async function fetchPanels(): Promise<readonly Panel[]> {
+		try {
+			const response = await fetcher(`${baseUrl}/api/world/panels`);
+			if (!response.ok) return latestPanels;
+			return ((await response.json()) as { panels: readonly Panel[] }).panels;
+		} catch {
+			return latestPanels;
+		}
+	}
+	let latestPanels: readonly Panel[] = []; // assigned below -- fetchPanels' own not-ok/error fallback reads this, so it must exist before the first call
+	latestPanels = await fetchPanels();
+
 	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
 	const streamController = new AbortController();
 
@@ -104,6 +117,15 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 						return; // malformed frame -- skip, keep the last-known-good state
 					}
 					for (const listener of changeListeners) listener(latest);
+					// A panel.move triggers this same broadcast as any other mutation --
+					// piggyback a refresh here instead of a second polling loop. Notifies
+					// listeners a second time once it lands (same viewModel, fresh panels)
+					// so a consumer reading panels() off onChange sees it, without
+					// widening onChange's own callback signature to carry panels itself.
+					void fetchPanels().then((panels) => {
+						latestPanels = panels;
+						for (const listener of changeListeners) listener(latest);
+					});
 				});
 			} catch {
 				if (streamController.signal.aborted) return;
@@ -121,6 +143,9 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 		workspaceViewModel(workspaceId: WorkspaceId): WorkspaceViewModel | undefined {
 			if (latest.state === "empty") return undefined;
 			return latest.workspaces.find((workspace) => workspace.id === workspaceId);
+		},
+		panels(): readonly Panel[] {
+			return latestPanels;
 		},
 		apply(intent: CommandIntent): void {
 			// Fire-and-forget, matching WorldStore.apply()'s own synchronous

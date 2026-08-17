@@ -87,6 +87,10 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 			worldRoutes.getWorld(req, res);
 			return;
 		}
+		if (pathname === "/api/world/panels" && req.method === "GET") {
+			worldRoutes.getPanels(req, res);
+			return;
+		}
 		if (pathname === "/api/world/commands" && req.method === "POST") {
 			void worldRoutes.postCommand(req, res);
 			return;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { commandId, workspaceId } from "@zodiac/protocol";
-import type { WorldViewModel } from "@zodiac/protocol";
+import { commandId, panelId, workspaceId } from "@zodiac/protocol";
+import type { Panel, WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore, postCommandIntent } from "./remote-world-store.js";
 
 const EMPTY: WorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
@@ -11,11 +11,12 @@ const EMPTY: WorldViewModel = { state: "empty", workspaces: [], activeWorkspaceI
  * (SSE broadcast, a real ReadableStream this test controls directly), and
  * POST /api/world/commands (records what was dispatched).
  */
-function createFakeDaemon(initial: WorldViewModel) {
+function createFakeDaemon(initial: WorldViewModel, initialPanels: readonly Panel[] = []) {
 	let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
 	const encoder = new TextEncoder();
 	const posted: unknown[] = [];
 	let eventsRequests = 0;
+	let panels = initialPanels;
 
 	function push(viewModel: WorldViewModel): void {
 		controller?.enqueue(encoder.encode(`data: ${JSON.stringify(viewModel)}\n\n`));
@@ -28,6 +29,9 @@ function createFakeDaemon(initial: WorldViewModel) {
 
 	const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);
+		if (url.endsWith("/api/world/panels")) {
+			return new Response(JSON.stringify({ panels }), { status: 200 });
+		}
 		if (url.endsWith("/api/world") && (!init || init.method === undefined)) {
 			return new Response(JSON.stringify(initial), { status: 200 });
 		}
@@ -47,7 +51,7 @@ function createFakeDaemon(initial: WorldViewModel) {
 		throw new Error(`fake daemon: unhandled request ${url}`);
 	});
 
-	return { fetcher, push, closeStream, posted, eventsRequestCount: () => eventsRequests };
+	return { fetcher, push, closeStream, posted, eventsRequestCount: () => eventsRequests, setPanels: (next: readonly Panel[]) => { panels = next; } };
 }
 
 describe("connectRemoteWorldStore", () => {
@@ -66,8 +70,31 @@ describe("connectRemoteWorldStore", () => {
 
 		const ready: WorldViewModel = { state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w1") };
 		daemon.push(ready);
-		await vi.waitFor(() => expect(store.worldViewModel()).toEqual(ready));
-		expect(seen).toEqual([ready]);
+		// Fires once for the frame itself, and again once its own background
+		// Panel-list refresh lands (see connectRemoteWorldStore's own doc
+		// comment) -- every call still carries this same ready WorldViewModel.
+		await vi.waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(1));
+		for (const viewModel of seen) expect(viewModel).toEqual(ready);
+		store.dispose();
+	});
+
+	it("panels() returns the daemon's Panel list fetched at connect", async () => {
+		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
+		const daemon = createFakeDaemon(EMPTY, [panel]);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		expect(store.panels()).toEqual([panel]);
+		store.dispose();
+	});
+
+	it("panels() picks up a change once an unrelated WorldViewModel change also arrives over SSE", async () => {
+		const panel: Panel = { id: panelId("p1"), location: "bottom", alignment: "center", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [] };
+		const daemon = createFakeDaemon(EMPTY, []);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		expect(store.panels()).toEqual([]);
+
+		daemon.setPanels([panel]);
+		daemon.push({ state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w1") });
+		await vi.waitFor(() => expect(store.panels()).toEqual([panel]));
 		store.dispose();
 	});
 

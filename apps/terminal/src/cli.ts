@@ -67,12 +67,12 @@ async function main(): Promise<void> {
 
   const remoteWorld = daemonUrl ? await attachToDaemon(daemonUrl) : undefined;
   const attached = remoteWorld !== undefined;
-  // Seeded only for embedded mode -- a real Panel to move via Ctrl+G
-  // (moveChatPanel's own no-op guard already handles the remote-daemon case,
-  // where no /panels route exists to seed or move anything through). Its
-  // starting geometry matches DEFAULT_EDGE_APPLET_IDS's own bottom default
-  // exactly (see regions.ts), so seeding it changes nothing visually until
-  // Ctrl+G actually moves it.
+  // Seeded only for embedded mode -- a real Panel to move via Ctrl+G. A
+  // remote daemon may or may not have seeded its own chat Panel; if it
+  // hasn't, moveChatPanel's own no-op guard (no matching Panel found) still
+  // applies. Its starting geometry matches DEFAULT_EDGE_APPLET_IDS's own
+  // bottom default exactly (see regions.ts), so seeding it changes nothing
+  // visually until Ctrl+G actually moves it.
   const world: WorldClientPort = remoteWorld ?? createWorldStore(worldId("zodiac"), { panels: [DEFAULT_CHAT_PANEL] });
   let host: LectorHost | undefined;
   // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory

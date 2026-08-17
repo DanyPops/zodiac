@@ -10,17 +10,11 @@ import { resolveShellCommand, type ShellCommand } from "./keymap.js";
 import { openTerminalPaneNatively } from "./native-terminal.js";
 import { SemanticShell, type ShellFocus } from "./semantic-shell.js";
 
-/**
- * apply/panels are optional because a remote WorldClientPort (the wire-safe
- * subset zodiacd exposes over HTTP) has apply but no panels() at all -- no
- * route exposes Panel state yet, so "move-chat-panel" degrades to a no-op
- * rather than throwing when attached to a live daemon. Embedded mode's real
- * WorldStore has both.
- */
+/** The narrow slice of WorldClientPort (the wire-safe subset zodiacd exposes over HTTP) this shell actually depends on -- both embedded mode's real WorldStore and connectRemoteWorldStore's remote adapter satisfy it in full (GET /api/world/panels exists, see world-client-port.ts). */
 export interface WorldProjection {
 	worldViewModel(): WorldViewModel;
-	apply?(intent: CommandIntent): void;
-	panels?(): readonly Panel[];
+	apply(intent: CommandIntent): void;
+	panels(): readonly Panel[];
 }
 
 /** bottom -> right -> top -> left -> bottom: the same rotation order a real edge-cycling UI (KDE's Plasma panel "Screen Edge" cycling) uses -- always lands back where it started after 4 presses. */
@@ -121,9 +115,8 @@ export class SemanticShellApplication {
     }
   }
 
-  /** No-op with no panels() (remote daemon, no /panels route yet) or no seeded chat Panel (cli.ts's embedded seeding failed/was skipped) -- see WorldProjection's own doc comment. */
+  /** No-op with no seeded chat Panel (cli.ts's embedded seeding failed/was skipped, or a remote daemon that never seeded one). */
   private moveChatPanel(): void {
-    if (!this.world.apply || !this.world.panels) return;
     const chatPanel = this.world.panels().find((panel) => panel.body.includes(appletId("chat")));
     if (!chatPanel) return;
     const nextLocation = PANEL_MOVE_ROTATION[chatPanel.location];
@@ -168,7 +161,7 @@ export class SemanticShellApplication {
   }
 
   private render(): Outcome<GridUpdate> {
-    const frame = this.shell.project(this.world.worldViewModel(), this.width, this.height, this.footerChat?.snapshot(), this.world.panels?.());
+    const frame = this.shell.project(this.world.worldViewModel(), this.width, this.height, this.footerChat?.snapshot(), this.world.panels());
     if (!frame.ok) return frame;
     return this.output.render(frame.value);
   }

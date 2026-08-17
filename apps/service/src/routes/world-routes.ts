@@ -44,6 +44,11 @@ export function createWorldRoutes(world: WorldStore) {
 			writeJson(res, 200, world.worldViewModel());
 		},
 
+		/** Global World chrome (Panel placement), separate from getWorld since Panels aren't Workspace-scoped -- see WorldStore.panels' own doc comment. */
+		getPanels(_req: IncomingMessage, res: ServerResponse): void {
+			writeJson(res, 200, { panels: world.panels() });
+		},
+
 		async postCommand(req: IncomingMessage, res: ServerResponse): Promise<void> {
 			let body: unknown;
 			try {
