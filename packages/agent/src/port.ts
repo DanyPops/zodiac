@@ -59,6 +59,45 @@ export function assertNeverZodiacAgentEvent(event: never): never {
 }
 
 /**
+ * This port's own overall version. Bumped only when a new ZodiacAgentEvent
+ * variant is added or an existing one's fields change in a way an older
+ * consumer couldn't safely ignore. Append-only, same discipline as
+ * commands.ts's COMMAND_INTENT_PROTOCOL_VERSION: an existing variant's
+ * recorded ZODIAC_AGENT_EVENT_MIN_VERSION entry never changes after release.
+ */
+export const ZODIAC_AGENT_EVENT_PROTOCOL_VERSION = 1;
+
+/**
+ * The minimum ZODIAC_AGENT_EVENT_PROTOCOL_VERSION a consumer must declare
+ * support for to safely handle each ZodiacAgentEvent variant. Every variant
+ * shipped so far was introduced at version 1.
+ */
+export const ZODIAC_AGENT_EVENT_MIN_VERSION: Readonly<Record<ZodiacAgentEvent["type"], number>> = {
+	"agent-start": 1,
+	"agent-settled": 1,
+	"assistant-message-start": 1,
+	"assistant-message-delta": 1,
+	"assistant-message-end": 1,
+	"tool-call-start": 1,
+	"tool-call-end": 1,
+	error: 1,
+};
+
+/**
+ * True when a consumer declaring support up to `supportedVersion` can safely
+ * handle the given event. False means "skip/degrade this event, don't
+ * project it into a UI it wasn't built to render" -- e.g. a future
+ * apps/web PiClient talking to an already-upgraded zodiacd across a
+ * deploy skew window. Both in-tree adapters (InProcessAgentIntegration,
+ * SubprocessAgentIntegration) and every in-tree consumer ship in lockstep
+ * with this port today, so this is a no-op for them; it exists for that
+ * cross-version window, not a currently-exercised real gap.
+ */
+export function isSupportedZodiacAgentEvent(event: ZodiacAgentEvent, supportedVersion: number): boolean {
+	return ZODIAC_AGENT_EVENT_MIN_VERSION[event.type] <= supportedVersion;
+}
+
+/**
  * Narrows an unknown, already-JSON-parsed SSE frame payload to a real
  * ZodiacAgentEvent -- shared by every HTTP+SSE consumer of zodiacd's
  * `/api/agent/sessions/:id/events` wire format (apps/web's PiClient and

@@ -31,3 +31,47 @@ export const CommandIntentSchema = z.discriminatedUnion("type", [
 ]);
 
 export type CommandIntent = z.infer<typeof CommandIntentSchema>;
+
+/**
+ * The protocol's own overall version for CommandIntentSchema. Bumped only
+ * when a new variant is added or an existing variant's required fields
+ * change in a way an older dispatcher couldn't safely ignore. This union is
+ * append-only: an existing variant's own recorded COMMAND_INTENT_MIN_VERSION
+ * entry never changes after release (Raymond's Rule of Extensibility --
+ * self-describing, versioned, so a future out-of-tree dispatcher speaking an
+ * older protocol version can reject/degrade an intent it doesn't understand
+ * instead of silently misinterpreting it).
+ */
+export const COMMAND_INTENT_PROTOCOL_VERSION = 1;
+
+/**
+ * The minimum COMMAND_INTENT_PROTOCOL_VERSION a dispatcher must declare
+ * support for to safely handle each CommandIntent variant. Every variant
+ * shipped so far was introduced at version 1; a future variant records
+ * whatever COMMAND_INTENT_PROTOCOL_VERSION it ships at, never editing an
+ * existing entry.
+ */
+export const COMMAND_INTENT_MIN_VERSION: Readonly<Record<CommandIntent["type"], number>> = {
+	"workspace.create": 1,
+	"surface.dock": 1,
+	"surface.undock": 1,
+	"window.next": 1,
+	"window.previous": 1,
+	"panel.move": 1,
+};
+
+/**
+ * True when a dispatcher that declares support up to `supportedVersion` can
+ * safely handle the given intent. False means "reject or degrade this
+ * intent, don't dispatch it into undefined behavior" (Raymond's Rule of
+ * Repair -- fail loud on an unsupported shape rather than guess). The
+ * in-tree dispatcher (world-routes.ts) always ships in lockstep with this
+ * schema today, so this is a no-op there; it exists for a future
+ * out-of-tree dispatcher (a Vehicle-backed process boundary, see task
+ * "Contributions: move from in-process trust to a real process/trust
+ * boundary") that may run an older protocol version than the intent's own
+ * producer.
+ */
+export function isSupportedCommandIntent(intent: CommandIntent, supportedVersion: number): boolean {
+	return COMMAND_INTENT_MIN_VERSION[intent.type] <= supportedVersion;
+}

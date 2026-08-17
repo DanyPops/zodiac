@@ -26,4 +26,17 @@ describe("package contribution contract", () => {
     await contribution.dispose();
     expect(registrations).toEqual([]);
   });
+
+  it("version and capabilities are optional -- a contribution written before either field existed still typechecks and parses unchanged", () => {
+    const legacy: ZodiacContribution["describe"] = () => ({ id: "example", title: "Example", commands: [], resourceSchemes: [] });
+    const described = legacy();
+    expect(described.version).toBeUndefined();
+    expect(described.capabilities).toBeUndefined();
+  });
+
+  it("a contribution may declare its own version and capability tags", () => {
+    const described: ReturnType<ZodiacContribution["describe"]> = { id: "example", title: "Example", commands: [], resourceSchemes: [], version: "1.2.0", capabilities: ["streaming-resources"] };
+    expect(described.version).toBe("1.2.0");
+    expect(described.capabilities).toEqual(["streaming-resources"]);
+  });
 });

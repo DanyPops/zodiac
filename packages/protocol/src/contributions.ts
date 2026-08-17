@@ -32,11 +32,35 @@ export interface ContributionHost {
   registerResourceProvider(provider: ContributionResourceProvider): () => void;
 }
 
+/**
+ * A capability tag a contribution declares beyond the baseline
+ * commands/resourceSchemes describe() already carries -- e.g. an optional
+ * protocol feature a future host may or may not understand. Append-only and
+ * deliberately unconstrained (plain string, not an enum): the vocabulary
+ * doesn't exist yet, this is the extension point Raymond's Rule of
+ * Extensibility calls for, not a currently-populated list. A host that
+ * doesn't recognize a tag should ignore it, never reject the whole
+ * contribution over an unknown one -- forward compatibility, not a strict
+ * negotiation handshake.
+ */
+export type ContributionCapability = string;
+
 export interface ContributionDescription {
   readonly id: string;
   readonly title: string;
   readonly commands: readonly { readonly id: string; readonly title: string }[];
   readonly resourceSchemes: readonly string[];
+  /**
+   * Semver of this contribution's own describe()/ContributionCommand/
+   * ContributionResourceProvider shape. Optional so a contribution written
+   * before this field existed keeps typechecking unchanged; a consumer that
+   * needs real version negotiation should treat an absent version as
+   * "unknown", not as "0.0.0" (a genuinely absent version isn't the same
+   * claim as an explicit pre-1.0 one).
+   */
+  readonly version?: string;
+  /** Declared capability tags beyond the baseline surface (see ContributionCapability). Optional; absent means "assume baseline only". */
+  readonly capabilities?: readonly ContributionCapability[];
 }
 
 export interface ZodiacContribution {

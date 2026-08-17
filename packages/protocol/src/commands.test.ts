@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CommandIntentSchema } from "./commands.js";
+import { COMMAND_INTENT_MIN_VERSION, COMMAND_INTENT_PROTOCOL_VERSION, CommandIntentSchema, isSupportedCommandIntent, type CommandIntent } from "./commands.js";
 
 describe("CommandIntentSchema", () => {
 	it("accepts a well-formed surface.dock intent", () => {
@@ -63,5 +63,26 @@ describe("CommandIntentSchema", () => {
 	it("rejects panel.move with an unknown Location or PanelAlignment", () => {
 		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "diagonal", alignment: "center", offset: 0 } }).success).toBe(false);
 		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "top", alignment: "justify", offset: 0 } }).success).toBe(false);
+	});
+});
+
+describe("CommandIntentSchema version/capability negotiation", () => {
+	it("every real variant records a minimum version at or below the protocol's current version", () => {
+		for (const type of Object.keys(COMMAND_INTENT_MIN_VERSION) as (keyof typeof COMMAND_INTENT_MIN_VERSION)[]) {
+			expect(COMMAND_INTENT_MIN_VERSION[type]).toBeLessThanOrEqual(COMMAND_INTENT_PROTOCOL_VERSION);
+		}
+	});
+
+	it("isSupportedCommandIntent accepts a structurally valid intent when the caller declares support for its minimum version", () => {
+		const intent = { type: "window.next", workspaceId: "w1" } as CommandIntent;
+		expect(isSupportedCommandIntent(intent, COMMAND_INTENT_PROTOCOL_VERSION)).toBe(true);
+	});
+
+	it("isSupportedCommandIntent fails loud (returns false, doesn't throw or guess) for a structurally valid intent whose variant requires a newer protocol version than the caller declares", () => {
+		const intent = { type: "window.next", workspaceId: "w1" } as CommandIntent;
+		// A hypothetical dispatcher that only understands protocol version 0 --
+		// older than every real variant's own recorded minimum -- must reject
+		// this intent rather than dispatch it into undefined behavior.
+		expect(isSupportedCommandIntent(intent, 0)).toBe(false);
 	});
 });

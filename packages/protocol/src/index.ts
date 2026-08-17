@@ -11,7 +11,7 @@ export type { Resource, Surface, WorkspaceWindow, Workspace, World, IntegrationC
 export { ResourceSchema, SurfaceSchema, WorkspaceWindowSchema, WorkspaceSchema, WorldSchema, IntegrationCapabilitiesSchema, IntegrationDefinitionSchema } from "./entities.js";
 
 export type { CommandIntent } from "./commands.js";
-export { CommandIntentSchema } from "./commands.js";
+export { CommandIntentSchema, COMMAND_INTENT_PROTOCOL_VERSION, COMMAND_INTENT_MIN_VERSION, isSupportedCommandIntent } from "./commands.js";
 
 export type { SurfaceViewModel, WindowViewModel, WorkspaceViewModel } from "./view-models.js";
 export type { PickerItem, PickerRequest } from "./ui-results.js";
@@ -27,7 +27,7 @@ export type { SurfaceRenderer } from "./renderer.js";
 export type { Location, EdgeLocation, PanelAlignment, FormFactor, LengthMode, VisibilityMode, AppletSlot, AppletDefinition, Panel } from "./panel.js";
 export { LocationSchema, EdgeLocationSchema, PanelAlignmentSchema, FormFactorSchema, LengthModeSchema, VisibilityModeSchema, AppletSlotSchema, AppletDefinitionSchema, PanelSchema, formFactorForLocation, validatePanelAppletAssignment } from "./panel.js";
 
-export type { ZodiacContribution, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
+export type { ZodiacContribution, ContributionCapability, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
 export { ContributionReadBoundsSchema, ContributionResourceReferenceSchema } from "./contributions.js";
 // Compatibility alias, not dead weight: the vendored, unpublished
 // @danypops/alignment-lector's own frozen source (repacked upstream, not
