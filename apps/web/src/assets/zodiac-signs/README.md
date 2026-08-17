@@ -19,9 +19,8 @@ The OFL's copyright statement reserves the font name **"Zodiac"** itself
 (`with Reserved Font Name "Zodiac"`) -- that clause restricts renaming *this
 font/derivative* and redistributing it as if it were the original "Zodiac"
 font. It has no bearing on this app's own, unrelated product name, which
-happens to be the same word by coincidence (see the root README's own
-Alignment -> Zodiac rename history) -- noted here only so the coincidence
-doesn't get mistaken for a license entanglement later.
+happens to be the same word by coincidence -- noted here only so the
+coincidence doesn't get mistaken for a license entanglement later.
 
 ## What actually ships in the app
 

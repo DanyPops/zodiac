@@ -26,8 +26,6 @@ export interface SubprocessAgentIntegrationOptions {
 	readonly agentDir?: string;
 	/** Where a one-time auth.json seed is copied from. Defaults to the user's real ~/.pi/agent. */
 	readonly sourceAgentDir?: string;
-	/** Where a one-time auth.json *migration* is copied from, if agentDir doesn't have one yet -- this product's own prior namespaced dir, before the Alignment -> Zodiac rename. Defaults to ~/.alignment/pi-agent; injectable for the same hermetic-test reason as sourceAgentDir (a real ~/.alignment/pi-agent existing on the machine running tests must never leak into a test's isolated agentDir). */
-	readonly legacyAlignmentAgentDir?: string;
 }
 
 /**
@@ -53,12 +51,6 @@ export interface SubprocessAgentIntegrationOptions {
 export function createSubprocessAgentIntegration(options: SubprocessAgentIntegrationOptions = {}): AgentIntegrationPort {
 	const [command = DEFAULT_COMMAND[0], ...args] = options.command ?? DEFAULT_COMMAND;
 	const agentDir = options.agentDir ?? resolveZodiacAgentDir();
-	// Two calls, not one: first migrate any existing auth.json from this
-	// product's own prior namespaced dir (before the Alignment -> Zodiac
-	// rename), then fall back to the user's personal Pi dir -- see
-	// seedZodiacAuthOnce's own doc comment for why chaining two calls is
-	// safe (each is a no-op once the destination already has an auth.json).
-	seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.legacyAlignmentAgentDir ?? join(homedir(), ".alignment", "pi-agent") });
 	seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
 	const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(command, args, {
 		cwd: options.cwd,

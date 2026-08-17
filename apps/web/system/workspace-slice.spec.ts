@@ -731,33 +731,3 @@ test("legacy product storage (agent-deck era) migrates all the way to today's na
 	expect(migrated).toEqual({ theme: "dark", selection: "true", legacyLayout: '{"schemaVersion":1,"panels":[]}' });
 });
 
-test("Alignment-era product storage migrates to today's namespace without losing preferences", async ({ page }) => {
-	await page.evaluate(() => {
-		localStorage.clear();
-		localStorage.setItem("alignment.theme", "dark");
-		localStorage.setItem("alignment.workspace-selection-collapsed", "true");
-		localStorage.setItem("alignment.workspace-layout.legacy-v1", '{"schemaVersion":1,"panels":[]}');
-	});
-	await page.reload();
-
-	await expect(page.locator("html")).toHaveClass(/dark/);
-	await expect(page.getByRole("navigation", { name: "Workspace selection" })).toBeHidden();
-	await expect(page.getByRole("navigation", { name: "Workspace quick selection" })).toBeVisible();
-	const migrated = await page.evaluate(() => ({
-		theme: localStorage.getItem("zodiac.theme"),
-		selection: localStorage.getItem("zodiac.workspace-selection-collapsed"),
-		legacyLayout: localStorage.getItem("zodiac.workspace-layout.legacy-v1"),
-		// The Alignment-era keys are consumed by the migration, not left behind.
-		alignmentTheme: localStorage.getItem("alignment.theme"),
-		alignmentSelection: localStorage.getItem("alignment.workspace-selection-collapsed"),
-		alignmentLegacyLayout: localStorage.getItem("alignment.workspace-layout.legacy-v1"),
-	}));
-	expect(migrated).toEqual({
-		theme: "dark",
-		selection: "true",
-		legacyLayout: '{"schemaVersion":1,"panels":[]}',
-		alignmentTheme: null,
-		alignmentSelection: null,
-		alignmentLegacyLayout: null,
-	});
-});

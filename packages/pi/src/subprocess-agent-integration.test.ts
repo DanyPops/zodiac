@@ -9,20 +9,18 @@ import { createSubprocessAgentIntegration } from "./subprocess-agent-integration
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/fake-pi-rpc.mjs", import.meta.url));
 const ENV_PROBE_FIXTURE = fileURLToPath(new URL("../test/fixtures/env-probe-rpc.mjs", import.meta.url));
 
-// A real, isolated agentDir/sourceAgentDir/legacyAlignmentAgentDir triple
-// every test below passes explicitly -- without this,
-// createSubprocessAgentIntegration's own default (resolveZodiacAgentDir() +
-// the machine's real ~/.pi/agent + the machine's real ~/.alignment/pi-agent,
-// if this product's prior-named build ever ran here) would run a real
-// one-time auth.json copy against this developer machine's actual personal
-// directories on every test run. The fixture commands here are plain `node`
-// scripts, so PI_CODING_AGENT_DIR is inert either way -- these dirs exist
-// purely to keep the seeding side effect hermetic.
+// A real, isolated agentDir/sourceAgentDir pair every test below passes
+// explicitly -- without this, createSubprocessAgentIntegration's own default
+// (resolveZodiacAgentDir() + the machine's real ~/.pi/agent) would run a
+// real one-time auth.json copy against this developer machine's actual
+// personal directory on every test run. The fixture commands here are plain
+// `node` scripts, so PI_CODING_AGENT_DIR is inert either way -- these dirs
+// exist purely to keep the seeding side effect hermetic.
 let agentDirRoot: string | undefined;
 
-function isolatedAgentDirs(): { agentDir: string; sourceAgentDir: string; legacyAlignmentAgentDir: string } {
+function isolatedAgentDirs(): { agentDir: string; sourceAgentDir: string } {
 	agentDirRoot = mkdtempSync(join(tmpdir(), "zodiac-subprocess-integration-"));
-	return { agentDir: join(agentDirRoot, "zodiac-pi-agent"), sourceAgentDir: join(agentDirRoot, "personal-pi-agent"), legacyAlignmentAgentDir: join(agentDirRoot, "legacy-alignment-pi-agent") };
+	return { agentDir: join(agentDirRoot, "zodiac-pi-agent"), sourceAgentDir: join(agentDirRoot, "personal-pi-agent") };
 }
 
 function collectUntil(port: ReturnType<typeof createSubprocessAgentIntegration>, predicate: (event: ZodiacAgentEvent) => boolean, timeoutMs = 5000): Promise<ZodiacAgentEvent[]> {

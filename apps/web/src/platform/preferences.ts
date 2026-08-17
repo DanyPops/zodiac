@@ -9,24 +9,13 @@ const USER_WORKSPACES_KEY = "zodiac.user-workspaces";
 const SHAPE_KEY = "zodiac.shape";
 const CHAT_PLACEMENT_KEY = "zodiac.chat-placement";
 const MAX_USER_WORKSPACES = 50;
-// Two product names ago (agent-deck) and one product name ago (Alignment) --
-// each a real, no-longer-current localStorage namespace an existing user's
-// browser may still hold. Only workspace-selection-collapsed and the
-// Dashboard layout existed back in the agent-deck era; the other four keys
-// were introduced during the Alignment era, so they have only one legacy
-// source each, not two.
-const LEGACY_ALIGNMENT_SELECTION_KEY = "alignment.workspace-selection-collapsed";
+// A real, no-longer-current localStorage namespace (agent-deck, the product's
+// prior name) an existing user's browser may still hold.
 const LEGACY_SIDEBAR_KEY = "agent-deck-sidebar-collapsed";
-const LEGACY_ALIGNMENT_KEYBINDINGS_KEY = "alignment.keybindings";
-const LEGACY_ALIGNMENT_SAVED_SURFACE_TEMPLATES_KEY = "alignment.saved-surface-templates";
-const LEGACY_ALIGNMENT_USER_WORKSPACES_KEY = "alignment.user-workspaces";
-// zodiac.visual-dna: the pre-rename key, same field shape as alignment.visual-dna
-// below (both used { vibe, cornerSharpness } -- migrateShapeSettings translates
-// both into the current { strokeWidth, cornerRadius } shape, not a raw copy.
+// zodiac.visual-dna: the pre-rename key, same { vibe, cornerSharpness } field
+// shape migrateShapeSettings translates into the current { strokeWidth, cornerRadius }.
 const LEGACY_ZODIAC_VISUAL_DNA_KEY = "zodiac.visual-dna";
-const LEGACY_ALIGNMENT_VISUAL_DNA_KEY = "alignment.visual-dna";
 const LEGACY_LAYOUT_KEY = "agent-deck-dashboard-layout";
-const LEGACY_ALIGNMENT_LAYOUT_KEY = "alignment.workspace-layout.legacy-v1";
 const PRESERVED_LAYOUT_KEY = "zodiac.workspace-layout.legacy-v1";
 const MAX_SAVED_SURFACE_TEMPLATES = 50;
 
@@ -65,13 +54,6 @@ export interface Preferences {
 }
 
 export function createPreferences(storage: Storage): Preferences {
-	// One-shot migrations for the four keys with no reader-side legacy check
-	// of their own (they were introduced entirely within the Alignment era,
-	// so they have exactly one legacy source, not agent-deck's own two).
-	migrateOnce(storage, LEGACY_ALIGNMENT_KEYBINDINGS_KEY, KEYBINDINGS_KEY);
-	migrateOnce(storage, LEGACY_ALIGNMENT_SAVED_SURFACE_TEMPLATES_KEY, SAVED_SURFACE_TEMPLATES_KEY);
-	migrateOnce(storage, LEGACY_ALIGNMENT_USER_WORKSPACES_KEY, USER_WORKSPACES_KEY);
-	migrateOnce(storage, LEGACY_ALIGNMENT_LAYOUT_KEY, PRESERVED_LAYOUT_KEY);
 	migrateLegacyLayout(storage);
 	migrateShapeSettings(storage);
 
@@ -79,13 +61,11 @@ export function createPreferences(storage: Storage): Preferences {
 		try {
 			const current = storage.getItem(WORKSPACE_SELECTION_KEY);
 			if (current === "true" || current === "false") return current === "true";
-			for (const legacyKey of [LEGACY_ALIGNMENT_SELECTION_KEY, LEGACY_SIDEBAR_KEY]) {
-				const legacy = storage.getItem(legacyKey);
-				if (legacy === "true" || legacy === "false") {
-					storage.setItem(WORKSPACE_SELECTION_KEY, legacy);
-					storage.removeItem(legacyKey);
-					return legacy === "true";
-				}
+			const legacy = storage.getItem(LEGACY_SIDEBAR_KEY);
+			if (legacy === "true" || legacy === "false") {
+				storage.setItem(WORKSPACE_SELECTION_KEY, legacy);
+				storage.removeItem(LEGACY_SIDEBAR_KEY);
+				return legacy === "true";
 			}
 		} catch {
 			return false;
@@ -207,19 +187,6 @@ function isKeybindingDefinition(value: unknown): value is KeybindingDefinition {
 	);
 }
 
-/** Copies `legacyKey`'s raw string value to `currentKey` once, if `currentKey` is still unset and `legacyKey` has something -- then removes `legacyKey`. Safe to call unconditionally on every startup: a no-op past the first successful copy, and a no-op (not a throw) when there's nothing to migrate. */
-function migrateOnce(storage: Storage, legacyKey: string, currentKey: string): void {
-	try {
-		if (storage.getItem(currentKey) !== null) return;
-		const legacy = storage.getItem(legacyKey);
-		if (legacy === null) return;
-		storage.setItem(currentKey, legacy);
-		storage.removeItem(legacyKey);
-	} catch {
-		// Preserve startup when storage is unavailable; no key is removed unless the copy succeeds.
-	}
-}
-
 /** legacyKey's { vibe, cornerSharpness } shape, translated into the current { strokeWidth, cornerRadius } one -- unrecognized JSON is dropped rather than carried over malformed. */
 function transformLegacyShapeSettings(raw: string): string | null {
 	try {
@@ -233,18 +200,15 @@ function transformLegacyShapeSettings(raw: string): string | null {
 	}
 }
 
-/** Like migrateOnce, but translates the legacy { vibe, cornerSharpness } field shape into the current { strokeWidth, cornerRadius } one instead of copying raw JSON verbatim -- a plain copy would leave old field names the current isShapeSettings guard doesn't recognize, silently discarding a user's saved values back to defaults. Tries the two legacy keys oldest-last, same precedence as migrateOnce elsewhere. */
+/** Translates the legacy { vibe, cornerSharpness } field shape into the current { strokeWidth, cornerRadius } one instead of copying raw JSON verbatim -- a plain copy would leave old field names the current isShapeSettings guard doesn't recognize, silently discarding a user's saved values back to defaults. */
 function migrateShapeSettings(storage: Storage): void {
 	try {
 		if (storage.getItem(SHAPE_KEY) !== null) return;
-		for (const legacyKey of [LEGACY_ZODIAC_VISUAL_DNA_KEY, LEGACY_ALIGNMENT_VISUAL_DNA_KEY]) {
-			const legacy = storage.getItem(legacyKey);
-			if (legacy === null) continue;
-			const transformed = transformLegacyShapeSettings(legacy);
-			if (transformed !== null) storage.setItem(SHAPE_KEY, transformed);
-			storage.removeItem(legacyKey);
-			return;
-		}
+		const legacy = storage.getItem(LEGACY_ZODIAC_VISUAL_DNA_KEY);
+		if (legacy === null) return;
+		const transformed = transformLegacyShapeSettings(legacy);
+		if (transformed !== null) storage.setItem(SHAPE_KEY, transformed);
+		storage.removeItem(LEGACY_ZODIAC_VISUAL_DNA_KEY);
 	} catch {
 		// Preserve startup when storage is unavailable; no key is removed unless the copy succeeds.
 	}

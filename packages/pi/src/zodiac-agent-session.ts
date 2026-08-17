@@ -31,7 +31,6 @@ export interface CreateZodiacAgentSessionOptions {
 	readonly mode: ZodiacAgentSessionMode;
 	readonly agentDir?: string;
 	readonly sourceAgentDir?: string;
-	readonly legacyAlignmentAgentDir?: string;
 	readonly modelRuntime?: ModelRuntime;
 	readonly resourceLoader?: ResourceLoader;
 	readonly sessionManager?: SessionManager;
@@ -65,12 +64,8 @@ export async function createZodiacAgentSession(options: CreateZodiacAgentSession
 	// Only actually touches the filesystem in production: seedZodiacAuthOnce
 	// no-ops the instant <agentDir>/auth.json already exists, which every
 	// hermetic test's own injected modelRuntime/settingsManager/resourceLoader
-	// (bypassing this entirely) never reaches anyway. Two calls, not one --
-	// see @zodiac/server's seedZodiacAuthOnce doc comment for why chaining
-	// the Alignment -> Zodiac migration ahead of the usual personal-Pi-dir
-	// seed is safe.
+	// (bypassing this entirely) never reaches anyway.
 	if (!options.modelRuntime) {
-		seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.legacyAlignmentAgentDir ?? join(homedir(), ".alignment", "pi-agent") });
 		seedZodiacAuthOnce({ agentDir, sourceAgentDir: options.sourceAgentDir ?? join(homedir(), ".pi", "agent") });
 	}
 	const modelRuntime =

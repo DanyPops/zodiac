@@ -16,8 +16,8 @@ export { BUS_CHANNELS, WILDCARD_TYPE, createEventBus } from "./event/bus.js";
 // import regardless of which named export is actually used, so re-exporting
 // pi-agent-dir here previously crashed the entire browser app at import time
 // ("node:fs has been externalized for browser compatibility") before React
-// ever rendered -- the app got stuck on its static "Loading Alignment..."
-// placeholder with no visible error. Node-only consumers (packages/pi-integration,
+// ever rendered -- the app got stuck on its static loading placeholder with
+// no visible error. Node-only consumers (packages/pi-integration,
 // apps/terminal) import it from the "@zodiac/server/pi-agent-dir" subpath
 // instead -- see that package's exports map.
 

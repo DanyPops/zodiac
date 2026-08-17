@@ -77,23 +77,12 @@ describe("createThemeController", () => {
 	it("loads the Zodiac preference before any legacy value", () => {
 		const mocks = createMocks(false);
 		mocks.storage.setItem("zodiac.theme", "light");
-		mocks.storage.setItem("alignment.theme", "dark");
 		mocks.storage.setItem("agent-deck-theme", "dark");
 		const controller = createThemeController(mocks);
 		expect(controller.getMode()).toBe("light");
 	});
 
-	it("migrates a valid Alignment-era preference into the Zodiac namespace, ahead of the older agent-deck one", () => {
-		const mocks = createMocks(false);
-		mocks.storage.setItem("alignment.theme", "dark");
-		mocks.storage.setItem("agent-deck-theme", "light");
-		const controller = createThemeController(mocks);
-		expect(controller.getMode()).toBe("dark");
-		expect(mocks.storage.getItem("zodiac.theme")).toBe("dark");
-		expect(mocks.storage.getItem("alignment.theme")).toBeNull(); // consumed by the migration, not left behind
-	});
-
-	it("migrates a valid legacy agent-deck preference into the Zodiac namespace when there is no Alignment-era value either", () => {
+	it("migrates a valid legacy agent-deck preference into the Zodiac namespace", () => {
 		const mocks = createMocks(false);
 		mocks.storage.setItem("agent-deck-theme", "dark");
 		const controller = createThemeController(mocks);

@@ -18,14 +18,6 @@ export interface StartFooterChatOptions {
 	 * real developer machine's actual personal credentials directory.
 	 */
 	readonly sourceAgentDir?: string;
-	/**
-	 * Where seedZodiacAuthOnce's own *migration* copies an initial auth.json
-	 * from, if agentDir doesn't have one yet -- this product's own prior
-	 * namespaced dir, before the Alignment -> Zodiac rename. Defaults to
-	 * ~/.alignment/pi-agent; injectable for the same hermetic-test reason as
-	 * sourceAgentDir.
-	 */
-	readonly legacyAlignmentAgentDir?: string;
 	/** Injection points for hermetic tests -- every field defaults to exactly the production behavior when omitted. */
 	readonly modelRuntime?: ModelRuntime;
 	readonly resourceLoader?: ResourceLoader;

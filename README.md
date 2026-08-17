@@ -8,10 +8,7 @@ Zodiac presents Alef conversations and pooled SDLC data as composable Workspaces
 zodiac/
 ├── apps/
 │   ├── web/              Web client (React) -- @zodiac/web
-│   ├── terminal/         Terminal client -- @zodiac/terminal, its own installed CLI command
-│   │                     `zodiac-tui` (renamed from `alignment-tui` alongside the rest of
-│   │                     the Alignment -> Zodiac rename -- a real, published-binary-name
-│   │                     breaking change, not just internal repo layout)
+│   ├── terminal/         Terminal client -- @zodiac/terminal, its own installed CLI command `zodiac-tui`
 │   └── service/          The real `zodiacd` daemon -- @zodiac/service, its own installed CLI
 │                         command `zodiacd`. Owns one canonical World (persisted to
 │                         ~/.zodiac/service/world.json), live agent sessions, and Alef's

@@ -1,10 +1,9 @@
 export type ThemeMode = "light" | "dark" | "system";
 
 const STORAGE_KEY = "zodiac.theme";
-// Checked in order: the prior product name (Alignment) first, then the one
-// before that (agent-deck) -- each a real, no-longer-current localStorage
-// namespace an existing user's browser may still hold.
-const LEGACY_STORAGE_KEYS = ["alignment.theme", "agent-deck-theme"];
+// A real, no-longer-current localStorage namespace (agent-deck, the
+// product's prior name) an existing user's browser may still hold.
+const LEGACY_STORAGE_KEYS = ["agent-deck-theme"];
 const VALID_MODES: readonly ThemeMode[] = ["light", "dark", "system"]; 
 
 // Text color changes immediately when the theme flips. Animating it creates a

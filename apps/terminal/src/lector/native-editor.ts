@@ -14,10 +14,10 @@ import type { LectorHost } from "./lector-host.js";
  * hideExternalComponent/refresh/terminalRows), since both ultimately mount into the exact same
  * SemanticShellApplication machinery, but this one has zero Pi-extension involvement: no
  * AgentSession, no ExtensionRunner, no session.prompt()/slash-command dispatch, no chat-history
- * side effect at all. See Doc "Alignment: host Lector's editor natively via mountComponent" for
- * why this exists as a second, independent path rather than reusing ZodiacExtensionUIContext
- * itself -- that facade is scoped to the generic in-process-AgentSession-extension case; this one
- * is Zodiac's own first-party integration with Lector specifically.
+ * side effect at all. A second, independent path rather than reusing
+ * ZodiacExtensionUIContext itself -- that facade is scoped to the generic
+ * in-process-AgentSession-extension case; this one is Zodiac's own
+ * first-party integration with Lector specifically.
  */
 export interface NativeEditorHost {
 	showExternalComponent(component: Component): void;
