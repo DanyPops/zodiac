@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { worldId } from "@zodiac/protocol";
+import { worldId, type IntegrationDefinition, type IntegrationId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore } from "@zodiac/server/world";
+import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
 import { createZodiacAgentSession } from "@zodiac/pi";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import { createZodiacService } from "./server.js";
@@ -17,6 +18,16 @@ const WORLD_ID = worldId("zodiac");
 async function createDaemonAgentIntegration(cwd?: string): Promise<AgentIntegrationPort> {
 	const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc" });
 	return integration;
+}
+
+/** Test-only injection point for a stub Integration/tool-contribution pair, JSON-encoded (no real Integration declares hasApi:true yet) -- production runs with both empty, granting nothing. */
+function loadToolGrantConfig(): { getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined; getContribution: (id: IntegrationId) => ToolContribution | undefined } {
+	const integrations = JSON.parse(process.env["ZODIAC_TOOL_INTEGRATIONS"] ?? "[]") as readonly IntegrationDefinition[];
+	const contributions = JSON.parse(process.env["ZODIAC_TOOL_CONTRIBUTIONS"] ?? "[]") as readonly ToolContribution[];
+	return {
+		getIntegration: (id) => integrations.find((definition) => definition.id === id),
+		getContribution: (id) => contributions.find((definition) => definition.integrationId === id),
+	};
 }
 
 /** Loads the persisted World if one exists, exiting loudly on a corrupted snapshot rather than silently discarding it (see the JSON-file WorldSnapshotPort's own doc comment). */
@@ -39,6 +50,10 @@ async function main(): Promise<void> {
 	const snapshotPort = createJsonFileSnapshotPort({ filePath: join(stateDir, "world.json") });
 
 	const world = await loadOrCreateWorld(snapshotPort);
+
+	const toolRegistrar = createInMemoryToolRegistrar();
+	const { getIntegration, getContribution } = loadToolGrantConfig();
+	watchWorkspaceToolGrants(world, getIntegration, getContribution, toolRegistrar);
 
 	// Fire-and-forget persistence on every change -- a snapshot a few
 	// milliseconds stale after an unclean shutdown is an acceptable loss;
@@ -65,6 +80,7 @@ async function main(): Promise<void> {
 		createAgentIntegration: createDaemonAgentIntegration,
 		enableTerminal: args.enableTerminal,
 		createTerminalPty: args.enableTerminal ? createNodePtyFactory() : undefined,
+		getWorkspaceToolIds: toolRegistrar.toolIds,
 	});
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
 

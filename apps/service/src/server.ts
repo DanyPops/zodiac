@@ -2,12 +2,14 @@ import { createServer, type Server } from "node:http";
 import { WebSocketServer } from "ws";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
+import type { WorkspaceId } from "@zodiac/protocol";
 import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
 import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/fixture-conversations.js";
 import { createAgentRoutes } from "./routes/agent-routes.js";
 import { createWorldRoutes } from "./routes/world-routes.js";
 import { createConversationsRoutes } from "./routes/conversations-routes.js";
 import { createTerminalRoutes } from "./routes/terminal-routes.js";
+import { createToolGrantRoutes } from "./routes/tool-grant-routes.js";
 import { createTerminalSessionRegistry } from "./terminal/terminal-session-registry.js";
 import type { TerminalPtyFactory } from "./terminal/terminal-pty-port.js";
 
@@ -26,6 +28,8 @@ export interface CreateZodiacServiceOptions {
 	enableTerminal?: boolean;
 	/** Constructs a real pty per new terminal session -- a real node-pty child in production (createNodePtyFactory), a fake port in tests. Required when enableTerminal is true. */
 	createTerminalPty?: TerminalPtyFactory;
+	/** Read side of the live per-Workspace tool-grant reactor (@zodiac/server/agent) -- omitted disables the diagnostic tools route entirely. */
+	getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[];
 }
 
 export interface ZodiacService {
@@ -53,6 +57,7 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 	const terminalSessionRegistry = options.enableTerminal && options.createTerminalPty ? createTerminalSessionRegistry(options.createTerminalPty) : undefined;
 	const terminalRoutes = terminalSessionRegistry ? createTerminalRoutes(terminalSessionRegistry) : undefined;
 	const webSocketServer = terminalRoutes ? new WebSocketServer({ noServer: true }) : undefined;
+	const toolGrantRoutes = options.getWorkspaceToolIds ? createToolGrantRoutes(options.getWorkspaceToolIds) : undefined;
 
 	const server = createServer((req, res) => {
 		// A browser-served static build (dist/) is necessarily a different origin
@@ -120,6 +125,11 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		}
 		if (terminalRoutes && pathname === "/api/terminal/sessions" && req.method === "GET") {
 			terminalRoutes.listSessions(req, res);
+			return;
+		}
+		const toolsMatch = toolGrantRoutes && req.method === "GET" ? /^\/api\/world\/workspaces\/([^/]+)\/tools$/.exec(pathname) : null;
+		if (toolGrantRoutes && toolsMatch) {
+			toolGrantRoutes.getWorkspaceTools(toolsMatch[1] ?? "", res);
 			return;
 		}
 

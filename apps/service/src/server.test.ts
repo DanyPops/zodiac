@@ -150,6 +150,28 @@ describe("createZodiacService", () => {
 		client.close();
 	});
 
+	it("tools route is 404 by default, live when getWorkspaceToolIds is provided", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration });
+
+		const missing = await fetch(`${service.baseUrl}/api/world/workspaces/ws-1/tools`);
+		expect(missing.status).toBe(404);
+
+		await service.close();
+		service = await createZodiacService({
+			world,
+			sessionsRoot: join(dir, "sessions"),
+			port: 0,
+			host: "127.0.0.1",
+			createAgentIntegration: fakeIntegration,
+			getWorkspaceToolIds: (id) => (id === "ws-1" ? ["lector.fs"] : []),
+		});
+		const live = await fetch(`${service.baseUrl}/api/world/workspaces/ws-1/tools`);
+		expect(live.status).toBe(200);
+		expect(await live.json()).toEqual({ toolIds: ["lector.fs"] });
+	});
+
 	it("dispatches a real command end to end through the live HTTP surface", async () => {
 		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
 		const world = createWorldStore(worldId("zodiac"));
