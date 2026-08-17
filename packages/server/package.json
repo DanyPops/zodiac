@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./agent": "./src/agent/index.ts",
+    "./approval": "./src/approval/approval-center.ts",
     "./pi-agent-dir": "./src/pi-agent-dir.ts",
     "./world": "./src/world/index.ts",
     "./world-client": "./src/world/client.ts",
@@ -21,6 +22,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@danypops/vehicle-core": "^0.17.1",
+    "@danypops/vehicle-server": "^0.24.5",
     "@zodiac/protocol": "*"
   },
   "devDependencies": {

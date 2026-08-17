@@ -30,3 +30,12 @@ export { BUS_CHANNELS, WILDCARD_TYPE, createEventBus } from "./event/bus.js";
 // createCommandDispatcher, highestIdSuffix) needs it -- confirmed via a real
 // bundle-visualizer trace, not assumed. Import it from the
 // "@zodiac/server/world" subpath instead (apps/terminal's cli.ts does).
+
+// approval/approval-center.ts is excluded for the same crash reason as
+// pi-agent-dir.ts: @danypops/vehicle-server/approval-authority imports
+// node:crypto at module scope. zodiacd (apps/service, real Node) is the only
+// intended consumer -- import it from the "@zodiac/server/approval" subpath
+// there. apps/web's NotificationsPill only ever needs the *type* shapes
+// (VehicleApprovalRequest/VehicleApprovalOutcome from @danypops/vehicle-core,
+// itself dependency-free), which `import type` erases before bundling --
+// never the ApprovalCenter runtime module itself.
