@@ -113,7 +113,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 					</div>
 					{/* Command palette/shortcuts/theme fold into the one Settings entry (its own dialog exposes all three as rows) -- the collapsed pillar has no room for four separate icons. */}
 					<PillarTooltip side="right" label="Settings" shortcut={appearanceShortcut}>
-						<PillarCap commandId="appearance.open" label="Settings" edge="bottom">
+						<PillarCap commandId="appearance.open" label="Settings" slot="end">
 							<Settings aria-hidden="true" size={16} />
 						</PillarCap>
 					</PillarTooltip>
@@ -139,7 +139,7 @@ function CollapsedToggle(): React.JSX.Element {
 	const shortcut = useCommandShortcut("workspace.toggleSelection");
 	return (
 		<PillarTooltip side="right" label={label} shortcut={shortcut}>
-			<PillarCap commandId="workspace.toggleSelection" label={label} edge="top">
+			<PillarCap commandId="workspace.toggleSelection" label={label} slot="start">
 				<span className="relative grid place-items-center">
 					<UserAvatar size="lg" className="transition-opacity group-hover:opacity-0 group-focus-within:opacity-0" />
 					<ChevronsRight aria-hidden="true" size={18} className="absolute opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" />

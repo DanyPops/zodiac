@@ -31,7 +31,7 @@ export function SurfaceTemplatesPillar({ entries, onDockDefault, onTemplateDragS
 		<nav aria-label="Surface Templates" className={cn("relative z-20 flex h-full w-14 shrink-0 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)]", SURFACE_BG)}>
 			{/* The categorized gallery (brand logos, per-category previews) -- browsing/discovery, not a dock action. TemplatesDialog's own keyboard-native filter+placement flow is still reachable via its own command/shortcut for docking a real template. */}
 			<PillarTooltip side="left" label="Browse the Surface Templates gallery" shortcut={openGalleryShortcut}>
-				<PillarCap commandId="templates.openGallery" label="Browse the Surface Templates gallery" edge="top">
+				<PillarCap commandId="templates.openGallery" label="Browse the Surface Templates gallery" slot="start">
 					<BookOpen aria-hidden="true" size={18} />
 				</PillarCap>
 			</PillarTooltip>

@@ -5,8 +5,8 @@ import { cn } from "../platform/cn.js";
 interface PillarCapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "children"> {
 	readonly commandId: string;
 	readonly label: string;
-	/** Which pillar edge this cap sits on -- governs which side gets the divider against the rest of the pillar. */
-	readonly edge: "top" | "bottom";
+	/** Which end of the pillar this cap occupies -- matches PanelSchema's own startCap/endCap terminology (packages/protocol/src/panel.ts), not a screen edge; governs which side gets the divider against the rest of the pillar. */
+	readonly slot: "start" | "end";
 	readonly children: React.ReactNode;
 }
 
@@ -24,7 +24,7 @@ interface PillarCapProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "
  * handlers onto it. A plain component silently drops both -- tooltip never
  * opens, no error (a real bug this once had, three call sites affected).
  */
-export const PillarCap = forwardRef<HTMLButtonElement, PillarCapProps>(function PillarCap({ commandId, label, edge, children, ...rest }, ref) {
+export const PillarCap = forwardRef<HTMLButtonElement, PillarCapProps>(function PillarCap({ commandId, label, slot, children, ...rest }, ref) {
 	return (
 		<CommandButton
 			ref={ref}
@@ -33,7 +33,7 @@ export const PillarCap = forwardRef<HTMLButtonElement, PillarCapProps>(function 
 			tooltip={false}
 			className={cn(
 				"group grid h-12 w-14 shrink-0 place-items-center text-gray-600 hover:bg-gray-200 focus-visible:outline-2 focus-visible:outline-accent dark:text-gray-300 dark:hover:bg-gray-800",
-				edge === "top" ? "border-b-[length:var(--app-line-width)] border-gray-200 dark:border-gray-700" : "border-t-[length:var(--app-line-width)] border-gray-200 dark:border-gray-700",
+				slot === "start" ? "border-b-[length:var(--app-line-width)] border-gray-200 dark:border-gray-700" : "border-t-[length:var(--app-line-width)] border-gray-200 dark:border-gray-700",
 			)}
 			{...rest}
 		>

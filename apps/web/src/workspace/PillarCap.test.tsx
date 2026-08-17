@@ -13,12 +13,12 @@ afterEach(() => {
 	getHotkeyManager().destroy();
 });
 
-function renderCap(edge: "top" | "bottom") {
+function renderCap(slot: "start" | "end") {
 	const execute = vi.fn();
 	const registry = createCommandRegistry({ commands: [{ id: "pillar.cap", title: "Pillar Cap", description: "d", execute }], bindings: [] });
 	render(
 		<CommandProvider registry={registry} activeContexts={["global"]}>
-			<PillarCap commandId="pillar.cap" label="Pillar Cap" edge={edge}>
+			<PillarCap commandId="pillar.cap" label="Pillar Cap" slot={slot}>
 				<span>glyph</span>
 			</PillarCap>
 		</CommandProvider>,
@@ -28,21 +28,21 @@ function renderCap(edge: "top" | "bottom") {
 
 describe("PillarCap", () => {
 	it("is a full pillar-width, fixed-height cell -- the same shape at every call site", () => {
-		renderCap("top");
+		renderCap("start");
 		const button = screen.getByRole("button", { name: "Pillar Cap" });
 		expect(button).toHaveClass("h-12", "w-14");
 	});
 
 	it("renders its glyph directly, with no separate nested chip", () => {
-		renderCap("top");
+		renderCap("start");
 		expect(screen.getByText("glyph").parentElement).toBe(screen.getByRole("button", { name: "Pillar Cap" }));
 	});
 
 	it("dividers against the rest of the pillar on the side facing away from its own edge", () => {
-		renderCap("top");
+		renderCap("start");
 		expect(screen.getByRole("button", { name: "Pillar Cap" }).className).toMatch(/border-b/);
 		cleanup();
-		renderCap("bottom");
+		renderCap("end");
 		expect(screen.getByRole("button", { name: "Pillar Cap" }).className).toMatch(/border-t/);
 	});
 
@@ -59,7 +59,7 @@ describe("PillarCap", () => {
 				<Tooltip.Provider>
 					<Tooltip.Root>
 						<Tooltip.Trigger asChild>
-							<PillarCap commandId="pillar.cap" label="Pillar Cap" edge="top" ref={ref} onPointerEnter={onPointerEnter}>
+							<PillarCap commandId="pillar.cap" label="Pillar Cap" slot="start" ref={ref} onPointerEnter={onPointerEnter}>
 								<span>glyph</span>
 							</PillarCap>
 						</Tooltip.Trigger>
