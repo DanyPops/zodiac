@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { appletId, SurfaceIdSchema } from "./ids.js";
 import type { AppletId, WorkspaceId } from "./ids.js";
-import type { Location, Panel } from "./panel.js";
+import { EdgeLocationSchema } from "./panel.js";
+import type { EdgeLocation, Panel } from "./panel.js";
 import type { ParseResult } from "./result.js";
 import type { WorkspaceViewModel } from "./view-models.js";
 import { SurfaceTileSchema } from "./tile.js";
@@ -29,8 +30,6 @@ export const AppletContentSchema = z.discriminatedUnion("appletId", [
 	z.object({ appletId: z.literal("chat"), chat: z.discriminatedUnion("state", [z.object({ state: z.literal("unavailable"), reason: z.literal("no-active-agent-integration") }), z.object({ state: z.literal("ready"), integrationId: z.string().min(1) })]) }),
 ]);
 export type AppletContent = z.infer<typeof AppletContentSchema>;
-
-const EdgeLocationSchema = z.enum(["top", "bottom", "left", "right"]);
 
 export const RegionSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("panel"), location: EdgeLocationSchema, rect: RegionRectSchema, body: z.array(AppletContentSchema).max(8) }),
@@ -69,8 +68,6 @@ const DEFAULT_HEADER_THICKNESS = 1;
 function defaultPillarThickness(width: number): number {
 	return Math.max(13, Math.min(18, Math.floor(width / 4)));
 }
-
-type EdgeLocation = Exclude<Location, "floating">;
 
 /** Today's real, single-instance content assignment, kept as the fallback for any edge Location with no explicit Panel -- the same pairing this codebase has always painted, just now data rather than a hardcoded region `kind`. */
 const DEFAULT_EDGE_APPLET_IDS: Record<EdgeLocation, readonly AppletId[]> = {

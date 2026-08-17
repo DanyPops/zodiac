@@ -13,6 +13,10 @@ export type PanelAlignment = z.infer<typeof PanelAlignmentSchema>;
 export const FormFactorSchema = z.enum(["horizontal", "vertical"]);
 export type FormFactor = z.infer<typeof FormFactorSchema>;
 
+/** Location minus "floating" -- the 4 real edges a Panel can dock to, shared by regions.ts's own edge-Location geometry and apps/web's chat-placement (a chat Panel is never "floating" today, only ever docked to one of these 4). */
+export const EdgeLocationSchema = z.enum(["top", "bottom", "left", "right"]);
+export type EdgeLocation = z.infer<typeof EdgeLocationSchema>;
+
 /** top/bottom panels are wide strips, left/right are tall strips; floating has no edge to take its shape from, so it defaults to horizontal -- the more common toolbar/strip shape. */
 export function formFactorForLocation(location: Location): FormFactor {
 	return location === "left" || location === "right" ? "vertical" : "horizontal";
