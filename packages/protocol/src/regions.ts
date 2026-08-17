@@ -144,7 +144,13 @@ export function layoutWorldRegions(world: WorldViewModel, width: number, height:
 	if (!edgePanelsResult.ok) return edgePanelsResult;
 	const edgePanels = edgePanelsResult.value;
 	const headerThickness = edgePanels.top?.thickness ?? DEFAULT_HEADER_THICKNESS;
-	const footerThickness = edgePanels.bottom?.thickness ?? footerHeight;
+	// "bottom" is the one Location with its own pre-existing live-adjustable
+	// thickness (footerHeight, driven by expand/collapse) -- footerHeight
+	// always wins there, even once a real Panel is seeded/moved into "bottom",
+	// so that resize keeps working regardless of which Applet currently
+	// occupies the edge. A moved Panel's own `thickness` field only matters at
+	// the other three Locations, which have no competing live value.
+	const footerThickness = footerHeight;
 	const leftThickness = edgePanels.left?.thickness ?? defaultPillarThickness(width);
 	const rightThickness = edgePanels.right?.thickness ?? defaultPillarThickness(width);
 	const contentHeight = height - headerThickness - footerThickness;

@@ -142,13 +142,20 @@ describe("semantic Region protocol", () => {
       expect(withEmptyPanels).toEqual(withoutPanels);
     });
 
-    it("a bottom Panel's own thickness overrides footerHeight, and Body shrinks to match", () => {
-      const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ thickness: 8 })]);
+    it("footerHeight always wins over a seeded bottom Panel's own thickness -- resize (Ctrl+Up/Down) must keep working regardless of Panel content", () => {
+      const result = layoutWorldRegions(emptyWorld, 80, 24, 8, [panel({ thickness: 3 })]);
       if (!result.ok) throw new Error(result.issues.join("; "));
       const footer = result.value.find((region) => region.kind === "panel" && region.location === "bottom")!;
       const body = result.value.find((region) => region.kind === "body")!;
       expect(footer.rect).toEqual({ x: 0, y: 16, width: 80, height: 8 });
       expect(body.rect.height).toBe(24 - 1 - 8);
+    });
+
+    it("a non-bottom Panel's own thickness still applies -- only \"bottom\" is special-cased to footerHeight", () => {
+      const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ id: panelId("top-nav"), location: "top", thickness: 5, body: [appletId("window-carousel")] })]);
+      if (!result.ok) throw new Error(result.issues.join("; "));
+      const top = result.value.find((region) => region.kind === "panel" && region.location === "top")!;
+      expect(top.rect).toEqual({ x: 0, y: 0, width: 80, height: 5 });
     });
 
     it("a left Panel's thickness changes Body's own x/width independently of the right pillar", () => {

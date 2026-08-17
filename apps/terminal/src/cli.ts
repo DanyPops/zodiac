@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { dirname } from "node:path";
 import { connectRemoteWorldStore, createWorldStore, type WorldClientPort } from "@zodiac/server/world";
-import { worldId } from "@zodiac/protocol";
+import { appletId, MIN_FOOTER_HEIGHT, panelId, worldId, type Panel } from "@zodiac/protocol";
 import { Key, matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
 import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";
@@ -18,6 +18,19 @@ function resolveAgentCwd(classified: ClassifiedPath): string {
   if (classified.kind === "file") return dirname(classified.path);
   return process.cwd();
 }
+
+const DEFAULT_CHAT_PANEL: Panel = {
+  id: panelId("footer"),
+  location: "bottom",
+  alignment: "start",
+  offset: 0,
+  thickness: MIN_FOOTER_HEIGHT,
+  lengthMode: "fill",
+  visibilityMode: "normal",
+  startCap: null,
+  endCap: null,
+  body: [appletId("chat")],
+};
 
 function fail(message: string): void {
   process.stderr.write(`Zodiac: ${message}\n`);
@@ -54,7 +67,13 @@ async function main(): Promise<void> {
 
   const remoteWorld = daemonUrl ? await attachToDaemon(daemonUrl) : undefined;
   const attached = remoteWorld !== undefined;
-  const world: WorldClientPort = remoteWorld ?? createWorldStore(worldId("zodiac"));
+  // Seeded only for embedded mode -- a real Panel to move via Ctrl+G
+  // (moveChatPanel's own no-op guard already handles the remote-daemon case,
+  // where no /panels route exists to seed or move anything through). Its
+  // starting geometry matches DEFAULT_EDGE_APPLET_IDS's own bottom default
+  // exactly (see regions.ts), so seeding it changes nothing visually until
+  // Ctrl+G actually moves it.
+  const world: WorldClientPort = remoteWorld ?? createWorldStore(worldId("zodiac"), { panels: [DEFAULT_CHAT_PANEL] });
   let host: LectorHost | undefined;
   // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
   // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch

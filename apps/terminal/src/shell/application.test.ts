@@ -1,5 +1,5 @@
 import { createWorldStore } from "@zodiac/server/world";
-import { worldId } from "@zodiac/protocol";
+import { appletId, panelId, worldId, type Panel } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it, vi } from "vitest";
 import type { FooterChatController, LiveFooterChatStatus } from "../pi/footer-chat-controller.js";
@@ -195,5 +195,35 @@ describe("SemanticShellApplication lifecycle", () => {
     app.boot(80, 24);
     app.handleInput("\x14"); // Ctrl+T
     expect(app.focusedRegion()).not.toBe("external");
+  });
+
+  it("Ctrl+G moves a real chat Panel through every edge Location and back, end-to-end -- its border title actually follows, not just geometry, and its old Location goes genuinely blank rather than re-showing a stale default", async () => {
+    const chatPanel: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 20, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
+    const writes: string[] = [];
+    const app = new SemanticShellApplication(createWorldStore(worldId("empty"), { panels: [chatPanel] }), { write: data => writes.push(data) });
+
+    async function lines(): Promise<string[]> {
+      const terminal = await renderToTerminal([writes.join("")], { cols: 80, rows: 24 });
+      try { return terminal.plainLines(); } finally { terminal.dispose(); }
+    }
+
+    app.boot(80, 24);
+    expect((await lines()).at(-1)).toContain("Chat");
+
+    app.handleInput("\x07"); // Ctrl+G: bottom -> right
+    let current = await lines();
+    expect(current.at(-1)).not.toContain("Chat"); // bottom now genuinely empty, not a stale "Chat" label
+    expect(current[0]).toContain("Chat"); // right pillar's own top-border segment now carries it
+
+    app.handleInput("\x07"); // right -> top
+    current = await lines();
+    expect(current[0]).toContain("Chat"); // header's own middle segment
+
+    app.handleInput("\x07"); // top -> left
+    current = await lines();
+    expect(current[0]).toContain("Chat"); // left pillar's own top-border segment
+
+    app.handleInput("\x07"); // left -> bottom
+    expect((await lines()).at(-1)).toContain("Chat"); // full rotation lands back where it started
   });
 });

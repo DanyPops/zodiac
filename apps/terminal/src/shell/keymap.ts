@@ -15,6 +15,7 @@ export type ShellCommand =
   | { readonly type: "open-lector-editor" }
   | { readonly type: "open-lector-explorer" }
   | { readonly type: "open-terminal" }
+  | { readonly type: "move-chat-panel" }
   | { readonly type: "expand-footer" }
   | { readonly type: "collapse-footer" }
   | { readonly type: "scroll-footer-up" }
@@ -96,6 +97,11 @@ export function resolveShellCommand(data: string, context: KeymapContext): Shell
   // pass-through, exactly like the editor/explorer already do, so this file never sees Ctrl+]
   // at all while a terminal is mounted.
   if (matchesKey(data, Key.ctrl("t"))) return { type: "open-terminal" };
+  // Same C0-control-byte reliability bar as Ctrl+E/Ctrl+O/Ctrl+T above (Ctrl+G is 0x07,
+  // universally delivered) -- cycles Chat's own Panel to the next edge Location
+  // (bottom -> right -> top -> left -> bottom), global rather than footer-scoped since
+  // it's repositioning chrome, not typing into the footer itself.
+  if (matchesKey(data, Key.ctrl("g"))) return { type: "move-chat-panel" };
   if (!context.hasFooterChat || context.focusedRegion !== "footer") return undefined;
   // Neovim/tmux-style incremental resize: repeatable, not a modal
   // resize-prefix step, and scoped to the footer being the focused region

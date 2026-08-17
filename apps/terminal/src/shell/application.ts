@@ -1,5 +1,5 @@
 import type { Component, Terminal } from "@earendil-works/pi-tui";
-import type { WorldViewModel } from "@zodiac/protocol";
+import { appletId, type CommandIntent, type Location, type Panel, type WorldViewModel } from "@zodiac/protocol";
 import type { GridUpdate, Outcome } from "@zodiac/tui";
 import type { LectorHost } from "../lector/lector-host.js";
 import { promptAndOpenLectorEditorNatively } from "../lector/native-editor.js";
@@ -10,7 +10,21 @@ import { resolveShellCommand, type ShellCommand } from "./keymap.js";
 import { openTerminalPaneNatively } from "./native-terminal.js";
 import { SemanticShell, type ShellFocus } from "./semantic-shell.js";
 
-export interface WorldProjection { worldViewModel(): WorldViewModel }
+/**
+ * apply/panels are optional because a remote WorldClientPort (the wire-safe
+ * subset zodiacd exposes over HTTP) has apply but no panels() at all -- no
+ * route exposes Panel state yet, so "move-chat-panel" degrades to a no-op
+ * rather than throwing when attached to a live daemon. Embedded mode's real
+ * WorldStore has both.
+ */
+export interface WorldProjection {
+	worldViewModel(): WorldViewModel;
+	apply?(intent: CommandIntent): void;
+	panels?(): readonly Panel[];
+}
+
+/** bottom -> right -> top -> left -> bottom: the same rotation order a real edge-cycling UI (KDE's Plasma panel "Screen Edge" cycling) uses -- always lands back where it started after 4 presses. */
+const PANEL_MOVE_ROTATION: Record<Location, Location> = { bottom: "right", right: "top", top: "left", left: "bottom", floating: "bottom" };
 
 /** How many history rows one Page Up/Page Down step scrolls -- tmux copy-mode/opentui ScrollBox's own arrow-key-scrolls-by-line, Page-scrolls-by-page convention; a fixed row count rather than the exact current viewport height, matching SemanticShell's own FOOTER_RESIZE_STEP precedent for footer height. */
 const FOOTER_SCROLL_STEP = 5;
@@ -103,7 +117,21 @@ export class SemanticShellApplication {
       case "open-lector-editor": this.openLectorEditor(); return;
       case "open-lector-explorer": this.openLectorExplorer(); return;
       case "open-terminal": this.openTerminal(); return;
+      case "move-chat-panel": this.moveChatPanel(); return;
     }
+  }
+
+  /** No-op with no panels() (remote daemon, no /panels route yet) or no seeded chat Panel (cli.ts's embedded seeding failed/was skipped) -- see WorldProjection's own doc comment. */
+  private moveChatPanel(): void {
+    if (!this.world.apply || !this.world.panels) return;
+    const chatPanel = this.world.panels().find((panel) => panel.body.includes(appletId("chat")));
+    if (!chatPanel) return;
+    const nextLocation = PANEL_MOVE_ROTATION[chatPanel.location];
+    this.world.apply({
+      type: "panel.move",
+      panelId: chatPanel.id,
+      placement: { location: nextLocation, alignment: chatPanel.alignment, offset: chatPanel.offset },
+    });
   }
 
   /** Fire-and-forget, matching every other dispatch branch's own void-returning contract -- a real failure (e.g. an unreachable Lector daemon) surfaces as a thrown error inside the prompted editor's own status line (ModalEditorComponent's own performActionSafely convention), not here. */
@@ -140,7 +168,7 @@ export class SemanticShellApplication {
   }
 
   private render(): Outcome<GridUpdate> {
-    const frame = this.shell.project(this.world.worldViewModel(), this.width, this.height, this.footerChat?.snapshot());
+    const frame = this.shell.project(this.world.worldViewModel(), this.width, this.height, this.footerChat?.snapshot(), this.world.panels?.());
     if (!frame.ok) return frame;
     return this.output.render(frame.value);
   }

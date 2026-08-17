@@ -1,4 +1,4 @@
-import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type AppletContent, type Region, type SurfaceId, type WorldViewModel } from "@zodiac/protocol";
+import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type AppletContent, type Panel, type Region, type SurfaceId, type WorldViewModel } from "@zodiac/protocol";
 import { computeTileRects } from "@zodiac/server/window";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
 import type { Component } from "@earendil-works/pi-tui";
@@ -104,10 +104,11 @@ function findApplet<T extends AppletContent["appletId"]>(body: readonly AppletCo
   return body.find((applet): applet is AppletContentOf<T> => applet.appletId === appletId);
 }
 
-/** A Panel's own border-embedded title -- generalizes what used to be a fixed per-"kind" label (the header's "Windows"/"Windows: none", each pillar's "Workspaces"/"Integrations", the footer's "Chat") to whichever Applet is actually first in that Location's body. Absent/unrecognized content falls back to a location-neutral label rather than a blank border segment. */
+/** A Panel's own border-embedded title -- generalizes what used to be a fixed per-"kind" label (the header's "Windows"/"Windows: none", each pillar's "Workspaces"/"Integrations", the footer's "Chat") to whichever Applet is actually first in that Location's body. `fallback` only covers `region` itself being absent (the 5-region invariant means this shouldn't happen in practice, purely defensive) -- a real, empty body (e.g. a Location an Applet has just moved away from) renders a genuinely blank label, never the fallback text, or the border would lie about content that isn't there. */
 function panelBorderLabel(region: Extract<Region, { kind: "panel" }> | undefined, fallback: string): string {
-  const first = region?.body[0];
-  if (!first) return fallback;
+  if (!region) return fallback;
+  const first = region.body[0];
+  if (!first) return "";
   switch (first.appletId) {
     case "window-carousel": return first.carousel.state === "empty" ? "Windows: none" : "Windows";
     case "workspace-nav": return "Workspaces";
@@ -204,7 +205,7 @@ export class SemanticShell {
   /** Scrolls back toward the live bottom -- Page Down. */
   scrollFooterDown(lines: number): void { this.footerScrollTop += Math.max(0, lines); }
 
-  project(world: WorldViewModel, width: number, height: number, footerChat?: FooterChatStatus): Outcome<GridFrame> {
+  project(world: WorldViewModel, width: number, height: number, footerChat?: FooterChatStatus, panels: readonly Panel[] = []): Outcome<GridFrame> {
     // A footer taller than what layoutWorldRegions accepts for this exact
     // viewport (its own footerHeight <= height - 2 bound) would otherwise
     // reject the whole render -- e.g. a footer expanded at a tall terminal,
@@ -212,7 +213,7 @@ export class SemanticShell {
     // (or the terminal growing back) can still recover the originally
     // requested size without the caller having to track viewport history.
     const effectiveFooterHeight = Math.min(this.requestedFooterHeight, Math.max(MIN_FOOTER_HEIGHT, height - 2));
-    const layout = layoutWorldRegions(world, width, height, effectiveFooterHeight);
+    const layout = layoutWorldRegions(world, width, height, effectiveFooterHeight, panels);
     if (!layout.ok) return { ok: false, error: { code: "invalid-dimensions", message: layout.issues.join("; "), context: { width, height } } };
     const created = createGridFrame(gridId("zodiac-shell"), width, height);
     if (!created.ok) return created;
