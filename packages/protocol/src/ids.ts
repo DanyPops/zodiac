@@ -68,3 +68,15 @@ export type ResourceId = z.infer<typeof ResourceIdSchema>;
 export function resourceId(value: string): ResourceId {
 	return ResourceIdSchema.parse(value);
 }
+
+export const PanelIdSchema = brandedIdSchema("PanelId");
+export type PanelId = z.infer<typeof PanelIdSchema>;
+export function panelId(value: string): PanelId {
+	return PanelIdSchema.parse(value);
+}
+
+export const AppletIdSchema = brandedIdSchema("AppletId");
+export type AppletId = z.infer<typeof AppletIdSchema>;
+export function appletId(value: string): AppletId {
+	return AppletIdSchema.parse(value);
+}

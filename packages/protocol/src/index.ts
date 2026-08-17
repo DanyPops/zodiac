@@ -1,5 +1,5 @@
-export type { Brand, WorldId, WorkspaceId, WindowId, SurfaceId, IntegrationId, CommandId, ResourceId } from "./ids.js";
-export { WorldIdSchema, WorkspaceIdSchema, WindowIdSchema, SurfaceIdSchema, IntegrationIdSchema, CommandIdSchema, ResourceIdSchema, worldId, workspaceId, windowId, surfaceId, integrationId, commandId, resourceId } from "./ids.js";
+export type { Brand, WorldId, WorkspaceId, WindowId, SurfaceId, IntegrationId, CommandId, ResourceId, PanelId, AppletId } from "./ids.js";
+export { WorldIdSchema, WorkspaceIdSchema, WindowIdSchema, SurfaceIdSchema, IntegrationIdSchema, CommandIdSchema, ResourceIdSchema, PanelIdSchema, AppletIdSchema, worldId, workspaceId, windowId, surfaceId, integrationId, commandId, resourceId, panelId, appletId } from "./ids.js";
 
 export type { ParseResult } from "./result.js";
 export { parseWithSchema } from "./result.js";
@@ -22,6 +22,9 @@ export type { EmptyWorldViewModel, ReadyWorldViewModel, WorldViewModel, Region }
 export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions } from "./regions.js";
 
 export type { SurfaceRenderer } from "./renderer.js";
+
+export type { Location, PanelAlignment, FormFactor, LengthMode, VisibilityMode, AppletSlot, AppletDefinition, Panel } from "./panel.js";
+export { LocationSchema, PanelAlignmentSchema, FormFactorSchema, LengthModeSchema, VisibilityModeSchema, AppletSlotSchema, AppletDefinitionSchema, PanelSchema, formFactorForLocation } from "./panel.js";
 
 export type { ZodiacContribution, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
 export { ContributionReadBoundsSchema, ContributionResourceReferenceSchema } from "./contributions.js";
