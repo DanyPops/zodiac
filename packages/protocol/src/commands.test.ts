@@ -54,4 +54,14 @@ describe("CommandIntentSchema", () => {
 	it("still accepts surface.dock without a surfaceId (optional, not required)", () => {
 		expect(CommandIntentSchema.safeParse({ type: "surface.dock", workspaceId: "w1", integrationId: "activity", title: "Activity" }).success).toBe(true);
 	});
+
+	it("accepts a well-formed panel.move intent, with no workspaceId at all", () => {
+		const result = CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "top", alignment: "center", offset: 2 } });
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects panel.move with an unknown Location or PanelAlignment", () => {
+		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "diagonal", alignment: "center", offset: 0 } }).success).toBe(false);
+		expect(CommandIntentSchema.safeParse({ type: "panel.move", panelId: "footer", placement: { location: "top", alignment: "justify", offset: 0 } }).success).toBe(false);
+	});
 });

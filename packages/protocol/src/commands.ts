@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { CommandIdSchema, IntegrationIdSchema, SurfaceIdSchema, WindowIdSchema, WorkspaceIdSchema } from "./ids.js";
+import { CommandIdSchema, IntegrationIdSchema, PanelIdSchema, SurfaceIdSchema, WindowIdSchema, WorkspaceIdSchema } from "./ids.js";
+import { LocationSchema, PanelAlignmentSchema } from "./panel.js";
 
 /**
  * Every CommandIntent variant may optionally carry a caller-supplied
@@ -25,6 +26,8 @@ export const CommandIntentSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("surface.undock"), workspaceId: WorkspaceIdSchema, surfaceId: SurfaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.next"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.previous"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
+	// No workspaceId -- a Panel is global World chrome, not owned by any one Workspace (mirrors today's header/pillar/footer regions, which are also global).
+	z.object({ type: z.literal("panel.move"), panelId: PanelIdSchema, placement: z.object({ location: LocationSchema, alignment: PanelAlignmentSchema, offset: z.number().int().nonnegative() }), ...commandIdField }),
 ]);
 
 export type CommandIntent = z.infer<typeof CommandIntentSchema>;

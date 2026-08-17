@@ -36,7 +36,8 @@ export interface AuthorizeAgentCommandContext {
  */
 export function authorizeAgentCommand(intent: CommandIntent, context: AuthorizeAgentCommandContext): AgentCommandAuthorization {
 	if (!context.sessionPolicy.allowed) return { ok: false, reason: "session-denied" };
-	if (intent.workspaceId !== context.grant.workspaceId) return { ok: false, reason: "workspace-not-granted" };
+	// panel.move carries no workspaceId -- a Panel is global World chrome, not owned by any one Workspace, so there is nothing to check a grant's own workspaceId against.
+	if ("workspaceId" in intent && intent.workspaceId !== context.grant.workspaceId) return { ok: false, reason: "workspace-not-granted" };
 	if (!context.grant.allowedCommandTypes.has(intent.type)) return { ok: false, reason: "command-not-granted" };
 	if (intent.type === "surface.dock") {
 		const integration = context.getIntegration(intent.integrationId);

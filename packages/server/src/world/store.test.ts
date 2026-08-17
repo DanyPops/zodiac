@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { commandId, integrationId, surfaceId, windowId, workspaceId, worldId } from "@zodiac/protocol";
+import { appletId, commandId, integrationId, panelId, surfaceId, windowId, workspaceId, worldId, type AppletDefinition, type Panel } from "@zodiac/protocol";
+import { authorizeAgentCommand } from "../agent/authorize-command.js";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
 
@@ -356,5 +357,60 @@ describe("WorldStore walking skeleton", () => {
 			expect(surface.id).not.toBe("surface-7");
 			expect(result.value.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(2);
 		});
+	});
+});
+
+describe("panel.move", () => {
+	const FOOTER: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 3, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
+	const CHAT_APPLET: AppletDefinition = { id: appletId("chat"), title: "Chat", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 };
+
+	it("moves a real Panel to a new Location, updating panels()", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [FOOTER] });
+		const outcome = store.apply({ type: "panel.move", panelId: FOOTER.id, placement: { location: "top", alignment: "center", offset: 2 } });
+		expect(outcome).toEqual({ commandId: undefined });
+		expect(store.panels()).toEqual([{ ...FOOTER, location: "top", alignment: "center", offset: 2 }]);
+	});
+
+	it("echoes back the caller's own commandId", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [FOOTER] });
+		const outcome = store.apply({ type: "panel.move", panelId: FOOTER.id, placement: { location: "bottom", alignment: "start", offset: 0 }, commandId: commandId("cmd-1") });
+		expect(outcome).toEqual({ commandId: commandId("cmd-1") });
+	});
+
+	it("throws for an unknown panelId", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [FOOTER] });
+		expect(() => store.apply({ type: "panel.move", panelId: panelId("nonexistent"), placement: { location: "top", alignment: "start", offset: 0 } })).toThrow();
+	});
+
+	it("throws moving to a Location whose FormFactor an assigned Applet doesn't support", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [FOOTER], getApplet: (id) => (id === CHAT_APPLET.id ? CHAT_APPLET : undefined) });
+		// FOOTER's chat body Applet only supports horizontal; "left" is vertical.
+		expect(() => store.apply({ type: "panel.move", panelId: FOOTER.id, placement: { location: "left", alignment: "start", offset: 0 } })).toThrow();
+		expect(store.panels()).toEqual([FOOTER]); // rejected move never mutated state
+	});
+
+	it("allows moving to a Location an assigned Applet's own registered definition does support", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [FOOTER], getApplet: (id) => (id === CHAT_APPLET.id ? CHAT_APPLET : undefined) });
+		expect(() => store.apply({ type: "panel.move", panelId: FOOTER.id, placement: { location: "top", alignment: "start", offset: 0 } })).not.toThrow();
+	});
+
+	it("never rejects on formFactor when getApplet can't resolve an assigned AppletId -- unconstrained, not denied", () => {
+		const store = createWorldStore(worldId("w1"), { panels: [FOOTER] }); // no getApplet at all
+		expect(() => store.apply({ type: "panel.move", panelId: FOOTER.id, placement: { location: "left", alignment: "start", offset: 0 } })).not.toThrow();
+	});
+
+	it("a human's direct apply() and an authorized agent tool call produce identical Panel state", () => {
+		const intent = { type: "panel.move" as const, panelId: FOOTER.id, placement: { location: "top" as const, alignment: "center" as const, offset: 1 } };
+
+		const humanStore = createWorldStore(worldId("w1"), { panels: [FOOTER] });
+		humanStore.apply(intent);
+
+		// The agent path: authorizeAgentCommand approves first, exactly as packages/pi's real tool call does, then the identical apply() call runs.
+		const agentStore = createWorldStore(worldId("w1"), { panels: [FOOTER] });
+		const authorization = authorizeAgentCommand(intent, { grant: { workspaceId: workspaceId("irrelevant"), allowedCommandTypes: new Set(["panel.move"]) }, sessionPolicy: { allowed: true }, getIntegration: () => undefined });
+		expect(authorization).toEqual({ ok: true });
+		agentStore.apply(intent);
+
+		expect(agentStore.panels()).toEqual(humanStore.panels());
 	});
 });

@@ -1,4 +1,4 @@
-import { integrationId, workspaceId, type CommandIntent, type IntegrationDefinition } from "@zodiac/protocol";
+import { integrationId, panelId, workspaceId, type CommandIntent, type IntegrationDefinition } from "@zodiac/protocol";
 import { describe, expect, it } from "vitest";
 import { authorizeAgentCommand, type AgentIntegrationGrant } from "./authorize-command.js";
 
@@ -62,5 +62,16 @@ describe("authorizeAgentCommand", () => {
 	it("allows a granted command type that carries no target Integration at all (window navigation)", () => {
 		const outcome = authorizeAgentCommand({ type: "window.next", workspaceId: WORKSPACE }, context({ grant: grant({ allowedCommandTypes: new Set(["window.next"]) }) }));
 		expect(outcome).toEqual({ ok: true });
+	});
+
+	it("allows panel.move once granted, even though it carries no workspaceId to check against the grant's own Workspace", () => {
+		const intent: CommandIntent = { type: "panel.move", panelId: panelId("footer"), placement: { location: "bottom", alignment: "start", offset: 0 } };
+		const outcome = authorizeAgentCommand(intent, context({ grant: grant({ allowedCommandTypes: new Set(["panel.move"]) }) }));
+		expect(outcome).toEqual({ ok: true });
+	});
+
+	it("denies panel.move when the grant never listed it", () => {
+		const intent: CommandIntent = { type: "panel.move", panelId: panelId("footer"), placement: { location: "bottom", alignment: "start", offset: 0 } };
+		expect(authorizeAgentCommand(intent, context())).toEqual({ ok: false, reason: "command-not-granted" });
 	});
 });

@@ -1,7 +1,11 @@
 import {
+	type AppletDefinition,
+	type AppletId,
 	type CommandId,
 	type CommandIntent,
 	type IntegrationId,
+	type Panel,
+	type PanelId,
 	type ParseResult,
 	type Surface,
 	type SurfaceId,
@@ -15,6 +19,7 @@ import {
 	type World,
 	type WorldId,
 	type WorldViewModel,
+	formFactorForLocation,
 	WorldSchema,
 	parseWithSchema,
 	surfaceId as makeSurfaceId,
@@ -61,6 +66,8 @@ export interface WorldStore {
 	 * keeps working unchanged.
 	 */
 	apply: (intent: CommandIntent) => ApplyOutcome;
+	/** Global World chrome, not owned by any one Workspace -- see panel.move's own CommandIntent doc comment. Empty unless seeded via createWorldStore's own options. */
+	panels: () => readonly Panel[];
 	workspaceViewModel: (workspaceId: WorkspaceId) => WorkspaceViewModel | undefined;
 	worldViewModel: () => WorldViewModel;
 	/**
@@ -99,6 +106,12 @@ export interface DockSurfaceIdCollision {
 export type DockIntoFailure = DockWorkspaceNotFound | DockWindowNotFound | DockSurfaceIdCollision | TileFailure;
 export type DockIntoOutcome = { readonly ok: true; readonly value: Surface } | DockIntoFailure;
 
+/** Constructor-time options for Panel state -- see WorldStore.panels' own doc comment for why Panels are global rather than per-Workspace. `getApplet` resolves an AppletId to its real AppletDefinition for panel.move's own supportedFormFactors check; a Panel referencing an id `getApplet` can't resolve is treated as unconstrained (no formFactor to violate), not rejected. */
+export interface WorldStorePanelOptions {
+	readonly panels?: readonly Panel[];
+	readonly getApplet?: (id: AppletId) => AppletDefinition | undefined;
+}
+
 /** apply()'s own return value -- see WorldStore.apply's doc comment. */
 export interface ApplyOutcome {
 	/** The submitted intent's own commandId, echoed back unchanged; undefined if the caller didn't supply one. */
@@ -107,7 +120,7 @@ export interface ApplyOutcome {
 	readonly surfaceId?: SurfaceId;
 }
 
-function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId, Workspace>): WorldStore {
+function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId, Workspace>, panelOptions: WorldStorePanelOptions = {}): WorldStore {
 	const allWindows = [...initialWorkspaces.values()].flatMap((workspace) => workspace.windows);
 	const nextWindowId = createIdSequence("window", highestIdSuffix(allWindows.map((window) => window.id), "window"));
 	const nextSurfaceId = createIdSequence(
@@ -119,6 +132,8 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	);
 	const workspaces = new Map(initialWorkspaces);
 	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
+	const panels = new Map((panelOptions.panels ?? []).map((panel) => [panel.id, panel]));
+	const getApplet = panelOptions.getApplet ?? (() => undefined);
 
 	/**
 	 * One tile tree per Window, live/derived state kept in lockstep with each
@@ -244,6 +259,19 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, activeWindowIndex });
 	}
 
+	function movePanel(targetPanelId: PanelId, placement: Extract<CommandIntent, { type: "panel.move" }>["placement"]): void {
+		const panel = panels.get(targetPanelId);
+		if (!panel) throw new Error(`World "${worldId}" has no Panel "${targetPanelId}"`);
+		const formFactor = formFactorForLocation(placement.location);
+		const assignedAppletIds = [panel.startCap, panel.endCap, ...panel.body].filter((id): id is AppletId => id !== null);
+		for (const assignedAppletId of assignedAppletIds) {
+			const applet = getApplet(assignedAppletId);
+			if (applet && !applet.supportedFormFactors.has(formFactor)) throw new Error(`Cannot move Panel "${targetPanelId}" to Location "${placement.location}": Applet "${assignedAppletId}" does not support FormFactor "${formFactor}"`);
+		}
+		panels.set(targetPanelId, { ...panel, location: placement.location, alignment: placement.alignment, offset: placement.offset });
+		emitChange();
+	}
+
 	function apply(intent: CommandIntent): ApplyOutcome {
 		switch (intent.type) {
 			case "workspace.create":
@@ -268,6 +296,9 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 			case "window.previous":
 				moveActiveWindow(intent.workspaceId, -1);
 				emitChange();
+				return { commandId: intent.commandId };
+			case "panel.move":
+				movePanel(intent.panelId, intent.placement);
 				return { commandId: intent.commandId };
 			default:
 				assertNeverIntent(intent);
@@ -308,6 +339,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		dockSurfaceInto,
 		windowTile,
 		apply,
+		panels: () => [...panels.values()],
 		workspaceViewModel,
 		worldViewModel,
 		onChange: (listener) => {
@@ -317,15 +349,16 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	};
 }
 
-export function createWorldStore(id: WorldId): WorldStore {
-	return buildStore(id, new Map());
+export function createWorldStore(id: WorldId, panelOptions?: WorldStorePanelOptions): WorldStore {
+	return buildStore(id, new Map(), panelOptions);
 }
 
 /** Rebuilds a store from an already-schema-validated World -- see hydrateWorldStore for the untrusted-input entry point. */
-export function createWorldStoreFromWorld(world: World): WorldStore {
+export function createWorldStoreFromWorld(world: World, panelOptions?: WorldStorePanelOptions): WorldStore {
 	return buildStore(
 		world.id,
 		new Map(world.workspaces.map((workspace) => [workspace.id, workspace])),
+		panelOptions,
 	);
 }
 

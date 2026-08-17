@@ -1,4 +1,4 @@
-export type { WorldStore } from "./store.js";
+export type { WorldStore, WorldStorePanelOptions } from "./store.js";
 export { createWorldStore, createWorldStoreFromWorld, hydrateWorldStore } from "./store.js";
 
 export type { WorldClientPort } from "./world-client-port.js";

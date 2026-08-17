@@ -57,7 +57,7 @@ export function createAgentCommandTool(options: CreateAgentCommandToolOptions): 
 		name: "zodiac_dispatch_command",
 		label: "Zodiac Command",
 		description:
-			"Dispatches one Zodiac CommandIntent (workspace.create, surface.dock, surface.undock, window.next, window.previous) through the same authorized daemon endpoint a human UI action uses. Denied outside this session's own granted Workspace and command types.",
+			"Dispatches one Zodiac CommandIntent (workspace.create, surface.dock, surface.undock, window.next, window.previous, panel.move) through the same authorized daemon endpoint a human UI action uses. Denied outside this session's own granted Workspace and command types.",
 		parameters: AgentCommandArgsSchema,
 		async execute(_toolCallId, params) {
 			const parsed = parseWithSchema(CommandIntentSchema, params);
@@ -82,8 +82,10 @@ export function createAgentCommandTool(options: CreateAgentCommandToolOptions): 
 			// produced, not just that some command succeeded.
 			const outcome = (await response.json().catch(() => ({}))) as { commandId?: string; result?: { surfaceId?: string } };
 			const createdSurfaceSuffix = outcome.result?.surfaceId ? ` (created Surface "${outcome.result.surfaceId}")` : "";
+			// panel.move carries no workspaceId -- it targets global World chrome, not a Workspace.
+			const targetSuffix = "workspaceId" in intent ? ` to Workspace "${intent.workspaceId}"` : "";
 			return {
-				content: [{ type: "text", text: `Applied ${intent.type} to Workspace "${intent.workspaceId}"${createdSurfaceSuffix}.` }],
+				content: [{ type: "text", text: `Applied ${intent.type}${targetSuffix}${createdSurfaceSuffix}.` }],
 				details: { intent, commandId: outcome.commandId, result: outcome.result },
 			};
 		},
