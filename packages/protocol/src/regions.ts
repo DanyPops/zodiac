@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SurfaceIdSchema } from "./ids.js";
 import type { WorkspaceId } from "./ids.js";
+import type { Location, Panel } from "./panel.js";
 import type { ParseResult } from "./result.js";
 import type { WorkspaceViewModel } from "./view-models.js";
 import { SurfaceTileSchema } from "./tile.js";
@@ -45,6 +46,30 @@ function activeBodyContent(workspace: WorkspaceViewModel) {
   };
 }
 
+const DEFAULT_HEADER_THICKNESS = 1;
+
+function defaultPillarThickness(width: number): number {
+  return Math.max(13, Math.min(18, Math.floor(width / 4)));
+}
+
+type EdgeLocation = Exclude<Location, "floating">;
+
+/**
+ * One Panel per edge Location -- see the "Precedent: desktop-shell Panel/Applet
+ * prior art" Doc's own settled anatomy. Only top/bottom/left/right reserve
+ * layout space (StrutManager's own real docked/floating distinction); a
+ * "floating" Panel is skipped here, not an error -- it doesn't own a strut.
+ */
+function edgePanelsByLocation(panels: readonly Panel[]): ParseResult<Partial<Record<EdgeLocation, Panel>>> {
+  const byLocation: Partial<Record<EdgeLocation, Panel>> = {};
+  for (const panel of panels) {
+    if (panel.location === "floating") continue;
+    if (byLocation[panel.location]) return { ok: false, issues: [`more than one Panel occupies Location "${panel.location}" -- exactly one Panel per Location is the model`] };
+    byLocation[panel.location] = panel;
+  }
+  return { ok: true, value: byLocation };
+}
+
 /**
  * `footerHeight` defaults to the original fixed size (MIN_FOOTER_HEIGHT) --
  * every existing caller that never passes it keeps today's exact layout.
@@ -52,13 +77,32 @@ function activeBodyContent(workspace: WorkspaceViewModel) {
  * taller footer to show real conversation history instead of one status
  * line; the header/body/pillars shrink to make room, same as resizing any
  * other pane in a tiling layout.
+ *
+ * `panels`, when given, lets a real Panel at an edge Location override that
+ * edge's own thickness (StrutManager::availableScreenRect's algorithm: each
+ * Panel reserves its own strut, Body claims whatever's left) -- a Location
+ * with no matching Panel keeps today's hardcoded default. `footerHeight`
+ * remains the footer's own default whenever no "bottom" Panel is given.
  */
-export function layoutWorldRegions(world: WorldViewModel, width: number, height: number, footerHeight: number = MIN_FOOTER_HEIGHT): ParseResult<readonly Region[]> {
+export function layoutWorldRegions(world: WorldViewModel, width: number, height: number, footerHeight: number = MIN_FOOTER_HEIGHT, panels: readonly Panel[] = []): ParseResult<readonly Region[]> {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 20 || height < 8 || width > 500 || height > 300) return { ok: false, issues: [`viewport must be integer 20..500 x 8..300; received ${width}x${height}`] };
   if (!Number.isInteger(footerHeight) || footerHeight < MIN_FOOTER_HEIGHT || footerHeight > height - 2) return { ok: false, issues: [`footerHeight must be an integer ${MIN_FOOTER_HEIGHT}..${height - 2} for a ${height}-row viewport; received ${footerHeight}`] };
-  const pillar = Math.max(13, Math.min(18, Math.floor(width / 4)));
-  const contentHeight = height - 1 - footerHeight;
-  const rects = { header: { x: 0, y: 0, width, height: 1 }, left: { x: 0, y: 1, width: pillar, height: contentHeight }, body: { x: pillar, y: 1, width: width - pillar * 2, height: contentHeight }, right: { x: width - pillar, y: 1, width: pillar, height: contentHeight }, footer: { x: 0, y: height - footerHeight, width, height: footerHeight } };
+  const edgePanels = edgePanelsByLocation(panels);
+  if (!edgePanels.ok) return edgePanels;
+  const headerThickness = edgePanels.value.top?.thickness ?? DEFAULT_HEADER_THICKNESS;
+  const footerThickness = edgePanels.value.bottom?.thickness ?? footerHeight;
+  const leftThickness = edgePanels.value.left?.thickness ?? defaultPillarThickness(width);
+  const rightThickness = edgePanels.value.right?.thickness ?? defaultPillarThickness(width);
+  const contentHeight = height - headerThickness - footerThickness;
+  const bodyWidth = width - leftThickness - rightThickness;
+  if (contentHeight < 1 || bodyWidth < 1) return { ok: false, issues: [`Panel thickness leaves no room for Body content in a ${width}x${height} viewport (header ${headerThickness}, footer ${footerThickness}, left ${leftThickness}, right ${rightThickness})`] };
+  const rects = {
+    header: { x: 0, y: 0, width, height: headerThickness },
+    left: { x: 0, y: headerThickness, width: leftThickness, height: contentHeight },
+    body: { x: leftThickness, y: headerThickness, width: bodyWidth, height: contentHeight },
+    right: { x: width - rightThickness, y: headerThickness, width: rightThickness, height: contentHeight },
+    footer: { x: 0, y: height - footerThickness, width, height: footerThickness },
+  };
   const empty = world.state === "empty";
   const regions: Region[] = [
     { kind: "header", rect: rects.header, carousel: empty ? { state: "empty", windows: [] } : { state: "ready", windows: world.workspaces[0]!.windows.map(w => ({ id: w.id, label: w.title, active: w.active })) } },

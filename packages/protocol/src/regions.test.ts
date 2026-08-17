@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { layoutWorldRegions, MIN_FOOTER_HEIGHT, RegionSchema, type EmptyWorldViewModel, type ReadyWorldViewModel } from "./regions.js";
-import { surfaceId, windowId, workspaceId } from "./ids.js";
+import { appletId, panelId, surfaceId, windowId, workspaceId } from "./ids.js";
+import type { Panel } from "./panel.js";
 
 const emptyWorld: EmptyWorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
 
@@ -128,5 +129,51 @@ describe("semantic Region protocol", () => {
     const implicit = layoutWorldRegions(emptyWorld, 80, 24);
     const explicit = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT);
     expect(implicit).toEqual(explicit);
+  });
+
+  describe("Panel-driven geometry", () => {
+    function panel(overrides: Partial<Panel> = {}): Panel {
+      return { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: MIN_FOOTER_HEIGHT, lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")], ...overrides };
+    }
+
+    it("an empty panels array reproduces today's exact default layout", () => {
+      const withoutPanels = layoutWorldRegions(emptyWorld, 80, 24);
+      const withEmptyPanels = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, []);
+      expect(withEmptyPanels).toEqual(withoutPanels);
+    });
+
+    it("a bottom Panel's own thickness overrides footerHeight, and Body shrinks to match", () => {
+      const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ thickness: 8 })]);
+      if (!result.ok) throw new Error(result.issues.join("; "));
+      const footer = result.value.find((region) => region.kind === "footer")!;
+      const body = result.value.find((region) => region.kind === "body")!;
+      expect(footer.rect).toEqual({ x: 0, y: 16, width: 80, height: 8 });
+      expect(body.rect.height).toBe(24 - 1 - 8);
+    });
+
+    it("a left Panel's thickness changes Body's own x/width independently of the right pillar", () => {
+      const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ id: panelId("left-nav"), location: "left", thickness: 20, body: [appletId("workspace-nav")] })]);
+      if (!result.ok) throw new Error(result.issues.join("; "));
+      const left = result.value.find((region) => region.kind === "pillar" && region.side === "left")!;
+      const body = result.value.find((region) => region.kind === "body")!;
+      expect(left.rect.width).toBe(20);
+      expect(body.rect.x).toBe(20);
+    });
+
+    it("rejects two Panels occupying the same edge Location", () => {
+      const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel(), panel({ id: panelId("other-footer") })]);
+      expect(result).toMatchObject({ ok: false });
+    });
+
+    it("a floating Panel reserves no strut -- it's excluded from the edge layout entirely", () => {
+      const withFloating = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ id: panelId("toast"), location: "floating", thickness: 5 })]);
+      const withoutPanels = layoutWorldRegions(emptyWorld, 80, 24);
+      expect(withFloating).toEqual(withoutPanels);
+    });
+
+    it("rejects Panel thicknesses that leave no room for Body", () => {
+      const result = layoutWorldRegions(emptyWorld, 40, 12, MIN_FOOTER_HEIGHT, [panel({ location: "left", id: panelId("huge-left"), thickness: 39 })]);
+      expect(result).toMatchObject({ ok: false });
+    });
   });
 });
