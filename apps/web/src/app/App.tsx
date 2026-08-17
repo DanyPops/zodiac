@@ -40,7 +40,7 @@ import type { PendingDock } from "../workspace/WindowDockview.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 import { WorldShell } from "../workspace/WorldShell.js";
-import type { Panel } from "@zodiac/protocol";
+import type { CommandIntent, Panel } from "@zodiac/protocol";
 import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
 
@@ -188,8 +188,25 @@ export function App(): React.JSX.Element {
 	// below loads and connects -- see its own doc comment for why this isn't
 	// just a direct useWorldClient() call here.
 	const [livePanels, setLivePanels] = useState<readonly Panel[]>([]);
+	// A ref, not state -- LiveWorldPanels calls onApply on every one of its own
+	// renders (useWorldClient's own apply() has no stable identity to depend
+	// on), so a state update here would cascade into a render loop; see
+	// LiveWorldPanels's own doc comment.
+	const applyRef = useRef<(intent: CommandIntent) => void>(() => {});
 	const leftAppletId = appletIdForLocation("left", livePanels);
 	const rightAppletId = appletIdForLocation("right", livePanels);
+	// Drag-resize-with-snapping's own dispatch: keeps the local collapse
+	// preference in sync (the pre-connection/no-daemon fallback default, per
+	// the "drag-resize" task's own instruction) and, once a real left Panel
+	// exists, sends the authoritative panel.resize -- a no-op dispatch-wise
+	// before the daemon has seeded/been reached, matching how the existing
+	// toggle button already behaves offline.
+	function handleWorkspaceSelectionResize(thickness: number): void {
+		const nextCollapsed = thickness <= 100;
+		if (nextCollapsed !== selection.collapsed) selection.toggle();
+		const leftPanel = livePanels.find((panel) => panel.location === "left");
+		if (leftPanel) applyRef.current({ type: "panel.resize", panelId: leftPanel.id, thickness });
+	}
 	// Each renderer is a thin container closure over this render's own local
 	// state/handlers (Container/Presentational split -- WorkspaceSelection and
 	// SurfaceTemplatesPillar themselves stay exactly as prop-driven and tested
@@ -208,6 +225,7 @@ export function App(): React.JSX.Element {
 				onCreateWorkspace={() => setCreatingWorkspace(true)}
 				onWorkspaceRename={renameWorkspace}
 				onWorkspaceRemove={removeWorkspace}
+				onResize={handleWorkspaceSelectionResize}
 			/>
 		),
 		"surface-templates": () => (
@@ -303,7 +321,7 @@ export function App(): React.JSX.Element {
 			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
 				<div className="min-w-0 flex-1">
 				<Suspense fallback={null}>
-					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} />
+					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} />
 				</Suspense>
 				<WorldShell panels={livePanels} left={leftAppletId && appletRenderers[leftAppletId]?.()} right={rightAppletId && appletRenderers[rightAppletId]?.()}>
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">

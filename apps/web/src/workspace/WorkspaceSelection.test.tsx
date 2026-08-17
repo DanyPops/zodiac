@@ -340,3 +340,57 @@ describe("collapsed Workspace quick selection", () => {
 		expect(idle.className).not.toMatch(/(?<!:)border-gray-300|(?<!:)bg-gray-100/);
 	});
 });
+
+describe("drag-resize", () => {
+	function renderWithResize(collapsed: boolean, onResize: (thickness: number) => void) {
+		const registry = createCommandRegistry({
+			commands: [
+				{ id: "workspace.toggleSelection", title: "Toggle workspace selection", description: "", execute: vi.fn() },
+				{ id: "palette.open", title: "Open command palette", description: "", execute: vi.fn() },
+				{ id: "shortcuts.open", title: "Open keyboard shortcuts", description: "", execute: vi.fn() },
+				{ id: "theme.cycle", title: "Cycle color theme", description: "", execute: vi.fn() },
+				{ id: "appearance.open", title: "Open Settings", description: "", execute: vi.fn() },
+			],
+			bindings: [],
+		});
+		render(
+			<CommandProvider registry={registry} activeContexts={["global"]}>
+				<WorkspaceSelection
+					collapsed={collapsed}
+					catalog={WORKSPACE_CATALOG}
+					activeWorkspaceId={WORKSPACE_CATALOG[0]!.id}
+					selectionRef={createRef()}
+					selectedButtonRef={createRef()}
+					onWorkspaceFocus={vi.fn()}
+					onCreateWorkspace={vi.fn()}
+					onWorkspaceRename={vi.fn()}
+					onWorkspaceRemove={vi.fn()}
+					onResize={onResize}
+				/>
+			</CommandProvider>,
+		);
+	}
+
+	it("renders no resize handle at all when onResize is omitted -- every existing call site is unaffected", () => {
+		renderExpanded();
+		expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+	});
+
+	it("a drag on the expanded pillar's own handle that ends past the midpoint dispatches the collapsed width", () => {
+		const onResize = vi.fn();
+		renderWithResize(false, onResize);
+		const handle = screen.getByRole("separator", { name: "Resize workspace selection" });
+		fireEvent.pointerDown(handle, { clientX: 300 });
+		window.dispatchEvent(new PointerEvent("pointerup", { clientX: 100 })); // dragged left by 200
+		expect(onResize).toHaveBeenCalledWith(56);
+	});
+
+	it("a drag on the collapsed pillar's own handle that ends past the midpoint dispatches the expanded width", () => {
+		const onResize = vi.fn();
+		renderWithResize(true, onResize);
+		const handle = screen.getByRole("separator", { name: "Resize workspace selection" });
+		fireEvent.pointerDown(handle, { clientX: 0 });
+		window.dispatchEvent(new PointerEvent("pointerup", { clientX: 200 })); // dragged right by 200
+		expect(onResize).toHaveBeenCalledWith(256);
+	});
+});

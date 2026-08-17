@@ -33,11 +33,13 @@ const ADAPTER_ALLOWLIST = [
 	"src/conversation/client.ts", // ConversationClient's own fetch adapter factory (fetch is its injectable default, never called literally here)
 	"src/pi/client.ts", // PiClient's own fetch/EventSource adapter factory (both are injectable defaults, never called literally here)
 	"src/terminal/terminal-client.ts", // TerminalClient's own fetch/WebSocket adapter factory (both are injectable defaults, never called literally here)
-	"src/platform/pointer.ts", // PointerTracker's own browser adapter factory
 	"src/platform/shape-settings-style.ts", // ShapeSettingsStyleTarget's own browser adapter factory
-	"src/platform/wisp-target-measurer.ts", // WispTargetMeasurer's own browser adapter factory
-	"src/platform/drag-tracker.ts", // DragTracker's own browser adapter factory
+	"src/workspace/useResizeHandle.ts", // Panel drag-resize's own window pointermove/pointerup adapter -- the pointer routinely leaves the handle element's own small hit area mid-drag, so this can't be scoped to the handle's own event handlers.
 ];
+
+// pointer.ts/wisp-target-measurer.ts/drag-tracker.ts were removed from this
+// list as stale entries -- none of those files exist in this repo (verified
+// directly, not assumed) at the time useResizeHandle.ts was added here.
 
 const RESTRICTED_GLOBALS = [
 	{ name: "window", message: "Reach in through a port (ConversationClient/Preferences/ThemeController) instead of the global." },

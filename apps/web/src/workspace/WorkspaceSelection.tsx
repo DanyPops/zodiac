@@ -5,6 +5,7 @@ import { cn } from "../platform/cn.js";
 import { ConfirmDialog, glyphBadgeClassName, GlyphBadge, iconButtonClassName, SURFACE_BG, UserAvatar } from "@zodiac/ui";
 import { PillarCap } from "./PillarCap.js";
 import { PillarTooltip } from "./PillarTooltip.js";
+import { useResizeHandle } from "./useResizeHandle.js";
 import type { WorkspaceCatalogEntry } from "./workspace-catalog.js";
 
 interface WorkspaceSelectionProps {
@@ -22,6 +23,8 @@ interface WorkspaceSelectionProps {
 	readonly onWorkspaceRename: (id: string, title: string) => void;
 	/** Permanently drops a catalog entry (and every Window/docked Surface it owns) by id -- reached via each expanded row's own Close button, gated behind a confirmation (see ExpandedCatalogItem/ConfirmDialog below). Not yet exposed in the collapsed pillar -- see its own doc comment. */
 	readonly onWorkspaceRemove: (id: string) => void;
+	/** Drag-resize-with-snapping (see panel-resize.ts) at this pillar's own right edge -- undefined omits the handle entirely (every existing call site/test keeps rendering exactly as it does today). Reaches the same two widths (collapsed/expanded) the toggle button already does, just via a drag gesture instead of a click; the caller (App.tsx) decides whether/how to also sync `collapsed` and dispatch a real panel.resize. */
+	readonly onResize?: (thickness: number) => void;
 }
 
 /**
@@ -32,12 +35,17 @@ interface WorkspaceSelectionProps {
  * dockChat) -- it never appears in this list. Surface docking itself lives
  * in the Window Carousel/center/Surface Templates pillar instead.
  */
-export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace, onWorkspaceRename, onWorkspaceRemove }: WorkspaceSelectionProps): React.JSX.Element {
+export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, selectionRef, selectedButtonRef, onWorkspaceFocus, toolCallWorkspaceId, onCreateWorkspace, onWorkspaceRename, onWorkspaceRemove, onResize }: WorkspaceSelectionProps): React.JSX.Element {
 	const appearanceShortcut = useCommandShortcut("appearance.open");
 	// The entry a Close click is asking to remove, pending the user's actual
 	// confirmation -- undefined the rest of the time, including right after a
 	// confirm/cancel decides it one way or the other.
 	const [pendingRemoval, setPendingRemoval] = useState<WorkspaceCatalogEntry | undefined>(undefined);
+	// Always the left pillar -- dragging right always grows it, whichever
+	// variant is currently mounted. Called unconditionally (hooks can't be
+	// conditional); the handle itself only renders when onResize is given.
+	const resize = useResizeHandle({ currentThickness: collapsed ? 56 : 256, direction: 1, onResize: onResize ?? (() => {}) });
+	const resizeHandle = onResize && <div role="separator" aria-label="Resize workspace selection" aria-orientation="vertical" className="absolute inset-y-0 right-0 z-30 w-1 cursor-ew-resize touch-none" onPointerDown={resize.onPointerDown} />;
 	return (
 		<>
 			{!collapsed && (
@@ -87,6 +95,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 						<FooterCommand commandId="theme.cycle" label="Cycle color theme" icon={<MoonStar aria-hidden="true" size={15} />} />
 						<FooterCommand commandId="appearance.open" label="Settings" icon={<Settings aria-hidden="true" size={15} />} />
 					</div>
+					{resizeHandle}
 				</nav>
 			)}
 			{/* Pillar Cap: the shared --app-corner-radius token, same as everywhere else -- CSS's own per-corner clamping (radius capped at half the box's own side) turns this narrow, tall nav into a true stadium once Corner Sharpness pushes the radius past half its width, exactly how a size-9 glyph button already becomes a circle at max sharpness. Never a fixed rounded-full: that would stay circular even at Corner Sharpness 0. */}
@@ -117,6 +126,7 @@ export function WorkspaceSelection({ collapsed, catalog, activeWorkspaceId, sele
 							<Settings aria-hidden="true" size={16} />
 						</PillarCap>
 					</PillarTooltip>
+					{resizeHandle}
 				</nav>
 			)}
 			<ConfirmDialog
