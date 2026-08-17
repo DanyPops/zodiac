@@ -39,6 +39,9 @@ import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
+import { WorldShell } from "../workspace/WorldShell.js";
+import type { Panel } from "@zodiac/protocol";
+import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
 
 const zodiacdBaseUrl = resolveZodiacdBaseUrl();
@@ -52,6 +55,8 @@ const piClient = createHttpPiClient({ baseUrl: zodiacdBaseUrl });
 const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then((module) => ({ default: module.WindowDockview })));
 // Same reasoning as WindowDockview above -- see LiveDaemonPanel's own doc comment for the confirmed bundle-budget breach this avoids.
 const LiveDaemonPanel = lazy(() => import("../workspace/LiveDaemonPanel.js").then((module) => ({ default: module.LiveDaemonPanel })));
+// Same reasoning again -- useWorldClient's own @zodiac/server/world-client dependency (a full WorldStore implementation) stayed out of the entry bundle only because LiveDaemonPanel was already lazy; using it directly here would have re-introduced exactly that regression (confirmed: check:bundle-budget failed, entryJs 168.2kB vs a 151.4kB budget, before this was made lazy too).
+const LiveWorldPanels = lazy(() => import("../workspace/LiveWorldPanels.js").then((module) => ({ default: module.LiveWorldPanels })));
 
 export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
@@ -170,6 +175,51 @@ export function App(): React.JSX.Element {
 		workspace.undockSurface(instanceId);
 	}
 
+	// Only World-level chrome placement (which edge WorkspaceSelection/
+	// SurfaceTemplatesPillar render at) is live-daemon-driven today -- the
+	// underlying Workspace/Window/Surface catalog above is still userWorkspaces'
+	// own local-preferences model, untouched by this. An agent (or another
+	// person's tab) dispatching panel.move against a real seeded Panel here
+	// relocates Web's chrome the next time panels() refreshes, the same way
+	// Ctrl+G already moves the TUI's chat Panel -- see the "AppletId ->
+	// component resolver" task's own doc comment for why this can't be a
+	// build-time-only assumption. Starts empty (appletIdForLocation's own
+	// default fallback covers the gap) until the lazy LiveWorldPanels bridge
+	// below loads and connects -- see its own doc comment for why this isn't
+	// just a direct useWorldClient() call here.
+	const [livePanels, setLivePanels] = useState<readonly Panel[]>([]);
+	const leftAppletId = appletIdForLocation("left", livePanels);
+	const rightAppletId = appletIdForLocation("right", livePanels);
+	// Each renderer is a thin container closure over this render's own local
+	// state/handlers (Container/Presentational split -- WorkspaceSelection and
+	// SurfaceTemplatesPillar themselves stay exactly as prop-driven and tested
+	// as they already are); resolved by AppletId, not hand-placed by App.tsx
+	// deciding "left" or "right" directly.
+	const appletRenderers: Partial<Record<string, () => React.ReactNode>> = {
+		"workspace-nav": () => (
+			<WorkspaceSelection
+				collapsed={selection.collapsed}
+				catalog={workspace.catalog}
+				activeWorkspaceId={workspace.activeWorkspaceId}
+				selectionRef={selectionRef}
+				selectedButtonRef={selectedButtonRef}
+				onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
+				toolCallWorkspaceId={toolCallWorkspaceId}
+				onCreateWorkspace={() => setCreatingWorkspace(true)}
+				onWorkspaceRename={renameWorkspace}
+				onWorkspaceRemove={removeWorkspace}
+			/>
+		),
+		"surface-templates": () => (
+			<SurfaceTemplatesPillar
+				entries={surfaceTemplates.entries}
+				onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)}
+				onTemplateDragStart={() => setTemplateDragging(true)}
+				onTemplateDragEnd={() => setTemplateDragging(false)}
+			/>
+		),
+	};
+
 	const registry = createZodiacCommandRegistry(
 		{
 			toggleWorkspaceSelection() {
@@ -251,19 +301,11 @@ export function App(): React.JSX.Element {
 		<CommandProvider registry={registry} activeContexts={contexts.effectiveContexts}>
 			{/* data-template-dragging: the authoritative "is a Surface Template drag active" signal, consumed by styles.css to force-hide dockview's own root-level drop-target overlay once a drag ends -- see the CSS rule's own doc comment for why dockview's own cleanup can't be trusted to do this itself. */}
 			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
-				<WorkspaceSelection
-					collapsed={selection.collapsed}
-					catalog={workspace.catalog}
-					activeWorkspaceId={workspace.activeWorkspaceId}
-					selectionRef={selectionRef}
-					selectedButtonRef={selectedButtonRef}
-					onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
-					toolCallWorkspaceId={toolCallWorkspaceId}
-					onCreateWorkspace={() => setCreatingWorkspace(true)}
-					onWorkspaceRename={renameWorkspace}
-					onWorkspaceRemove={removeWorkspace}
-				/>
-
+				<div className="min-w-0 flex-1">
+				<Suspense fallback={null}>
+					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} />
+				</Suspense>
+				<WorldShell panels={livePanels} left={leftAppletId && appletRenderers[leftAppletId]?.()} right={rightAppletId && appletRenderers[rightAppletId]?.()}>
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
 					<CanvasWell
 						center={
@@ -331,13 +373,9 @@ export function App(): React.JSX.Element {
 						)}
 					</CanvasWell>
 				</div>
+				</WorldShell>
+				</div>
 
-				<SurfaceTemplatesPillar
-					entries={surfaceTemplates.entries}
-					onDockDefault={(templateId, title) => dockTemplate(templateId, title, undefined)}
-					onTemplateDragStart={() => setTemplateDragging(true)}
-					onTemplateDragEnd={() => setTemplateDragging(false)}
-				/>
 				<DockRulerFrame visible={templateDragging} box={dockCanvasBox} mark={dockRulerMark} />
 
 				<CommandDialog
