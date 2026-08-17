@@ -10,7 +10,7 @@ import { SemanticShell } from "./semantic-shell.js";
 function footerCellIndex(width: number, height: number, footerHeight: number, relativeX: number, relativeY: number): number {
   const layout = layoutWorldRegions({ state: "empty", workspaces: [], activeWorkspaceId: null }, width, height, footerHeight);
   if (!layout.ok) throw new Error(layout.issues.join("; "));
-  const footer = layout.value.find((region) => region.kind === "footer");
+  const footer = layout.value.find((region) => region.kind === "panel" && region.location === "bottom");
   if (!footer) throw new Error("no footer region");
   return (footer.rect.y + relativeY) * width + (footer.rect.x + relativeX);
 }

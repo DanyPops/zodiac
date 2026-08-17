@@ -20,6 +20,12 @@ export interface BorderTopology {
   readonly contentBottom: number;
 }
 
+type PanelRegion = Extract<Region, { kind: "panel" }>;
+
+function panelAt(regions: readonly Region[], location: PanelRegion["location"]): PanelRegion | undefined {
+  return regions.find((region): region is PanelRegion => region.kind === "panel" && region.location === location);
+}
+
 function byKind<K extends Region["kind"]>(regions: readonly Region[], kind: K): Extract<Region, { kind: K }> | undefined {
   return regions.find((region): region is Extract<Region, { kind: K }> => region.kind === kind);
 }
@@ -30,11 +36,11 @@ function byKind<K extends Region["kind"]>(regions: readonly Region[], kind: K): 
  * ever stops tiling contiguously, this fails closed instead of drawing a garbled frame.
  */
 export function deriveBorderTopology(regions: readonly Region[], width: number, height: number): Outcome<BorderTopology> {
-  const header = byKind(regions, "header");
-  const footer = byKind(regions, "footer");
+  const header = panelAt(regions, "top");
+  const footer = panelAt(regions, "bottom");
   const body = byKind(regions, "body");
-  const leftPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "left");
-  const rightPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "right");
+  const leftPillar = panelAt(regions, "left");
+  const rightPillar = panelAt(regions, "right");
   if (!header || !footer || !body || !leftPillar || !rightPillar) {
     return { ok: false, error: { code: "invalid-rect", message: "border topology requires header, footer, body and both pillars" } };
   }

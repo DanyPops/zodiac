@@ -31,7 +31,7 @@ describe("deriveBorderTopology", () => {
   });
 
   it("fails closed when a required region is missing", () => {
-    const withoutFooter = regionsAt(60, 16).filter(region => region.kind !== "footer");
+    const withoutFooter = regionsAt(60, 16).filter(region => !(region.kind === "panel" && region.location === "bottom"));
     expect(deriveBorderTopology(withoutFooter, 60, 16)).toMatchObject({ ok: false, error: { code: "invalid-rect" } });
   });
 

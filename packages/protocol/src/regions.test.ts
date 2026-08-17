@@ -28,14 +28,14 @@ describe("semantic Region protocol", () => {
     const result = layoutWorldRegions(emptyWorld, width, height);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.map((region) => region.kind)).toEqual(["header", "pillar", "body", "pillar", "footer"]);
+    expect(result.value.map((region) => (region.kind === "panel" ? region.location : region.kind))).toEqual(["top", "left", "body", "right", "bottom"]);
     expect(result.value.map((region) => RegionSchema.safeParse(region).success)).toEqual([true, true, true, true, true]);
     expect(result.value).toMatchObject([
-      { kind: "header", carousel: { state: "empty", windows: [] } },
-      { kind: "pillar", side: "left", navigation: "workspaces", items: [] },
+      { kind: "panel", location: "top", body: [{ appletId: "window-carousel", carousel: { state: "empty", windows: [] } }] },
+      { kind: "panel", location: "left", body: [{ appletId: "workspace-nav", items: [] }] },
       { kind: "body", content: { state: "empty", watermark: "No workspace open" } },
-      { kind: "pillar", side: "right", navigation: "integrations", items: [] },
-      { kind: "footer", chat: { state: "unavailable", reason: "no-active-agent-integration" } },
+      { kind: "panel", location: "right", body: [{ appletId: "integrations-nav", items: [] }] },
+      { kind: "panel", location: "bottom", body: [{ appletId: "chat", chat: { state: "unavailable", reason: "no-active-agent-integration" } }] },
     ]);
   });
 
@@ -95,7 +95,7 @@ describe("semantic Region protocol", () => {
   it("grows the footer and shrinks header/body/pillars to match, when given a taller footerHeight", () => {
     const result = layoutWorldRegions(emptyWorld, 80, 24, 10);
     if (!result.ok) throw new Error(result.issues.join("; "));
-    const footer = result.value.find((region) => region.kind === "footer")!;
+    const footer = result.value.find((region) => region.kind === "panel" && region.location === "bottom")!;
     const body = result.value.find((region) => region.kind === "body")!;
     expect(footer.rect).toEqual({ x: 0, y: 14, width: 80, height: 10 });
     expect(body.rect.height).toBe(24 - 1 - 10);
@@ -145,7 +145,7 @@ describe("semantic Region protocol", () => {
     it("a bottom Panel's own thickness overrides footerHeight, and Body shrinks to match", () => {
       const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ thickness: 8 })]);
       if (!result.ok) throw new Error(result.issues.join("; "));
-      const footer = result.value.find((region) => region.kind === "footer")!;
+      const footer = result.value.find((region) => region.kind === "panel" && region.location === "bottom")!;
       const body = result.value.find((region) => region.kind === "body")!;
       expect(footer.rect).toEqual({ x: 0, y: 16, width: 80, height: 8 });
       expect(body.rect.height).toBe(24 - 1 - 8);
@@ -154,7 +154,7 @@ describe("semantic Region protocol", () => {
     it("a left Panel's thickness changes Body's own x/width independently of the right pillar", () => {
       const result = layoutWorldRegions(emptyWorld, 80, 24, MIN_FOOTER_HEIGHT, [panel({ id: panelId("left-nav"), location: "left", thickness: 20, body: [appletId("workspace-nav")] })]);
       if (!result.ok) throw new Error(result.issues.join("; "));
-      const left = result.value.find((region) => region.kind === "pillar" && region.side === "left")!;
+      const left = result.value.find((region) => region.kind === "panel" && region.location === "left")!;
       const body = result.value.find((region) => region.kind === "body")!;
       expect(left.rect.width).toBe(20);
       expect(body.rect.x).toBe(20);

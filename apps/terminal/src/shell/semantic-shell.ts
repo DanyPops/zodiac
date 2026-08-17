@@ -1,4 +1,4 @@
-import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type Region, type SurfaceId, type WorldViewModel } from "@zodiac/protocol";
+import { layoutWorldRegions, MIN_FOOTER_HEIGHT, type AppletContent, type Region, type SurfaceId, type WorldViewModel } from "@zodiac/protocol";
 import { computeTileRects } from "@zodiac/server/window";
 import { deriveBorderTopology, labelSegment, paintBorders } from "../frame/border.js";
 import type { Component } from "@earendil-works/pi-tui";
@@ -92,8 +92,28 @@ function footerStatusLine(status: FooterChatStatus, maxWidth: number): { text: s
   return { text: "", style: BASE };
 }
 
+const LOCATION_FOCUS: Record<Extract<Region, { kind: "panel" }>["location"], ShellFocus> = { top: "header", left: "left-pillar", right: "right-pillar", bottom: "footer" };
+
 function regionFocus(region: Region): ShellFocus {
-  return region.kind === "pillar" ? `${region.side}-pillar` : region.kind;
+  return region.kind === "body" ? "body" : LOCATION_FOCUS[region.location];
+}
+
+type AppletContentOf<T extends AppletContent["appletId"]> = Extract<AppletContent, { appletId: T }>;
+
+function findApplet<T extends AppletContent["appletId"]>(body: readonly AppletContent[], appletId: T): AppletContentOf<T> | undefined {
+  return body.find((applet): applet is AppletContentOf<T> => applet.appletId === appletId);
+}
+
+/** A Panel's own border-embedded title -- generalizes what used to be a fixed per-"kind" label (the header's "Windows"/"Windows: none", each pillar's "Workspaces"/"Integrations", the footer's "Chat") to whichever Applet is actually first in that Location's body. Absent/unrecognized content falls back to a location-neutral label rather than a blank border segment. */
+function panelBorderLabel(region: Extract<Region, { kind: "panel" }> | undefined, fallback: string): string {
+  const first = region?.body[0];
+  if (!first) return fallback;
+  switch (first.appletId) {
+    case "window-carousel": return first.carousel.state === "empty" ? "Windows: none" : "Windows";
+    case "workspace-nav": return "Workspaces";
+    case "integrations-nav": return "Integrations";
+    case "chat": return "Chat";
+  }
 }
 
 function toRect(region: Region): Outcome<Rect> {
@@ -211,7 +231,7 @@ export class SemanticShell {
     }
     if (this.fullscreenTarget !== null) {
       const target = this.fullscreenTarget;
-      const region = layout.value.find((candidate) => candidate.kind === target);
+      const region = layout.value.find((candidate) => (target === "body" ? candidate.kind === "body" : candidate.kind === "panel" && candidate.location === "bottom"));
       if (!region) return { ok: false, error: { code: "invalid-dimensions", message: `fullscreen target region "${target}" missing from layout`, context: { width, height } } };
       return this.renderFullscreen(frame, region, target, width, height, footerChat);
     }
@@ -292,15 +312,33 @@ export class SemanticShell {
   }
 
   private paintRegion(frame: GridFrame, area: Rect, region: Region, title: CellStyle, footerChat?: FooterChatStatus): Outcome<void> {
-    if (region.kind === "header") return { ok: true, value: undefined }; // embedded into the top border row by paintFrameBorders
-    if (region.kind === "pillar") {
-      // "Workspaces"/"Integrations" now live on this pillar's own top border
-      // segment (see paintFrameBorders), the same "embedded in the border, not
-      // painted as content" convention the header region itself already uses --
-      // so the panel's own content starts immediately at row 1, not row 3.
-      return paint(frame, area, 1, 1, region.items.length === 0 ? "(none)" : region.items[0]!.label, MUTED);
-    }
     if (region.kind === "body") return this.paintBody(frame, area, region, title);
+    const chatApplet = findApplet(region.body, "chat");
+    // A Panel's own body content starts immediately at row 1, not row 3 --
+    // its title ("Workspaces"/"Windows"/"Chat"/...) rides the border itself
+    // (see paintFrameBorders/panelBorderLabel), never a separate content
+    // heading painted here.
+    if (!chatApplet) {
+      // window-carousel has no row content of its own (its title text alone,
+      // border-embedded, is the whole of it); an items-shaped Applet
+      // (workspace-nav/integrations-nav) shows its first item or "(none)".
+      const itemsApplet = region.body.find((applet): applet is Extract<AppletContent, { items: unknown }> => "items" in applet);
+      if (!itemsApplet) return { ok: true, value: undefined };
+      return paint(frame, area, 1, 1, itemsApplet.items.length === 0 ? "(none)" : itemsApplet.items[0]!.label, MUTED);
+    }
+    // Only "bottom" (the classic footer, expand/collapse-able via
+    // requestedFooterHeight) supports the rich multi-row history/composer
+    // view -- every other Location the chat Applet could move to (a fixed
+    // 1-row header, or a narrow-by-default pillar) renders the same compact
+    // single-line status a footer at its own minimum height already shows.
+    if (region.location !== "bottom") {
+      if (footerChat) {
+        const line = footerChatLine(footerChat, Math.max(0, area.width - 2));
+        return paint(frame, area, 1, 1, line.text, line.style);
+      }
+      const status = chatApplet.chat.state === "unavailable" ? "Agent unavailable" : "Agent ready";
+      return paint(frame, area, 1, 1, status, MUTED);
+    }
     // Footer row 0 is the border separator and row (height-1) is the bottom
     // border. At the default MIN_FOOTER_HEIGHT there's exactly one content
     // row, holding the live status line. Once expanded past that (see
@@ -308,10 +346,6 @@ export class SemanticShell {
     // everything between shows real history -- presentation-only in both
     // cases, not fed back through World/CommandIntent (see the driven-session-
     // port task's own notes on why).
-    // "Chat" now lives on the outer bottom border, centered (see
-    // paintFrameBorders) -- the same "embedded in the border, not painted as
-    // content" convention the header region already uses -- so every content
-    // row here starts immediately at row 1, one row earlier than before.
     const contentRows = area.height - 2;
     if (footerChat) {
       if (contentRows <= 1) {
@@ -367,7 +401,7 @@ export class SemanticShell {
       const composerLine = footerComposerLine(footerChat, Math.max(0, area.width - 2));
       return paint(frame, area, 1, area.height - 2, composerLine.text, composerLine.style);
     }
-    const status = region.chat.state === "unavailable" ? "Agent unavailable" : "Agent ready";
+    const status = chatApplet.chat.state === "unavailable" ? "Agent unavailable" : "Agent ready";
     return paint(frame, area, 1, 1, status, MUTED);
   }
 
@@ -380,13 +414,15 @@ export class SemanticShell {
     const focus = this.focusedRegion();
     const bordered = paintBorders(frame, t, width, height, focus, { base: MUTED, active: BORDER_ACTIVE });
     if (!bordered.ok) return bordered;
-    // Pillar names ride their own top-border segment, the same slot
+    // Panel titles ride their own top-border segment, the same slot
     // "Zodiac" used to sit in, rather than a separate content heading one
     // row down -- one fewer thing painted per frame, and it reads exactly
-    // like tmux/zellij's own pane-title-in-the-border convention.
-    const leftPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "left");
-    const rightPillar = regions.find((region): region is Extract<Region, { kind: "pillar" }> => region.kind === "pillar" && region.side === "right");
-    const pillarLabel = (pillar: Extract<Region, { kind: "pillar" }> | undefined): string => (pillar?.navigation === "workspaces" ? "Workspaces" : "Integrations");
+    // like tmux/zellij's own pane-title-in-the-border convention. Generic
+    // over whichever Applet actually occupies each Location now (see
+    // panelBorderLabel), not a fixed per-side label.
+    const leftPanel = regions.find((region): region is Extract<Region, { kind: "panel" }> => region.kind === "panel" && region.location === "left");
+    const rightPanel = regions.find((region): region is Extract<Region, { kind: "panel" }> => region.kind === "panel" && region.location === "right");
+    const topPanel = regions.find((region): region is Extract<Region, { kind: "panel" }> => region.kind === "panel" && region.location === "top");
     // Each segment's own inverse-when-focused styling mirrors exactly which
     // ShellFocus value highlights that segment's own region -- the header
     // region's real focus for the middle ("Windows") segment, but
@@ -395,21 +431,18 @@ export class SemanticShell {
     const leftStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "left-pillar" };
     const headerStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "header" };
     const rightStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "right-pillar" };
-    const leftLabel = labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalLeftSplit, t.horizontalTop, pillarLabel(leftPillar), leftStyle);
+    const leftLabel = labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalLeftSplit, t.horizontalTop, panelBorderLabel(leftPanel, "Workspaces"), leftStyle);
     if (!leftLabel.ok) return leftLabel;
-    const header = regions.find((region): region is Extract<Region, { kind: "header" }> => region.kind === "header");
-    if (header) {
-      const carouselText = header.carousel.state === "empty" ? "Windows: none" : "Windows";
-      const windows = labelSegment(frame, fullArea.value, t.verticalLeftSplit + 1, t.verticalRightSplit, t.horizontalTop, carouselText, headerStyle);
-      if (!windows.ok) return windows;
-    }
-    const rightLabel = labelSegment(frame, fullArea.value, t.verticalRightSplit + 1, t.verticalOuterRight, t.horizontalTop, pillarLabel(rightPillar), rightStyle);
+    const windows = labelSegment(frame, fullArea.value, t.verticalLeftSplit + 1, t.verticalRightSplit, t.horizontalTop, panelBorderLabel(topPanel, "Windows: none"), headerStyle);
+    if (!windows.ok) return windows;
+    const rightLabel = labelSegment(frame, fullArea.value, t.verticalRightSplit + 1, t.verticalOuterRight, t.horizontalTop, panelBorderLabel(rightPanel, "Integrations"), rightStyle);
     if (!rightLabel.ok) return rightLabel;
-    // "Chat" rides the outer bottom border, centered across the footer's full
-    // width (the footer has no left/right vertical split the way the header
-    // row does) -- see paintRegion's own footer branch for the corresponding
-    // content-row shift.
+    // The bottom Panel's own title rides the outer bottom border, centered
+    // across its full width (no left/right vertical split there the way the
+    // header row has) -- see paintRegion's own "bottom" branch for the
+    // corresponding content-row shift.
+    const bottomPanel = regions.find((region): region is Extract<Region, { kind: "panel" }> => region.kind === "panel" && region.location === "bottom");
     const footerStyle: CellStyle = { ...BASE, bold: true, inverse: focus === "footer" };
-    return labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalOuterRight, t.horizontalBottom, "Chat", footerStyle);
+    return labelSegment(frame, fullArea.value, t.verticalOuterLeft + 1, t.verticalOuterRight, t.horizontalBottom, panelBorderLabel(bottomPanel, "Chat"), footerStyle);
   }
 }
