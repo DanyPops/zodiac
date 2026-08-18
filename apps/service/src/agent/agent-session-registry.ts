@@ -10,8 +10,8 @@ export interface AgentSessionSummary {
 }
 
 export interface AgentSessionRegistry {
-	/** Constructs a fresh AgentIntegrationPort via the injected factory and registers it under a new opaque id. cwd is forwarded to the factory, undefined when the caller didn't request one. */
-	create: (cwd?: string) => Promise<string>;
+	/** Constructs a fresh AgentIntegrationPort via the injected factory. Both args forward unchanged; initialActiveToolNames carries a Workspace's own resolved tool grant (see agent-routes.ts's createSession). */
+	create: (cwd?: string, initialActiveToolNames?: readonly string[]) => Promise<string>;
 	list: () => readonly AgentSessionSummary[];
 	get: (sessionId: string) => AgentIntegrationPort | undefined;
 	/** Every ZodiacAgentEvent this session has emitted so far, in order -- for a newly-attaching SSE subscriber to replay before switching to live tail (see the "zodiacd API surface" Papyrus Doc). */
@@ -34,13 +34,13 @@ interface Entry {
  * tests), the same shape apps/web's own PiSessionRegistry already
  * established for its (now-superseded, zodiacd stage 4) subprocess sessions.
  */
-export function createAgentSessionRegistry(createIntegration: (cwd?: string) => AgentIntegrationPort | Promise<AgentIntegrationPort>): AgentSessionRegistry {
+export function createAgentSessionRegistry(createIntegration: (cwd?: string, initialActiveToolNames?: readonly string[]) => AgentIntegrationPort | Promise<AgentIntegrationPort>): AgentSessionRegistry {
 	const sessions = new Map<string, Entry>();
 
 	return {
-		async create(cwd?: string): Promise<string> {
+		async create(cwd?: string, initialActiveToolNames?: readonly string[]): Promise<string> {
 			const sessionId = randomUUID();
-			const integration = await createIntegration(cwd);
+			const integration = await createIntegration(cwd, initialActiveToolNames);
 			const entry: Entry = { createdAt: Date.now(), integration, history: [] };
 			integration.onEvent((event) => {
 				entry.history.push(event);

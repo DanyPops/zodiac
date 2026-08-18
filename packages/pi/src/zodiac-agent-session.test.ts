@@ -54,6 +54,47 @@ describe("createZodiacAgentSession", () => {
 		expect(session.getActiveToolNames()).toEqual(["read"]);
 	});
 
+	it("zero-default invariant: an explicit empty initialActiveToolNames excludes Pi's own built-in tools, not just Vehicle-shaped ones", async () => {
+		const faux = fauxProvider();
+		const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });
+		modelRuntime.registerNativeProvider(faux.provider);
+		await modelRuntime.setRuntimeApiKey(faux.getModel().provider, "test-key");
+
+		const { session, integration } = await createZodiacAgentSession({
+			cwd: process.cwd(),
+			mode: "rpc",
+			modelRuntime,
+			resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir: process.cwd(), noExtensions: true }),
+			sessionManager: SessionManager.inMemory(),
+			settingsManager: SettingsManager.inMemory(),
+			initialActiveToolNames: [],
+		});
+		disposers.push(() => integration.dispose());
+
+		const activeToolNames = session.getActiveToolNames();
+		expect(activeToolNames).toEqual([]);
+		for (const builtin of ["read", "bash", "edit", "write"]) expect(activeToolNames).not.toContain(builtin);
+	});
+
+	it("omitting initialActiveToolNames preserves Pi's own SDK default -- only a caller with a real Workspace tool grant to enforce should opt in", async () => {
+		const faux = fauxProvider();
+		const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });
+		modelRuntime.registerNativeProvider(faux.provider);
+		await modelRuntime.setRuntimeApiKey(faux.getModel().provider, "test-key");
+
+		const { session, integration } = await createZodiacAgentSession({
+			cwd: process.cwd(),
+			mode: "rpc",
+			modelRuntime,
+			resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir: process.cwd(), noExtensions: true }),
+			sessionManager: SessionManager.inMemory(),
+			settingsManager: SettingsManager.inMemory(),
+		});
+		disposers.push(() => integration.dispose());
+
+		expect(session.getActiveToolNames().sort()).toEqual(["bash", "edit", "read", "write"]);
+	});
+
 	it("returns a real AgentIntegrationPort backed by the constructed AgentSession", async () => {
 		const faux = fauxProvider();
 		const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });

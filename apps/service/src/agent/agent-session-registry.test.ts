@@ -39,14 +39,22 @@ describe("createAgentSessionRegistry", () => {
 		expect(create).toHaveBeenCalledTimes(2);
 	});
 
-	it("forwards a client-requested cwd to the integration factory, undefined when none was given", async () => {
+	it("forwards a client-requested cwd and initialActiveToolNames to the integration factory, undefined when none was given", async () => {
 		const create = vi.fn(() => fakeIntegration());
 		const registry = createAgentSessionRegistry(create);
 
 		await registry.create("/repos/pipes");
-		expect(create).toHaveBeenCalledWith("/repos/pipes");
+		expect(create).toHaveBeenCalledWith("/repos/pipes", undefined);
 		await registry.create();
-		expect(create).toHaveBeenCalledWith(undefined);
+		expect(create).toHaveBeenCalledWith(undefined, undefined);
+	});
+
+	it("forwards a caller-resolved initialActiveToolNames to the integration factory unchanged", async () => {
+		const create = vi.fn(() => fakeIntegration());
+		const registry = createAgentSessionRegistry(create);
+
+		await registry.create(undefined, []);
+		expect(create).toHaveBeenCalledWith(undefined, []);
 	});
 
 	it("awaits an async integration factory (the real production shape) before registering the session", async () => {

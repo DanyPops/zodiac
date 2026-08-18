@@ -50,9 +50,9 @@ function defaultWorldPanelOptions(): WorldStorePanelOptions {
 	return { panels: DEFAULT_WORLD_PANELS, getApplet: (id) => byId.get(id) };
 }
 
-/** Constructs a real, live agent session per zodiacd agent-session request -- "rpc" mode, the same headless character pi's own `pi --mode rpc` subprocess has, since a daemon session has no interactive TUI of its own. Falls back to the daemon's own process cwd when a client doesn't request one. */
-async function createDaemonAgentIntegration(cwd?: string): Promise<AgentIntegrationPort> {
-	const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc" });
+/** Constructs a real, live agent session per zodiacd agent-session request -- "rpc" mode, since a daemon session has no interactive TUI. Falls back to the daemon's own cwd when unrequested. initialActiveToolNames enforces a Workspace's own tool grant (see agent-routes.ts's createSession); omitted for a cwd-only caller with no Workspace. */
+async function createDaemonAgentIntegration(cwd?: string, initialActiveToolNames?: readonly string[]): Promise<AgentIntegrationPort> {
+	const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc", initialActiveToolNames });
 	return integration;
 }
 

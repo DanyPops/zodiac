@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
+import { workspaceId } from "@zodiac/protocol";
 import { createAgentSessionRegistry } from "../agent/agent-session-registry.js";
 import { createAgentRoutes } from "./agent-routes.js";
 
@@ -63,6 +64,36 @@ describe("createAgentRoutes", () => {
 
 		const response = await fetch(`${base}/api/agent/sessions`, { method: "POST" });
 		expect(response.status).toBe(500);
+	});
+
+	it("createSession resolves a requested workspaceId through getWorkspaceToolIds, never a client-supplied tool list", async () => {
+		const createIntegration = vi.fn(() => fakeIntegration());
+		const registry = createAgentSessionRegistry(createIntegration);
+		const getWorkspaceToolIds = vi.fn(() => ["lector.fs"]);
+		const routes = createAgentRoutes(registry, getWorkspaceToolIds);
+		const base = await listen((req, res) => {
+			void routes.createSession(req, res);
+		});
+
+		await fetch(`${base}/api/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "ws", tools: ["edit", "write", "bash"] }) });
+
+		expect(getWorkspaceToolIds).toHaveBeenCalledWith(workspaceId("ws"));
+		expect(createIntegration).toHaveBeenCalledWith(undefined, ["lector.fs"]);
+	});
+
+	it("createSession omits initialActiveToolNames when no workspaceId is requested -- preserves the factory's own default", async () => {
+		const createIntegration = vi.fn(() => fakeIntegration());
+		const registry = createAgentSessionRegistry(createIntegration);
+		const getWorkspaceToolIds = vi.fn(() => ["lector.fs"]);
+		const routes = createAgentRoutes(registry, getWorkspaceToolIds);
+		const base = await listen((req, res) => {
+			void routes.createSession(req, res);
+		});
+
+		await fetch(`${base}/api/agent/sessions`, { method: "POST" });
+
+		expect(getWorkspaceToolIds).not.toHaveBeenCalled();
+		expect(createIntegration).toHaveBeenCalledWith(undefined, undefined);
 	});
 
 	it("listSessions reports every live session", async () => {

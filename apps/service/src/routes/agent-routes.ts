@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { WorkspaceId } from "@zodiac/protocol";
 import type { AgentSessionRegistry } from "../agent/agent-session-registry.js";
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
@@ -49,24 +50,24 @@ function matchAction(pathname: string): { sessionId: string; action: string } | 
  * conversation another client already started, which is the actual point
  * of zodiacd existing.
  */
-export function createAgentRoutes(registry: AgentSessionRegistry) {
+export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[]) {
 	return {
 		async createSession(req: IncomingMessage, res: ServerResponse): Promise<void> {
-			// cwd is the only option a client can request today, and it's optional --
-			// an empty body or a malformed one both fall back to the registry's own
-			// default (the daemon's own cwd) rather than failing the request, the
-			// same permissive fallback apps/web's own (now-superseded) session
-			// creation route already established.
+			// Malformed/empty body falls back to defaults (registry's own cwd, no tool grant) rather than failing the request.
 			let cwd: string | undefined;
+			let initialActiveToolNames: readonly string[] | undefined;
 			try {
 				const body = await readJsonBody(req);
 				const requestedCwd = (body as { cwd?: unknown } | undefined)?.cwd;
 				if (typeof requestedCwd === "string" && requestedCwd.trim()) cwd = requestedCwd;
+				// Never trust a client-supplied tool list -- only a workspaceId, resolved server-side against the real WorldStore-derived grant.
+				const requestedWorkspaceId = (body as { workspaceId?: unknown } | undefined)?.workspaceId;
+				if (typeof requestedWorkspaceId === "string" && requestedWorkspaceId.trim() && getWorkspaceToolIds) initialActiveToolNames = getWorkspaceToolIds(requestedWorkspaceId as WorkspaceId);
 			} catch {
 				// Malformed JSON body -- ignored, same fallback as no body at all.
 			}
 			try {
-				const sessionId = await registry.create(cwd);
+				const sessionId = await registry.create(cwd, initialActiveToolNames);
 				writeJson(res, 200, { sessionId });
 			} catch (error) {
 				// A real construction failure (no model configured, no network for

@@ -36,6 +36,8 @@ export interface CreateZodiacAgentSessionOptions {
 	readonly sessionManager?: SessionManager;
 	readonly settingsManager?: SettingsManager;
 	readonly uiContext?: ExtensionUIContext;
+	/** Active-tool allowlist, e.g. a Workspace's own tool grant; `[]` for zero docked Integrations. Maps to Pi's own `tools` option. Omitted keeps Pi's default (read/bash/edit/write). */
+	readonly initialActiveToolNames?: readonly string[];
 }
 
 export interface ZodiacAgentSession {
@@ -83,6 +85,7 @@ export async function createZodiacAgentSession(options: CreateZodiacAgentSession
 		resourceLoader: options.resourceLoader,
 		sessionManager: options.sessionManager ?? SessionManager.inMemory(options.cwd),
 		settingsManager,
+		...(options.initialActiveToolNames !== undefined ? { tools: [...options.initialActiveToolNames] } : {}),
 	});
 	// createAgentSession() alone never fires session_start -- that only
 	// happens inside bindExtensions() (confirmed by reading pi-coding-agent's
