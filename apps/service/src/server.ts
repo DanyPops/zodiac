@@ -3,11 +3,14 @@ import { WebSocketServer } from "ws";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
 import type { WorkspaceId } from "@zodiac/protocol";
+import { createEventBus, type EventBus } from "@zodiac/server";
+import { createApprovalCenter, type ApprovalCenter } from "@zodiac/server/approval";
 import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
 import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/fixture-conversations.js";
 import { createAgentRoutes } from "./routes/agent-routes.js";
 import { createWorldRoutes } from "./routes/world-routes.js";
 import { createConversationsRoutes } from "./routes/conversations-routes.js";
+import { createNotificationRoutes } from "./routes/notification-routes.js";
 import { createTerminalRoutes } from "./routes/terminal-routes.js";
 import { createToolGrantRoutes } from "./routes/tool-grant-routes.js";
 import { createTerminalSessionRegistry } from "./terminal/terminal-session-registry.js";
@@ -30,6 +33,10 @@ export interface CreateZodiacServiceOptions {
 	createTerminalPty?: TerminalPtyFactory;
 	/** Read side of the live per-Workspace tool-grant reactor (@zodiac/server/agent) -- omitted disables the diagnostic tools route entirely. */
 	getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[];
+	/** Real EventBus backing /api/notifications' SSE stream -- defaults to a fresh in-process instance. Inject a shared one (as cli.ts does) so anything else that publishes onto "notification" elsewhere in the process (e.g. a future gated Integration invoke) is visible on the same stream a client actually connects to. */
+	bus?: EventBus;
+	/** Real ApprovalCenter wired to `bus` -- defaults to a fresh instance over the given/default bus. Inject a shared one so approve()/deny() here agree with whatever originally called request() elsewhere. */
+	approvalCenter?: ApprovalCenter;
 }
 
 export interface ZodiacService {
@@ -45,6 +52,9 @@ export interface ZodiacService {
  * and Conversations routes were themselves promoted alongside.
  */
 export function createZodiacService(options: CreateZodiacServiceOptions): Promise<ZodiacService> {
+	const bus = options.bus ?? createEventBus();
+	const approvalCenter = options.approvalCenter ?? createApprovalCenter({ bus });
+	const notificationRoutes = createNotificationRoutes(bus, approvalCenter);
 	const worldRoutes = createWorldRoutes(options.world);
 	const conversationsRoutes = createConversationsRoutes(
 		options.fixtureMode ? { sessionsRoot: options.sessionsRoot, scan: fixtureScanConversations, readEvents: fixtureReadSessionEvents } : { sessionsRoot: options.sessionsRoot },
@@ -134,6 +144,17 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		const toolsMatch = toolGrantRoutes && req.method === "GET" ? /^\/api\/world\/workspaces\/([^/]+)\/tools$/.exec(pathname) : null;
 		if (toolGrantRoutes && toolsMatch) {
 			toolGrantRoutes.getWorkspaceTools(toolsMatch[1] ?? "", res);
+			return;
+		}
+		if (pathname === "/api/notifications" && req.method === "GET") {
+			notificationRoutes.streamNotifications(req, res);
+			return;
+		}
+		const notificationDecisionMatch = req.method === "POST" ? /^\/api\/notifications\/([^/]+)\/(approve|deny)$/.exec(pathname) : null;
+		if (notificationDecisionMatch) {
+			const [, requestId, action] = notificationDecisionMatch;
+			if (action === "approve") notificationRoutes.postApprove(req, res, requestId ?? "");
+			else notificationRoutes.postDeny(req, res, requestId ?? "");
 			return;
 		}
 

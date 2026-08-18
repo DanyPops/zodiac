@@ -3,7 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
-import { createAppletRegistry, seedBuiltinApplets } from "@zodiac/server";
+import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodiac/server";
+import { createApprovalCenter } from "@zodiac/server/approval";
 import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
 import { createAgentCommandTool, createListIntegrationsTool, createZodiacAgentSession } from "@zodiac/pi";
 import type { AgentIntegrationPort } from "@zodiac/agent";
@@ -134,6 +135,13 @@ async function main(): Promise<void> {
 	const { getIntegration, getAllIntegrations, getContribution } = loadToolGrantConfig();
 	watchWorkspaceToolGrants(world, getIntegration, getContribution, toolRegistrar);
 
+	// Real, shared instances -- constructed here (not left to createZodiacService's own
+	// defaults) so future in-process publishers (e.g. a gated Integration invoke, once
+	// integration.invoke handlers can themselves emit a VehicleApprovalRequest) share the
+	// exact same bus/authority a connected client's /api/notifications stream reads from.
+	const bus = createEventBus();
+	const approvalCenter = createApprovalCenter({ bus });
+
 	// Set once the daemon is actually listening, just below -- see
 	// createDaemonAgentIntegrationFactory's own doc comment on why this is
 	// safe despite being read from a closure defined before that happens.
@@ -169,6 +177,8 @@ async function main(): Promise<void> {
 		enableTerminal: args.enableTerminal,
 		createTerminalPty: args.enableTerminal ? createNodePtyFactory() : undefined,
 		getWorkspaceToolIds: toolRegistrar.toolIds,
+		bus,
+		approvalCenter,
 	});
 	daemonBaseUrl = service.baseUrl;
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
