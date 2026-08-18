@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lectorOperationsFromClient } from "@danypops/alignment-lector";
+import { lectorOperationsFromClient } from "@danypops/zodiac-lector";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLectorHost, type LectorHost } from "../lector/lector-host.js";
 import { startIsolatedLectorDaemon } from "../test/isolated-lector-daemon.js";

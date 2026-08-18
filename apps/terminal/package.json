@@ -23,8 +23,8 @@
     "@zodiac/pi": "*",
     "@zodiac/protocol": "*",
     "@zodiac/tui": "*",
-    "@danypops/alignment-lector": "file:vendor/danypops-alignment-lector-0.0.2.tgz",
-    "@danypops/pi-lector": "file:vendor/danypops-pi-lector-0.12.9.tgz",
+    "@danypops/zodiac-lector": "file:vendor/danypops-zodiac-lector-0.0.3.tgz",
+    "@danypops/pi-lector": "^0.12.12",
     "@earendil-works/pi-coding-agent": "^0.84.1",
     "@earendil-works/pi-tui": "^0.84.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -32,7 +32,7 @@
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
-    "@danypops/lector": "file:vendor/danypops-lector-0.18.15.tgz",
+    "@danypops/lector": "^0.19.0",
     "@danypops/pi-tui-harness": "^0.0.2",
     "@danypops/vehicle-server": "^0.3.2",
     "@types/picomatch": "^4.0.3",

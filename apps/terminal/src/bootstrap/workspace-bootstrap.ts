@@ -47,7 +47,7 @@ function failure(code: string, message: string): BootstrapWorkspaceOutcome {
 
 function record(value: unknown): Record<string, unknown> | undefined {
 	// This assertion follows the runtime object/null check and assigns no field semantics --
-	// the same defensive-parse convention @danypops/alignment-lector's own contribution uses.
+	// the same defensive-parse convention @danypops/zodiac-lector's own contribution uses.
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 }

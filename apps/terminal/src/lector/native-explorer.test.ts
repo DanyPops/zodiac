@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lectorOperationsFromClient } from "@danypops/alignment-lector";
+import { lectorOperationsFromClient } from "@danypops/zodiac-lector";
 import type { Component } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLectorHost, type LectorHost } from "./lector-host.js";

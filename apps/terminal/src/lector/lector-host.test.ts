@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lectorOperationsFromClient } from "@danypops/alignment-lector";
+import { lectorOperationsFromClient } from "@danypops/zodiac-lector";
 import { afterEach, describe, expect, it } from "vitest";
 import { startIsolatedLectorDaemon } from "../test/isolated-lector-daemon.js";
 import { createLectorHost } from "./lector-host.js";

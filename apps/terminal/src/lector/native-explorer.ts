@@ -16,7 +16,7 @@ const READ_BOUNDS: ContributionReadBounds = { maxBytes: 4 * 1024 * 1024, maxEntr
 
 function record(value: unknown): Record<string, unknown> | undefined {
 	// Same tiny defensive-parse convention deliberately duplicated in every file that needs it in
-	// this codebase (native-editor.ts, workspace-bootstrap.ts, alignment-lector's own
+	// this codebase (native-editor.ts, workspace-bootstrap.ts, zodiac-lector's own
 	// contribution.ts) rather than shared -- see those files' own comments on why.
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
@@ -40,17 +40,17 @@ function parseTree(value: unknown): { path: string; entries: TreeEntry[] } | und
 }
 
 /**
- * Builds the same `lector://workspace/<id>?path=<path>` resource reference alignment-lector's own
+ * Builds the same `lector://workspace/<id>?path=<path>` resource reference zodiac-lector's own
  * contribution.ts constructs internally (its `reference()` helper) and workspace-bootstrap.ts
  * already parses the reverse of (`workspaceIdFromReference`) -- confirmed identical by direct
  * source read, not guessed. Constructing it here for an arbitrary relative path is safe: it's a
- * pure client-side identity, not a capability grant -- alignment-lector's own readResource decodes
+ * pure client-side identity, not a capability grant -- zodiac-lector's own readResource decodes
  * any workspace-kind URI the same structural way regardless of how the caller built it, exactly
  * like it already does when mapping a directory listing's own child entries into resources.
  */
 function workspaceResource(workspaceId: string, path: string): ContributionResourceReference {
 	// title has a real min-length-1 schema floor (ContributionResourceReferenceSchema) -- "" (the
-	// resolved root) needs a real fallback, the same "/" convention alignment-lector's own bootstrap
+	// resolved root) needs a real fallback, the same "/" convention zodiac-lector's own bootstrap
 	// path already uses for a root-relative empty path.
 	return { uri: `lector://workspace/${encodeURIComponent(workspaceId)}?path=${encodeURIComponent(path)}`, kind: "workspace", title: path || "/", readOnly: true };
 }

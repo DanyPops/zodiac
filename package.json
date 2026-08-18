@@ -22,9 +22,8 @@
     "verify:full": "npm run verify && npm run test:system --workspace=@zodiac/web && npm run check:bundle-budget --workspace=@zodiac/web"
   },
   "overrides": {
-    "@danypops/lector": "file:vendor/danypops-lector-0.18.15.tgz",
-    "@danypops/alignment-lector": {
-      "@alignment/surface-protocol": "file:../../../packages/protocol"
+    "@danypops/zodiac-lector": {
+      "@zodiac/protocol": "file:../../../packages/protocol"
     }
   }
 }

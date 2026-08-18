@@ -30,7 +30,7 @@ const READ_BOUNDS: ContributionReadBounds = { maxBytes: 4 * 1024 * 1024, maxEntr
 
 function record(value: unknown): Record<string, unknown> | undefined {
 	// Defensive-parse convention already used identically by workspace-bootstrap.ts,
-	// alignment-lector's own contribution.ts, and semantic-navigation.ts -- kept local rather than
+	// zodiac-lector's own contribution.ts, and semantic-navigation.ts -- kept local rather than
 	// shared, per this codebase's own established convention for this exact tiny helper.
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
@@ -48,7 +48,7 @@ export function fakeTui(host: NativeEditorHost): { requestRender(): void; termin
 	};
 }
 
-/** A LiveBuffer-shaped mutation port -- exactly what alignment-lector's own tracked GuardedLiveBuffer.buffer already is, narrowed to only what save() below needs. Kept as a small structural type rather than importing Lector's real LiveBuffer class as a type dependency this app doesn't otherwise need. */
+/** A LiveBuffer-shaped mutation port -- exactly what zodiac-lector's own tracked GuardedLiveBuffer.buffer already is, narrowed to only what save() below needs. Kept as a small structural type rather than importing Lector's real LiveBuffer class as a type dependency this app doesn't otherwise need. */
 interface ReplaceableBuffer {
 	readonly length: number;
 	replace(from: number, to: number, text: string): void;
@@ -74,7 +74,7 @@ function hoverContents(value: unknown): string | undefined {
 /**
  * Builds a ModalEditorHost backed entirely by Zodiac's own existing lector-host.ts
  * contribution commands (lector.file.open/save, lector.symbol.hover) -- confirmed by direct
- * source read that both already exist in @danypops/alignment-lector, no new contribution code
+ * source read that both already exist in @danypops/zodiac-lector, no new contribution code
  * needed. save() reaches into the tracked resource's own GuardedLiveBuffer (returned as the
  * `editor` field of a "text" resource read) and replaces its whole content before calling
  * lector.file.save, since that command persists whatever is currently in the tracked buffer
