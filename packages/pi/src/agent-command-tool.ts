@@ -19,14 +19,29 @@ const AgentCommandArgsSchema = Type.Object({
 		Type.Literal("surface.undock"),
 		Type.Literal("window.next"),
 		Type.Literal("window.previous"),
+		Type.Literal("integration.invoke"),
 	]),
 	workspaceId: Type.String({ description: "The target Workspace's id." }),
 	title: Type.Optional(Type.String({ description: "Required for workspace.create and surface.dock." })),
-	integrationId: Type.Optional(Type.String({ description: "Required for surface.dock -- which Integration to dock." })),
+	integrationId: Type.Optional(Type.String({ description: "Required for surface.dock and integration.invoke -- which Integration to target." })),
 	surfaceId: Type.Optional(Type.String({ description: "Required for surface.undock -- which Surface to remove." })),
 	windowId: Type.Optional(Type.String({ description: "Optional for surface.dock -- defaults to the active Window." })),
+	action: Type.Optional(Type.String({ description: "Required for integration.invoke -- the target Integration's own action name, e.g. lector's own file-read action." })),
+	input: Type.Optional(Type.Unknown({ description: "Optional for integration.invoke -- the target Integration's own action input, validated by that Integration itself." })),
 	commandId: Type.Optional(Type.String({ description: "Optional correlation id echoed back unchanged in the response -- lets this session tell its own command's outcome apart from another concurrent caller's (a human, another agent session)." })),
 });
+
+interface WorldSnapshotForDockCheck {
+	readonly workspaces?: ReadonlyArray<{ readonly id: string; readonly activeIntegrationIds?: readonly string[] }>;
+}
+
+/** Live per-Workspace dock check for integration.invoke, fetched fresh (not cached from session start) since docking/undocking can happen mid-conversation. Reuses workspaceViewModel's own activeIntegrationIds (Slice 4) rather than re-deriving it from windows/surfaces. */
+async function isIntegrationDocked(fetcher: typeof fetch, daemonUrl: string, targetWorkspaceId: string, targetIntegrationId: IntegrationId): Promise<boolean> {
+	const response = await fetcher(`${daemonUrl}/api/world`);
+	if (!response.ok) return false;
+	const world = (await response.json().catch(() => undefined)) as WorldSnapshotForDockCheck | undefined;
+	return world?.workspaces?.find((workspace) => workspace.id === targetWorkspaceId)?.activeIntegrationIds?.includes(targetIntegrationId) ?? false;
+}
 
 export interface CreateAgentCommandToolOptions {
 	/** Where the daemon's own /api/world/commands route lives -- the exact endpoint a human UI's RemoteWorldStore posts to, so an authorized tool call and a human dispatch produce identical WorldStore mutations through the identical transport, not just structurally similar ones. */
@@ -64,7 +79,11 @@ export function createAgentCommandTool(options: CreateAgentCommandToolOptions): 
 			if (!parsed.ok) throw new Error(`Invalid Zodiac command: ${parsed.issues.join("; ")}`);
 			const intent = parsed.value;
 
-			const authorization = authorizeAgentCommand(intent, { grant: options.grant, sessionPolicy: options.sessionPolicy, getIntegration: options.getIntegration });
+			// integration.invoke is gated on the target Integration currently being docked in
+			// this Workspace -- a live fact, so fetch it fresh rather than trusting a stale
+			// snapshot from session start. Every other intent type skips this network call.
+			const isDocked = intent.type === "integration.invoke" ? await isIntegrationDocked(fetcher, options.daemonUrl, intent.workspaceId, intent.integrationId) : true;
+			const authorization = authorizeAgentCommand(intent, { grant: options.grant, sessionPolicy: options.sessionPolicy, getIntegration: options.getIntegration, isIntegrationDocked: () => isDocked });
 			if (!authorization.ok) throw new Error(`Zodiac command denied (${authorization.reason}): "${intent.type}" is not permitted for this Agent Integration session.`);
 
 			const response = await fetcher(`${options.daemonUrl}/api/world/commands`, {

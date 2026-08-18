@@ -191,4 +191,48 @@ describe("Agent Integration tool: zodiac_dispatch_command against a real daemon 
 		const world = await fetchWorld(url);
 		expect(world.workspaces?.find((workspace) => workspace.id === "ws-agent")?.windows[0]?.surfaces).toEqual([]);
 	}, 30_000);
+
+	it("integration.invoke is denied before reaching the daemon when the target Integration is not currently docked, and reaches the daemon once it is", async () => {
+		const url = await startDaemon();
+		await humanApply(url, { type: "workspace.create", workspaceId: "ws-agent", title: "Agent Workspace" });
+
+		// Not docked yet -- the live per-Workspace check denies before any daemon POST.
+		piProcess = spawnAgent({
+			daemonUrl: url,
+			grant: { workspaceId: "ws-agent", allowedCommandTypes: ["integration.invoke"] },
+			integrations: [ACTIVITY_INTEGRATION],
+			scriptArgs: { type: "integration.invoke", workspaceId: "ws-agent", integrationId: "activity", action: "noop", input: {} },
+		});
+		let events: AgentSessionEvent[] = [];
+		piProcess.onEvent((event) => events.push(event));
+		piProcess.sendPrompt("go");
+		let end = await waitForRpcEvent(events, (event) => event.type === "tool_execution_end", { timeoutMs: 20_000 });
+		expect(end.type).toBe("tool_execution_end");
+		if (end.type === "tool_execution_end") {
+			expect(end.isError).toBe(true);
+			expect(JSON.stringify(end.result)).toContain("integration-not-docked");
+		}
+		await piProcess.dispose();
+
+		// Dock it for real, then retry the identical call -- the live check now passes,
+		// so the denial is no longer integration-not-docked (it proceeds to the daemon,
+		// which has no registered integration.invoke handler in this test fixture --
+		// a separately-tracked gap, not what this test is proving).
+		await humanApply(url, { type: "surface.dock", workspaceId: "ws-agent", integrationId: "activity", title: "Activity Board" });
+		piProcess = spawnAgent({
+			daemonUrl: url,
+			grant: { workspaceId: "ws-agent", allowedCommandTypes: ["integration.invoke"] },
+			integrations: [ACTIVITY_INTEGRATION],
+			scriptArgs: { type: "integration.invoke", workspaceId: "ws-agent", integrationId: "activity", action: "noop", input: {} },
+		});
+		events = [];
+		piProcess.onEvent((event) => events.push(event));
+		piProcess.sendPrompt("go");
+		end = await waitForRpcEvent(events, (event) => event.type === "tool_execution_end", { timeoutMs: 20_000 });
+		expect(end.type).toBe("tool_execution_end");
+		if (end.type === "tool_execution_end") {
+			expect(end.isError).toBe(true);
+			expect(JSON.stringify(end.result)).not.toContain("integration-not-docked");
+		}
+	}, 30_000);
 });

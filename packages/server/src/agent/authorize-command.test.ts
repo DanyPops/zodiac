@@ -1,5 +1,5 @@
 import { integrationId, panelId, workspaceId, type CommandIntent, type IntegrationDefinition } from "@zodiac/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { authorizeAgentCommand, type AgentIntegrationGrant } from "./authorize-command.js";
 
 const WORKSPACE = workspaceId("ws-1");
@@ -93,5 +93,45 @@ describe("authorizeAgentCommand", () => {
 	it("denies integration.invoke when the grant never listed it, even though the target Integration has an API", () => {
 		const intent: CommandIntent = { type: "integration.invoke", workspaceId: WORKSPACE, integrationId: ACTIVITY, action: "symbol.search", input: {} };
 		expect(authorizeAgentCommand(intent, context())).toEqual({ ok: false, reason: "command-not-granted" });
+	});
+
+	describe("isIntegrationDocked -- live per-Workspace binding", () => {
+		const INVOKE_ACTIVITY: CommandIntent = { type: "integration.invoke", workspaceId: WORKSPACE, integrationId: ACTIVITY, action: "symbol.search", input: { query: "x" } };
+		function invokeContext(isIntegrationDocked: (workspaceId: typeof WORKSPACE, integrationId: typeof ACTIVITY) => boolean) {
+			return context({ grant: grant({ allowedCommandTypes: new Set(["integration.invoke"]) }), isIntegrationDocked });
+		}
+
+		it("allows integration.invoke when the target Integration is currently docked in the grant's Workspace", () => {
+			expect(authorizeAgentCommand(INVOKE_ACTIVITY, invokeContext(() => true))).toEqual({ ok: true });
+		});
+
+		it("denies integration.invoke when the target Integration is not currently docked, even though it declares hasApi and the command type is granted", () => {
+			expect(authorizeAgentCommand(INVOKE_ACTIVITY, invokeContext(() => false))).toEqual({ ok: false, reason: "integration-not-docked" });
+		});
+
+		it("passes the intent's own workspaceId and integrationId to isIntegrationDocked, not some other pair", () => {
+			const isIntegrationDocked = vi.fn(() => true);
+			authorizeAgentCommand(INVOKE_ACTIVITY, invokeContext(isIntegrationDocked));
+			expect(isIntegrationDocked).toHaveBeenCalledWith(WORKSPACE, ACTIVITY);
+		});
+
+		it("never calls isIntegrationDocked for surface.dock -- docking is how an Integration becomes docked, not gated on already being docked", () => {
+			const isIntegrationDocked = vi.fn(() => false);
+			expect(authorizeAgentCommand(DOCK_ACTIVITY, context({ isIntegrationDocked }))).toEqual({ ok: true });
+			expect(isIntegrationDocked).not.toHaveBeenCalled();
+		});
+
+		it("omitting isIntegrationDocked preserves prior behavior -- integration.invoke is allowed on hasApi alone", () => {
+			expect(authorizeAgentCommand(INVOKE_ACTIVITY, context({ grant: grant({ allowedCommandTypes: new Set(["integration.invoke"]) }) }))).toEqual({ ok: true });
+		});
+
+		it("reports integration-lacks-api rather than integration-not-docked when both are true -- the more specific reason wins", () => {
+			const intent: CommandIntent = { type: "integration.invoke", workspaceId: WORKSPACE, integrationId: TERMINAL, action: "anything", input: {} };
+			const outcome = authorizeAgentCommand(
+				intent,
+				context({ grant: grant({ allowedCommandTypes: new Set(["integration.invoke"]) }), getIntegration: integrations({ id: TERMINAL, title: "Terminal", capabilities: { renderable: true, hasApi: false } }), isIntegrationDocked: () => false }),
+			);
+			expect(outcome).toEqual({ ok: false, reason: "integration-lacks-api" });
+		});
 	});
 });

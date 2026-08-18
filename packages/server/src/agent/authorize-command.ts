@@ -16,7 +16,7 @@ export interface AgentSessionPolicy {
 	readonly allowed: boolean;
 }
 
-export type AgentCommandDenialReason = "session-denied" | "workspace-not-granted" | "command-not-granted" | "integration-lacks-api";
+export type AgentCommandDenialReason = "session-denied" | "workspace-not-granted" | "command-not-granted" | "integration-lacks-api" | "integration-not-docked";
 
 export type AgentCommandAuthorization = { readonly ok: true } | { readonly ok: false; readonly reason: AgentCommandDenialReason };
 
@@ -24,6 +24,8 @@ export interface AuthorizeAgentCommandContext {
 	readonly grant: AgentIntegrationGrant;
 	readonly sessionPolicy: AgentSessionPolicy;
 	readonly getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined;
+	/** Whether `integrationId` currently has a docked Surface in `workspaceId` -- live per-Workspace binding, not a static grant. Omitted defaults to always-docked, preserving prior behavior for a caller with no dock-state to check (e.g. a test with no real WorldStore). */
+	readonly isIntegrationDocked?: (workspaceId: WorkspaceId, integrationId: IntegrationId) => boolean;
 }
 
 /**
@@ -44,5 +46,7 @@ export function authorizeAgentCommand(intent: CommandIntent, context: AuthorizeA
 		const integration = context.getIntegration(intent.integrationId);
 		if (!integration || !integration.capabilities.hasApi) return { ok: false, reason: "integration-lacks-api" };
 	}
+	// Docking is how an Integration *becomes* docked, so this only gates invoking one already docked -- checked after hasApi so a genuinely-capability-less Integration still reports integration-lacks-api, its more specific reason.
+	if (intent.type === "integration.invoke" && context.isIntegrationDocked && !context.isIntegrationDocked(intent.workspaceId, intent.integrationId)) return { ok: false, reason: "integration-not-docked" };
 	return { ok: true };
 }
