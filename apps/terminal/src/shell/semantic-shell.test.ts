@@ -1,5 +1,5 @@
 import { createWorldStore } from "@zodiac/server/world";
-import { integrationId, layoutWorldRegions, workspaceId, worldId } from "@zodiac/protocol";
+import { appletId, integrationId, layoutWorldRegions, panelId, workspaceId, worldId, type Panel } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
 import { describe, expect, it } from "vitest";
 import { diffFrames, type GridFrame } from "@zodiac/tui";
@@ -397,6 +397,83 @@ describe("semantic empty Zodiac shell", () => {
       expect(shell.focusedRegion()).toBe("body");
       shell.focusPrevious();
       expect(shell.focusedRegion()).toBe("body");
+    });
+  });
+
+  describe("Chat relocated off the literal footer Location (panel.move) -- composer/scrollback/expand-collapse/fullscreen follow the chat Applet itself, not a hardcoded Region-kind", () => {
+    /** Mirrors application.test.ts's own Ctrl+G fixture -- a real, wide Panel at a non-bottom edge Location hosting the chat Applet, wide/tall enough to have genuine room for the rich view. */
+    function chatPanelAt(location: "top" | "left" | "right"): Panel {
+      return { id: panelId("chat-panel"), location, alignment: "start", offset: 0, thickness: 20, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
+    }
+
+    it("renders the rich multi-row history+composer view when Chat is docked into a tall non-bottom Panel, not just the compact one-line status the old bottom-only check left it with", async () => {
+      const shell = new SemanticShell();
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "a live draft", items: [{ role: "assistant", text: "hi from the right pillar" }] }, [chatPanelAt("right")]);
+      if (!frame.ok) throw new Error(frame.error.message);
+      const update = diffFrames(undefined, frame.value);
+      if (!update.ok) throw new Error(update.error.message);
+      const encoded = encodeGridUpdate(update.value);
+      if (!encoded.ok) throw new Error(encoded.error.message);
+      const terminal = await renderToTerminal([encoded.value], { cols: 80, rows: 24 });
+      try {
+        const text = terminal.plainLines().join(" ");
+        // The pillar is narrow (20 cols) so this wraps across real rows --
+        // check each word individually, mirroring the existing "wraps a long
+        // message" test's own convention, not the whole phrase as one substring.
+        for (const word of "hi from the right pillar".split(" ")) expect(text).toContain(word);
+        expect(text).toContain("a live draft"); // the composer's own separate row -- proves this is the rich view, not the one-line compact status
+      } finally { terminal.dispose(); }
+    });
+
+    it("enterFullscreen() fullscreens Chat wherever it is currently docked, not only when it is literally the bottom-Location footer", () => {
+      const shell = new SemanticShell();
+      const seed = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, undefined, [chatPanelAt("right")]);
+      if (!seed.ok) throw new Error(seed.error.message);
+      shell.focusNext(); // header -> left-pillar
+      shell.focusNext(); // left-pillar -> body
+      shell.focusNext(); // body -> right-pillar, now hosting chat
+      expect(shell.focusedRegion()).toBe("right-pillar");
+      shell.enterFullscreen();
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, { kind: "idle", draft: "", items: [{ role: "assistant", text: "a relocated fullscreened reply" }] }, [chatPanelAt("right")]);
+      if (!frame.ok) throw new Error(frame.error.message);
+      const text = frame.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("a relocated fullscreened reply");
+      expect(text).not.toContain("Workspaces");
+    });
+
+    it("enterFullscreen() is a no-op for a footer Chat has moved away from -- fullscreen follows the Applet, not the old Location", () => {
+      const shell = new SemanticShell();
+      const seed = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, undefined, [chatPanelAt("right")]);
+      if (!seed.ok) throw new Error(seed.error.message);
+      shell.focusNext(); shell.focusNext(); shell.focusNext(); shell.focusNext(); // -> footer, now genuinely empty
+      expect(shell.focusedRegion()).toBe("footer");
+      shell.enterFullscreen();
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, undefined, [chatPanelAt("right")]);
+      if (!frame.ok) throw new Error(frame.error.message);
+      const text = frame.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("Workspaces"); // normal tiled layout, fullscreen never engaged
+    });
+
+    it("expandFooter()/collapseFooter() become a no-op once Chat has moved away from the bottom Location -- they never resize an unrelated, now-empty Panel that happens to occupy bottom", async () => {
+      async function watermarkRow(shell: SemanticShell): Promise<number> {
+        const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 80, 24, undefined, [chatPanelAt("right")]);
+        if (!frame.ok) throw new Error(frame.error.message);
+        const update = diffFrames(undefined, frame.value);
+        if (!update.ok) throw new Error(update.error.message);
+        const encoded = encodeGridUpdate(update.value);
+        if (!encoded.ok) throw new Error(encoded.error.message);
+        const terminal = await renderToTerminal([encoded.value], { cols: 80, rows: 24 });
+        try {
+          return terminal.plainLines().findIndex((line) => line.includes("No workspace open"));
+        } finally { terminal.dispose(); }
+      }
+
+      const shell = new SemanticShell();
+      const beforeRow = await watermarkRow(shell); // seeds chatHostFocus from the real (non-bottom) placement
+      shell.expandFooter();
+      shell.expandFooter();
+      const afterRow = await watermarkRow(shell);
+      expect(afterRow).toBe(beforeRow); // bottom's own thickness never moved -- there was nothing there to expand
     });
   });
 

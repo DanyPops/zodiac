@@ -92,10 +92,18 @@ function footerStatusLine(status: FooterChatStatus, maxWidth: number): { text: s
   return { text: "", style: BASE };
 }
 
-const LOCATION_FOCUS: Record<Extract<Region, { kind: "panel" }>["location"], ShellFocus> = { top: "header", left: "left-pillar", right: "right-pillar", bottom: "footer" };
+const LOCATION_FOCUS: Record<Extract<Region, { kind: "panel" }>["location"], CyclableShellFocus> = { top: "header", left: "left-pillar", right: "right-pillar", bottom: "footer" };
 
 function regionFocus(region: Region): ShellFocus {
   return region.kind === "body" ? "body" : LOCATION_FOCUS[region.location];
+}
+
+/** Whichever ShellFocus currently corresponds to the Panel hosting the chat Applet, wherever panel.move has actually put it -- null only if chat is somehow absent from every Panel body, which the 5-region invariant means shouldn't happen in practice. */
+function findChatHostFocus(regions: readonly Region[]): CyclableShellFocus | null {
+  for (const region of regions) {
+    if (region.kind === "panel" && findApplet(region.body, "chat")) return LOCATION_FOCUS[region.location];
+  }
+  return null;
 }
 
 type AppletContentOf<T extends AppletContent["appletId"]> = Extract<AppletContent, { appletId: T }>;
@@ -129,8 +137,10 @@ export class SemanticShell {
   private focusIndex = 0;
   /** The *requested* footer height -- see MAX_REQUESTED_FOOTER_HEIGHT's own doc comment for why this is independent of any particular viewport. */
   private requestedFooterHeight = MIN_FOOTER_HEIGHT;
-  /** Non-null means that Surface fills the entire viewport, hiding every other region -- see enterFullscreen's own doc comment. Only ever "body" or "footer": header/pillars are chrome, not a Surface. */
-  private fullscreenTarget: "body" | "footer" | null = null;
+  /** Non-null means that Surface fills the entire viewport, hiding every other region -- see enterFullscreen's own doc comment. Only ever "body" or wherever chat is currently docked (chatHostFocus): header/pillars are chrome, not a Surface, unless chat itself has been relocated there. */
+  private fullscreenTarget: CyclableShellFocus | null = null;
+  /** Recomputed every project() call from the real, current Panel layout -- defaults to "footer" (chat's own default placement) so a command issued before the first render still behaves exactly as it always has. See findChatHostFocus's own doc comment. */
+  private chatHostFocus: CyclableShellFocus | null = "footer";
   /** Non-null means an extension-mounted Component (ExtensionUIContext.custom()) owns the entire viewport and all keyboard input -- see enterExternal's own doc comment. */
   private externalComponent: Component | null = null;
 
@@ -168,16 +178,17 @@ export class SemanticShell {
   enterFullscreen(): void {
     if (this.fullscreenTarget !== null) return;
     const focus = this.focusedRegion();
-    if (focus === "body" || focus === "footer") this.fullscreenTarget = focus;
+    if (focus === "external") return;
+    if (focus === "body" || focus === this.chatHostFocus) this.fullscreenTarget = focus;
   }
 
   /** Restores the normal tiled layout -- a no-op if not currently fullscreen. */
   exitFullscreen(): void { this.fullscreenTarget = null; }
 
-  /** Grows the Footer by one step (Neovim/tmux-style incremental resize) -- clamped against the real viewport lazily, in project(), not here. */
-  expandFooter(): void { this.requestedFooterHeight = Math.min(this.requestedFooterHeight + FOOTER_RESIZE_STEP, MAX_REQUESTED_FOOTER_HEIGHT); }
-  /** Shrinks the Footer by one step, down to its default single-row size -- never smaller, since MIN_FOOTER_HEIGHT is the smallest a footer can render at all. */
-  collapseFooter(): void { this.requestedFooterHeight = Math.max(this.requestedFooterHeight - FOOTER_RESIZE_STEP, MIN_FOOTER_HEIGHT); }
+  /** Grows the Footer by one step (Neovim/tmux-style incremental resize) -- clamped against the real viewport lazily, in project(), not here. A no-op once chat has moved away from bottom (chatHostFocus !== "footer"): layoutWorldRegions's own footerHeight parameter always resizes the bottom Location specifically (see its own doc comment), so growing it once nothing chat-relevant is there anymore would just inflate an unrelated, likely-empty Panel. */
+  expandFooter(): void { if (this.chatHostFocus === "footer") this.requestedFooterHeight = Math.min(this.requestedFooterHeight + FOOTER_RESIZE_STEP, MAX_REQUESTED_FOOTER_HEIGHT); }
+  /** Shrinks the Footer by one step, down to its default single-row size -- never smaller, since MIN_FOOTER_HEIGHT is the smallest a footer can render at all. Same chatHostFocus guard as expandFooter(). */
+  collapseFooter(): void { if (this.chatHostFocus === "footer") this.requestedFooterHeight = Math.max(this.requestedFooterHeight - FOOTER_RESIZE_STEP, MIN_FOOTER_HEIGHT); }
 
   /**
    * Absolute row offset into the Footer's wrapped history buffer (0 = the
@@ -199,11 +210,12 @@ export class SemanticShell {
 
   /** Reveals older rows -- Page Up while the footer is focused, tmux copy-mode/opentui ScrollBox's own line-scroll convention. Pauses following; re-arms automatically (see paintRegion) once scrolled back down to the live bottom. */
   scrollFooterUp(lines: number): void {
+    if (this.chatHostFocus !== "footer") return;
     this.footerFollowingEnd = false;
     this.footerScrollTop = Math.max(0, this.footerScrollTop - Math.max(0, lines));
   }
-  /** Scrolls back toward the live bottom -- Page Down. */
-  scrollFooterDown(lines: number): void { this.footerScrollTop += Math.max(0, lines); }
+  /** Scrolls back toward the live bottom -- Page Down. Same chatHostFocus guard as scrollFooterUp(). */
+  scrollFooterDown(lines: number): void { if (this.chatHostFocus === "footer") this.footerScrollTop += Math.max(0, lines); }
 
   project(world: WorldViewModel, width: number, height: number, footerChat?: FooterChatStatus, panels: readonly Panel[] = []): Outcome<GridFrame> {
     // A footer taller than what layoutWorldRegions accepts for this exact
@@ -215,6 +227,7 @@ export class SemanticShell {
     const effectiveFooterHeight = Math.min(this.requestedFooterHeight, Math.max(MIN_FOOTER_HEIGHT, height - 2));
     const layout = layoutWorldRegions(world, width, height, effectiveFooterHeight, panels);
     if (!layout.ok) return { ok: false, error: { code: "invalid-dimensions", message: layout.issues.join("; "), context: { width, height } } };
+    this.chatHostFocus = findChatHostFocus(layout.value);
     const created = createGridFrame(gridId("zodiac-shell"), width, height);
     if (!created.ok) return created;
     const frame = created.value;
@@ -232,7 +245,7 @@ export class SemanticShell {
     }
     if (this.fullscreenTarget !== null) {
       const target = this.fullscreenTarget;
-      const region = layout.value.find((candidate) => (target === "body" ? candidate.kind === "body" : candidate.kind === "panel" && candidate.location === "bottom"));
+      const region = layout.value.find((candidate) => regionFocus(candidate) === target);
       if (!region) return { ok: false, error: { code: "invalid-dimensions", message: `fullscreen target region "${target}" missing from layout`, context: { width, height } } };
       return this.renderFullscreen(frame, region, target, width, height, footerChat);
     }
@@ -262,7 +275,7 @@ export class SemanticShell {
    * never the region's own natural rect, so the same body/footer rendering
    * logic just stretches to fill whatever area it's handed.
    */
-  private renderFullscreen(frame: GridFrame, region: Region, target: "body" | "footer", width: number, height: number, footerChat?: FooterChatStatus): Outcome<GridFrame> {
+  private renderFullscreen(frame: GridFrame, region: Region, target: CyclableShellFocus, width: number, height: number, footerChat?: FooterChatStatus): Outcome<GridFrame> {
     const inner = createRect(1, 1, width - 2, height - 2);
     if (!inner.ok) return inner;
     for (let row = 0; row < inner.value.height; row++) {
@@ -277,7 +290,7 @@ export class SemanticShell {
     return { ok: true, value: frame };
   }
 
-  private paintFullscreenBox(frame: GridFrame, target: "body" | "footer", width: number, height: number): Outcome<void> {
+  private paintFullscreenBox(frame: GridFrame, target: CyclableShellFocus, width: number, height: number): Outcome<void> {
     const area = createRect(0, 0, width, height);
     if (!area.ok) return area;
     const horizontal = "\u2500".repeat(Math.max(0, width - 2));
@@ -327,32 +340,20 @@ export class SemanticShell {
       if (!itemsApplet) return { ok: true, value: undefined };
       return paint(frame, area, 1, 1, itemsApplet.items.length === 0 ? "(none)" : itemsApplet.items[0]!.label, MUTED);
     }
-    // Only "bottom" (the classic footer, expand/collapse-able via
-    // requestedFooterHeight) supports the rich multi-row history/composer
-    // view -- every other Location the chat Applet could move to (a fixed
-    // 1-row header, or a narrow-by-default pillar) renders the same compact
-    // single-line status a footer at its own minimum height already shows.
-    if (region.location !== "bottom") {
-      if (footerChat) {
-        const line = footerChatLine(footerChat, Math.max(0, area.width - 2));
-        return paint(frame, area, 1, 1, line.text, line.style);
-      }
-      const status = chatApplet.chat.state === "unavailable" ? "Agent unavailable" : "Agent ready";
-      return paint(frame, area, 1, 1, status, MUTED);
-    }
-    // Footer row 0 is the border separator and row (height-1) is the bottom
-    // border. At the default MIN_FOOTER_HEIGHT there's exactly one content
-    // row, holding the live status line. Once expanded past that (see
-    // expandFooter()), the composer moves to the last content row, and
-    // everything between shows real history -- presentation-only in both
-    // cases, not fed back through World/CommandIntent (see the driven-session-
-    // port task's own notes on why).
+    // Row 0 is the border separator and row (height-1) is the far border --
+    // at the default single content row (MIN_FOOTER_HEIGHT, or any Location's
+    // own fixed default thickness) that one row holds the live status line;
+    // once genuinely tall enough (expandFooter() at bottom -- the only
+    // Location layoutWorldRegions lets live-resize -- or a real Panel giving
+    // chat real room somewhere else) the composer gets its own row and
+    // everything between shows real history. Driven by the region's actual
+    // height, not by "is this literally the Location named bottom": wherever
+    // panel.move has put the chat Applet, this is the same check -- see
+    // findChatHostFocus's own doc comment for the analogous fullscreen/resize
+    // generalization. Presentation-only either way, not fed back through
+    // World/CommandIntent (see the driven-session-port task's own notes on why).
     const contentRows = area.height - 2;
-    if (footerChat) {
-      if (contentRows <= 1) {
-        const line = footerChatLine(footerChat, Math.max(0, area.width - 2));
-        return paint(frame, area, 1, 1, line.text, line.style);
-      }
+    if (footerChat && contentRows > 1) {
       // A dedicated status row sits directly above the composer -- see
       // footerStatusLine's own doc comment for why (Pi TUI's statusContainer
       // vs. editorContainer split). Always reachable here: the contentRows <= 1
@@ -401,6 +402,10 @@ export class SemanticShell {
       if (!paintedStatus.ok) return paintedStatus;
       const composerLine = footerComposerLine(footerChat, Math.max(0, area.width - 2));
       return paint(frame, area, 1, area.height - 2, composerLine.text, composerLine.style);
+    }
+    if (footerChat) {
+      const line = footerChatLine(footerChat, Math.max(0, area.width - 2));
+      return paint(frame, area, 1, 1, line.text, line.style);
     }
     const status = chatApplet.chat.state === "unavailable" ? "Agent unavailable" : "Agent ready";
     return paint(frame, area, 1, 1, status, MUTED);
