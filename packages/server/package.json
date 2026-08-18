@@ -14,7 +14,8 @@
     "./world-client": "./src/world/client.ts",
     "./window": "./src/window/index.ts",
     "./conversations": "./src/conversations/index.ts",
-    "./net": "./src/net/sse-client.ts"
+    "./net": "./src/net/sse-client.ts",
+    "./notifications": "./src/notifications/remote-notifications.ts"
   },
   "scripts": {
     "test": "vitest run",
