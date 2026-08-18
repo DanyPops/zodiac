@@ -7,11 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
  * Proves the real zodiacd binary (not agent-command-tool.process.test.ts's
- * own fixture, see 542c32d2) actually registers zodiac_dispatch_command on
- * a Workspace-scoped session without crashing -- the concrete gap that task
- * closes. Real conversation/tool-call proof stays in the fixture-based
- * tests (real LLM auth isn't available/desirable in this suite); this
- * covers the wiring itself: does createDaemonAgentIntegrationFactory's
+ * own fixture, see 542c32d2) actually registers zodiac_dispatch_command --
+ * and, per dbed439e, list_integrations -- on a Workspace-scoped session
+ * without crashing. Real conversation/tool-call proof stays in the
+ * fixture-based tests (real LLM auth isn't available/desirable in this
+ * suite); this covers the wiring itself: does createDaemonAgentIntegrationFactory's
  * getDaemonBaseUrl closure resolve correctly once the daemon is actually
  * listening, and does a no-workspaceId caller keep working unchanged.
  */
@@ -70,7 +70,7 @@ async function createWorkspace(id: string): Promise<void> {
 	});
 }
 
-describe("zodiacd's own cli.ts wires zodiac_dispatch_command onto a real, Workspace-scoped agent session", () => {
+describe("zodiacd's own cli.ts wires zodiac_dispatch_command and list_integrations onto a real, Workspace-scoped agent session", () => {
 	it("creating a session with a real workspaceId succeeds -- the tool/grant construction and the daemonBaseUrl closure both resolve without crashing", async () => {
 		await createWorkspace("ws-wired");
 		const response = await fetch(`${baseUrl}/api/agent/sessions`, {
@@ -101,5 +101,17 @@ describe("zodiacd's own cli.ts wires zodiac_dispatch_command onto a real, Worksp
 		expect(b.status).toBe(200);
 		const [aBody, bBody] = (await Promise.all([a.json(), b.json()])) as [{ sessionId: string }, { sessionId: string }];
 		expect(aBody.sessionId).not.toBe(bBody.sessionId);
+	});
+
+	it("a session with a real workspaceId still succeeds now that two custom tools (zodiac_dispatch_command, list_integrations) are both constructed and passed to createZodiacAgentSession", async () => {
+		await createWorkspace("ws-both-tools");
+		const response = await fetch(`${baseUrl}/api/agent/sessions`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ workspaceId: "ws-both-tools" }),
+		});
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { sessionId?: string };
+		expect(typeof body.sessionId).toBe("string");
 	});
 });

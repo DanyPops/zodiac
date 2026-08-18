@@ -2,6 +2,7 @@ import { CommandIntentSchema, parseWithSchema, type IntegrationDefinition, type 
 import { authorizeAgentCommand, type AgentIntegrationGrant, type AgentSessionPolicy } from "@zodiac/server/agent";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { fetchActiveIntegrationIds } from "./world-snapshot.js";
 
 /**
  * The one tool a Pi agent gets to drive Zodiac with: a flat argument shape
@@ -31,16 +32,9 @@ const AgentCommandArgsSchema = Type.Object({
 	commandId: Type.Optional(Type.String({ description: "Optional correlation id echoed back unchanged in the response -- lets this session tell its own command's outcome apart from another concurrent caller's (a human, another agent session)." })),
 });
 
-interface WorldSnapshotForDockCheck {
-	readonly workspaces?: ReadonlyArray<{ readonly id: string; readonly activeIntegrationIds?: readonly string[] }>;
-}
-
-/** Live per-Workspace dock check for integration.invoke, fetched fresh (not cached from session start) since docking/undocking can happen mid-conversation. Reuses workspaceViewModel's own activeIntegrationIds (Slice 4) rather than re-deriving it from windows/surfaces. */
+/** Live per-Workspace dock check for integration.invoke -- see world-snapshot.ts's own doc comment for why this is fetched fresh rather than cached. */
 async function isIntegrationDocked(fetcher: typeof fetch, daemonUrl: string, targetWorkspaceId: string, targetIntegrationId: IntegrationId): Promise<boolean> {
-	const response = await fetcher(`${daemonUrl}/api/world`);
-	if (!response.ok) return false;
-	const world = (await response.json().catch(() => undefined)) as WorldSnapshotForDockCheck | undefined;
-	return world?.workspaces?.find((workspace) => workspace.id === targetWorkspaceId)?.activeIntegrationIds?.includes(targetIntegrationId) ?? false;
+	return (await fetchActiveIntegrationIds(fetcher, daemonUrl, targetWorkspaceId)).has(targetIntegrationId);
 }
 
 export interface CreateAgentCommandToolOptions {

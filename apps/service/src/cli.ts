@@ -5,7 +5,7 @@ import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandInt
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
 import { createAppletRegistry, seedBuiltinApplets } from "@zodiac/server";
 import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
-import { createAgentCommandTool, createZodiacAgentSession } from "@zodiac/pi";
+import { createAgentCommandTool, createListIntegrationsTool, createZodiacAgentSession } from "@zodiac/pi";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import { createZodiacService } from "./server.js";
 import { parseZodiacdArgs } from "./parse-args.js";
@@ -67,37 +67,43 @@ function defaultWorldPanelOptions(): WorldStorePanelOptions {
  * it's only ever called once a session is actually requested, by which
  * point the daemon is already listening.
  */
-function createDaemonAgentIntegrationFactory(getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined, getDaemonBaseUrl: () => string) {
+function createDaemonAgentIntegrationFactory(getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined, getAllIntegrations: () => readonly IntegrationDefinition[], getDaemonBaseUrl: () => string) {
 	return async function createDaemonAgentIntegration(cwd?: string, initialActiveToolNames?: readonly string[], workspaceId?: WorkspaceId): Promise<AgentIntegrationPort> {
 		if (!workspaceId) {
 			const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc", initialActiveToolNames });
 			return integration;
 		}
-		const tool = createAgentCommandTool({
+		const dispatchTool = createAgentCommandTool({
 			daemonUrl: getDaemonBaseUrl(),
 			grant: { workspaceId, allowedCommandTypes: new Set(ALL_COMMAND_INTENT_TYPES) },
 			sessionPolicy: { allowed: true },
 			getIntegration,
 		});
+		// Read-only, so it carries no grant/session-policy check of its own --
+		// dbed439e's own point is that seeing what exists is a strictly weaker
+		// capability than acting on it (zodiac_dispatch_command already gates that).
+		const listTool = createListIntegrationsTool({ daemonUrl: getDaemonBaseUrl(), getAllIntegrations });
 		const { integration } = await createZodiacAgentSession({
 			cwd: cwd ?? process.cwd(),
 			mode: "rpc",
-			// zodiac_dispatch_command must stay active even when initialActiveToolNames is [] (zero docked
-			// Integrations) -- it's the trusted, per-call-authorized escape hatch (including surface.dock
-			// itself, needed to dock the first Integration at all), not a Vehicle-shaped granted tool.
-			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, tool.name] : undefined,
-			customTools: [tool],
+			// Both custom tools must stay active even when initialActiveToolNames is [] (zero docked
+			// Integrations) -- zodiac_dispatch_command is the trusted, per-call-authorized escape hatch
+			// (including surface.dock itself); list_integrations is how the agent discovers that hatch
+			// even has anything to dock in the first place. Neither is a Vehicle-shaped granted tool.
+			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listTool.name] : undefined,
+			customTools: [dispatchTool, listTool],
 		});
 		return integration;
 	};
 }
 
 /** Test-only injection point for a stub Integration/tool-contribution pair, JSON-encoded (no real Integration declares hasApi:true yet) -- production runs with both empty, granting nothing. */
-function loadToolGrantConfig(): { getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined; getContribution: (id: IntegrationId) => ToolContribution | undefined } {
+function loadToolGrantConfig(): { getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined; getAllIntegrations: () => readonly IntegrationDefinition[]; getContribution: (id: IntegrationId) => ToolContribution | undefined } {
 	const integrations = JSON.parse(process.env["ZODIAC_TOOL_INTEGRATIONS"] ?? "[]") as readonly IntegrationDefinition[];
 	const contributions = JSON.parse(process.env["ZODIAC_TOOL_CONTRIBUTIONS"] ?? "[]") as readonly ToolContribution[];
 	return {
 		getIntegration: (id) => integrations.find((definition) => definition.id === id),
+		getAllIntegrations: () => integrations,
 		getContribution: (id) => contributions.find((definition) => definition.integrationId === id),
 	};
 }
@@ -125,14 +131,14 @@ async function main(): Promise<void> {
 	const world = await loadOrCreateWorld(snapshotPort);
 
 	const toolRegistrar = createInMemoryToolRegistrar();
-	const { getIntegration, getContribution } = loadToolGrantConfig();
+	const { getIntegration, getAllIntegrations, getContribution } = loadToolGrantConfig();
 	watchWorkspaceToolGrants(world, getIntegration, getContribution, toolRegistrar);
 
 	// Set once the daemon is actually listening, just below -- see
 	// createDaemonAgentIntegrationFactory's own doc comment on why this is
 	// safe despite being read from a closure defined before that happens.
 	let daemonBaseUrl: string | undefined;
-	const createDaemonAgentIntegration = createDaemonAgentIntegrationFactory(getIntegration, () => {
+	const createDaemonAgentIntegration = createDaemonAgentIntegrationFactory(getIntegration, getAllIntegrations, () => {
 		if (!daemonBaseUrl) throw new Error("[zodiacd] createDaemonAgentIntegration called before the daemon finished binding its own HTTP server");
 		return daemonBaseUrl;
 	});
