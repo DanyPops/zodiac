@@ -44,9 +44,9 @@ describe("createAgentSessionRegistry", () => {
 		const registry = createAgentSessionRegistry(create);
 
 		await registry.create("/repos/pipes");
-		expect(create).toHaveBeenCalledWith("/repos/pipes", undefined);
+		expect(create).toHaveBeenCalledWith("/repos/pipes", undefined, undefined);
 		await registry.create();
-		expect(create).toHaveBeenCalledWith(undefined, undefined);
+		expect(create).toHaveBeenCalledWith(undefined, undefined, undefined);
 	});
 
 	it("forwards a caller-resolved initialActiveToolNames to the integration factory unchanged", async () => {
@@ -54,7 +54,15 @@ describe("createAgentSessionRegistry", () => {
 		const registry = createAgentSessionRegistry(create);
 
 		await registry.create(undefined, []);
-		expect(create).toHaveBeenCalledWith(undefined, []);
+		expect(create).toHaveBeenCalledWith(undefined, [], undefined);
+	});
+
+	it("forwards a caller-resolved workspaceId to the integration factory unchanged", async () => {
+		const create = vi.fn(() => fakeIntegration());
+		const registry = createAgentSessionRegistry(create);
+
+		await registry.create(undefined, undefined, "ws-1" as never);
+		expect(create).toHaveBeenCalledWith(undefined, undefined, "ws-1");
 	});
 
 	it("awaits an async integration factory (the real production shape) before registering the session", async () => {

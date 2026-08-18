@@ -9,6 +9,7 @@ import {
 	type AgentSession,
 	type ExtensionUIContext,
 	type ResourceLoader,
+	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
 // ExtensionMode itself isn't exported from this package's public root (only
@@ -36,8 +37,10 @@ export interface CreateZodiacAgentSessionOptions {
 	readonly sessionManager?: SessionManager;
 	readonly settingsManager?: SettingsManager;
 	readonly uiContext?: ExtensionUIContext;
-	/** Active-tool allowlist, e.g. a Workspace's own tool grant; `[]` for zero docked Integrations. Maps to Pi's own `tools` option. Omitted keeps Pi's default (read/bash/edit/write). */
+	/** Active-tool allowlist, e.g. a Workspace's own tool grant; `[]` for zero docked Integrations. Maps to Pi's own `tools` option. Omitted keeps Pi's default (read/bash/edit/write). A caller registering customTools must include their names here too -- an empty allowlist excludes them exactly like a built-in. */
 	readonly initialActiveToolNames?: readonly string[];
+	/** SDK-registered tools beyond Pi's own built-ins, e.g. zodiac_dispatch_command. Maps straight to Pi's own `customTools` option. */
+	readonly customTools?: readonly ToolDefinition[];
 }
 
 export interface ZodiacAgentSession {
@@ -86,6 +89,7 @@ export async function createZodiacAgentSession(options: CreateZodiacAgentSession
 		sessionManager: options.sessionManager ?? SessionManager.inMemory(options.cwd),
 		settingsManager,
 		...(options.initialActiveToolNames !== undefined ? { tools: [...options.initialActiveToolNames] } : {}),
+		...(options.customTools !== undefined ? { customTools: [...options.customTools] } : {}),
 	});
 	// createAgentSession() alone never fires session_start -- that only
 	// happens inside bindExtensions() (confirmed by reading pi-coding-agent's

@@ -15,7 +15,7 @@ function readyWorld(tile: ReadyWorldViewModel["workspaces"][number]["windows"][n
 	return {
 		state: "ready",
 		activeWorkspaceId: workspaceId("ws1"),
-		workspaces: [{ id: workspaceId("ws1"), title: "My Workspace", activeWindowId: window.id, windows: [window] }],
+		workspaces: [{ id: workspaceId("ws1"), title: "My Workspace", activeWindowId: window.id, windows: [window], activeIntegrationIds: [] }],
 	};
 }
 

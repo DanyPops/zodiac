@@ -78,7 +78,7 @@ describe("createAgentRoutes", () => {
 		await fetch(`${base}/api/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "ws", tools: ["edit", "write", "bash"] }) });
 
 		expect(getWorkspaceToolIds).toHaveBeenCalledWith(workspaceId("ws"));
-		expect(createIntegration).toHaveBeenCalledWith(undefined, ["lector.fs"]);
+		expect(createIntegration).toHaveBeenCalledWith(undefined, ["lector.fs"], workspaceId("ws"));
 	});
 
 	it("createSession omits initialActiveToolNames when no workspaceId is requested -- preserves the factory's own default", async () => {
@@ -93,7 +93,20 @@ describe("createAgentRoutes", () => {
 		await fetch(`${base}/api/agent/sessions`, { method: "POST" });
 
 		expect(getWorkspaceToolIds).not.toHaveBeenCalled();
-		expect(createIntegration).toHaveBeenCalledWith(undefined, undefined);
+		expect(createIntegration).toHaveBeenCalledWith(undefined, undefined, undefined);
+	});
+
+	it("createSession forwards the raw workspaceId to the integration factory even when getWorkspaceToolIds is unavailable -- it's a separate concern from the tool-list resolution", async () => {
+		const createIntegration = vi.fn(() => fakeIntegration());
+		const registry = createAgentSessionRegistry(createIntegration);
+		const routes = createAgentRoutes(registry);
+		const base = await listen((req, res) => {
+			void routes.createSession(req, res);
+		});
+
+		await fetch(`${base}/api/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "ws" }) });
+
+		expect(createIntegration).toHaveBeenCalledWith(undefined, undefined, workspaceId("ws"));
 	});
 
 	it("listSessions reports every live session", async () => {

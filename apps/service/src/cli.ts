@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { appletId, panelId, worldId, type IntegrationDefinition, type IntegrationId, type Panel } from "@zodiac/protocol";
+import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
 import { createAppletRegistry, seedBuiltinApplets } from "@zodiac/server";
 import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
-import { createZodiacAgentSession } from "@zodiac/pi";
+import { createAgentCommandTool, createZodiacAgentSession } from "@zodiac/pi";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import { createZodiacService } from "./server.js";
 import { parseZodiacdArgs } from "./parse-args.js";
 import { resolveZodiacServiceStateDir } from "./state-dir.js";
 import { createNodePtyFactory } from "./terminal/terminal-pty-port.js";
+
+/** Every CommandIntent variant, derived from the schema's own version table rather than hand-listed, so a new variant is granted automatically instead of silently staying ungranted. allowedCommandTypes curation beyond "scoped to this session's Workspace" is c166f10b's own separate concern, not this wiring's. */
+const ALL_COMMAND_INTENT_TYPES = Object.keys(COMMAND_INTENT_MIN_VERSION) as readonly CommandIntent["type"][];
 
 const DEFAULT_SESSIONS_ROOT = join(homedir(), ".local", "share", "alef", "sessions");
 const WORLD_ID = worldId("zodiac");
@@ -50,10 +53,43 @@ function defaultWorldPanelOptions(): WorldStorePanelOptions {
 	return { panels: DEFAULT_WORLD_PANELS, getApplet: (id) => byId.get(id) };
 }
 
-/** Constructs a real, live agent session per zodiacd agent-session request -- "rpc" mode, since a daemon session has no interactive TUI. Falls back to the daemon's own cwd when unrequested. initialActiveToolNames enforces a Workspace's own tool grant (see agent-routes.ts's createSession); omitted for a cwd-only caller with no Workspace. */
-async function createDaemonAgentIntegration(cwd?: string, initialActiveToolNames?: readonly string[]): Promise<AgentIntegrationPort> {
-	const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc", initialActiveToolNames });
-	return integration;
+/**
+ * Constructs a real, live agent session per zodiacd agent-session request --
+ * "rpc" mode, since a daemon session has no interactive TUI. Falls back to
+ * the daemon's own cwd when unrequested. initialActiveToolNames enforces a
+ * Workspace's own tool grant (see agent-routes.ts's createSession).
+ *
+ * A session gets the real zodiac_dispatch_command tool only when a
+ * workspaceId is present -- a cwd-only caller with no Workspace gets no
+ * grant and no dispatch tool at all, never an implicit default Workspace.
+ * getDaemonBaseUrl is a closure, not a plain string, because this factory is
+ * constructed before the daemon's own HTTP server has bound a real port;
+ * it's only ever called once a session is actually requested, by which
+ * point the daemon is already listening.
+ */
+function createDaemonAgentIntegrationFactory(getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined, getDaemonBaseUrl: () => string) {
+	return async function createDaemonAgentIntegration(cwd?: string, initialActiveToolNames?: readonly string[], workspaceId?: WorkspaceId): Promise<AgentIntegrationPort> {
+		if (!workspaceId) {
+			const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc", initialActiveToolNames });
+			return integration;
+		}
+		const tool = createAgentCommandTool({
+			daemonUrl: getDaemonBaseUrl(),
+			grant: { workspaceId, allowedCommandTypes: new Set(ALL_COMMAND_INTENT_TYPES) },
+			sessionPolicy: { allowed: true },
+			getIntegration,
+		});
+		const { integration } = await createZodiacAgentSession({
+			cwd: cwd ?? process.cwd(),
+			mode: "rpc",
+			// zodiac_dispatch_command must stay active even when initialActiveToolNames is [] (zero docked
+			// Integrations) -- it's the trusted, per-call-authorized escape hatch (including surface.dock
+			// itself, needed to dock the first Integration at all), not a Vehicle-shaped granted tool.
+			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, tool.name] : undefined,
+			customTools: [tool],
+		});
+		return integration;
+	};
 }
 
 /** Test-only injection point for a stub Integration/tool-contribution pair, JSON-encoded (no real Integration declares hasApi:true yet) -- production runs with both empty, granting nothing. */
@@ -92,6 +128,15 @@ async function main(): Promise<void> {
 	const { getIntegration, getContribution } = loadToolGrantConfig();
 	watchWorkspaceToolGrants(world, getIntegration, getContribution, toolRegistrar);
 
+	// Set once the daemon is actually listening, just below -- see
+	// createDaemonAgentIntegrationFactory's own doc comment on why this is
+	// safe despite being read from a closure defined before that happens.
+	let daemonBaseUrl: string | undefined;
+	const createDaemonAgentIntegration = createDaemonAgentIntegrationFactory(getIntegration, () => {
+		if (!daemonBaseUrl) throw new Error("[zodiacd] createDaemonAgentIntegration called before the daemon finished binding its own HTTP server");
+		return daemonBaseUrl;
+	});
+
 	// Fire-and-forget persistence on every change -- a snapshot a few
 	// milliseconds stale after an unclean shutdown is an acceptable loss;
 	// blocking every command on a disk write is not.
@@ -119,6 +164,7 @@ async function main(): Promise<void> {
 		createTerminalPty: args.enableTerminal ? createNodePtyFactory() : undefined,
 		getWorkspaceToolIds: toolRegistrar.toolIds,
 	});
+	daemonBaseUrl = service.baseUrl;
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
 
 	const shutdown = (signal: string) => {

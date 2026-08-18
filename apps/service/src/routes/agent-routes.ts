@@ -56,18 +56,22 @@ export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceTo
 			// Malformed/empty body falls back to defaults (registry's own cwd, no tool grant) rather than failing the request.
 			let cwd: string | undefined;
 			let initialActiveToolNames: readonly string[] | undefined;
+			let workspaceId: WorkspaceId | undefined;
 			try {
 				const body = await readJsonBody(req);
 				const requestedCwd = (body as { cwd?: unknown } | undefined)?.cwd;
 				if (typeof requestedCwd === "string" && requestedCwd.trim()) cwd = requestedCwd;
 				// Never trust a client-supplied tool list -- only a workspaceId, resolved server-side against the real WorldStore-derived grant.
 				const requestedWorkspaceId = (body as { workspaceId?: unknown } | undefined)?.workspaceId;
-				if (typeof requestedWorkspaceId === "string" && requestedWorkspaceId.trim() && getWorkspaceToolIds) initialActiveToolNames = getWorkspaceToolIds(requestedWorkspaceId as WorkspaceId);
+				if (typeof requestedWorkspaceId === "string" && requestedWorkspaceId.trim()) {
+					workspaceId = requestedWorkspaceId as WorkspaceId;
+					if (getWorkspaceToolIds) initialActiveToolNames = getWorkspaceToolIds(workspaceId);
+				}
 			} catch {
 				// Malformed JSON body -- ignored, same fallback as no body at all.
 			}
 			try {
-				const sessionId = await registry.create(cwd, initialActiveToolNames);
+				const sessionId = await registry.create(cwd, initialActiveToolNames, workspaceId);
 				writeJson(res, 200, { sessionId });
 			} catch (error) {
 				// A real construction failure (no model configured, no network for

@@ -1,6 +1,7 @@
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { fauxProvider } from "@earendil-works/pi-ai/compat";
-import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type InlineExtension } from "@earendil-works/pi-coding-agent";
+import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type InlineExtension, type ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createZodiacAgentSession } from "./zodiac-agent-session.js";
 
@@ -93,6 +94,36 @@ describe("createZodiacAgentSession", () => {
 		disposers.push(() => integration.dispose());
 
 		expect(session.getActiveToolNames().sort()).toEqual(["bash", "edit", "read", "write"]);
+	});
+
+	it("customTools are registered and, together with an explicit initialActiveToolNames naming them, stay active even when built-ins are zeroed out", async () => {
+		const faux = fauxProvider();
+		const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });
+		modelRuntime.registerNativeProvider(faux.provider);
+		await modelRuntime.setRuntimeApiKey(faux.getModel().provider, "test-key");
+
+		const customTool: ToolDefinition = {
+			name: "zodiac_dispatch_command",
+			label: "Zodiac Command",
+			description: "test double",
+			parameters: Type.Object({}),
+			execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
+		};
+
+		const { session, integration } = await createZodiacAgentSession({
+			cwd: process.cwd(),
+			mode: "rpc",
+			modelRuntime,
+			resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir: process.cwd(), noExtensions: true }),
+			sessionManager: SessionManager.inMemory(),
+			settingsManager: SettingsManager.inMemory(),
+			initialActiveToolNames: [customTool.name],
+			customTools: [customTool],
+		});
+		disposers.push(() => integration.dispose());
+
+		expect(session.getActiveToolNames()).toEqual([customTool.name]);
+		expect(session.getToolDefinition(customTool.name)).toBeDefined();
 	});
 
 	it("returns a real AgentIntegrationPort backed by the constructed AgentSession", async () => {
