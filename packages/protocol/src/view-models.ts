@@ -32,4 +32,12 @@ export interface WorkspaceViewModel {
 	readonly title: string;
 	readonly activeWindowId: WindowId;
 	readonly windows: readonly WindowViewModel[];
+	/**
+	 * Every IntegrationId with at least one docked Surface anywhere in this
+	 * Workspace, deduped, in first-docked order across Windows. A Workspace
+	 * is a context pool -- an Integration counts as "active" the same way
+	 * whether its Surface sits in the active Window or any other Window in
+	 * this Workspace, never scoped to just one.
+	 */
+	readonly activeIntegrationIds: readonly IntegrationId[];
 }

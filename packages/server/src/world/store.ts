@@ -376,7 +376,13 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		}));
 		const firstWindow = windows[0];
 		if (!firstWindow) return undefined; // a Workspace always has >=1 Window (enforced by WorkspaceSchema); guards the noUncheckedIndexedAccess narrowing below.
-		return { id: workspace.id, title: workspace.title, activeWindowId: activeWindow?.id ?? firstWindow.id, windows };
+		const activeIntegrationIds: IntegrationId[] = [];
+		for (const window of workspace.windows) {
+			for (const surface of window.surfaces) {
+				if (!activeIntegrationIds.includes(surface.integrationId)) activeIntegrationIds.push(surface.integrationId);
+			}
+		}
+		return { id: workspace.id, title: workspace.title, activeWindowId: activeWindow?.id ?? firstWindow.id, windows, activeIntegrationIds };
 	}
 
 	function worldViewModel(): WorldViewModel {

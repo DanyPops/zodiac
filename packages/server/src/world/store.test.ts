@@ -367,6 +367,55 @@ describe("WorldStore walking skeleton", () => {
 	});
 });
 
+describe("workspaceViewModel.activeIntegrationIds -- a Workspace is a context pool, independent of Window placement", () => {
+	function twoWindowWorkspace() {
+		const hydrated = hydrateWorldStore({
+			id: "w1",
+			workspaces: [{ id: "ws", title: "WS", windows: [{ id: "window-a", title: "A", surfaces: [] }, { id: "window-b", title: "B", surfaces: [] }], activeWindowIndex: 0 }],
+		});
+		expect(hydrated.ok).toBe(true);
+		if (!hydrated.ok) throw new Error("unreachable");
+		return hydrated.value;
+	}
+
+	it("reports an Integration docked into the non-active Window as active at the Workspace level", () => {
+		const store = twoWindowWorkspace();
+		store.dockSurfaceInto(workspaceId("ws"), integrationId("lector"), "Lector", windowId("window-b"));
+
+		expect(store.workspaceViewModel(workspaceId("ws"))?.activeIntegrationIds).toEqual([integrationId("lector")]);
+	});
+
+	it("aggregates distinct Integrations docked across two different Windows into one Workspace-level set", () => {
+		const store = twoWindowWorkspace();
+		store.dockSurfaceInto(workspaceId("ws"), integrationId("lector"), "Lector", windowId("window-a"));
+		store.dockSurfaceInto(workspaceId("ws"), integrationId("terminal"), "Terminal", windowId("window-b"));
+
+		expect(store.workspaceViewModel(workspaceId("ws"))?.activeIntegrationIds).toEqual([integrationId("lector"), integrationId("terminal")]);
+	});
+
+	it("dedupes the same Integration docked into more than one Window", () => {
+		const store = twoWindowWorkspace();
+		store.dockSurfaceInto(workspaceId("ws"), integrationId("lector"), "Lector A", windowId("window-a"));
+		store.dockSurfaceInto(workspaceId("ws"), integrationId("lector"), "Lector B", windowId("window-b"));
+
+		expect(store.workspaceViewModel(workspaceId("ws"))?.activeIntegrationIds).toEqual([integrationId("lector")]);
+	});
+
+	it("drops an Integration once every one of its docked Surfaces in the Workspace is undocked", () => {
+		const store = twoWindowWorkspace();
+		const a = store.dockSurfaceInto(workspaceId("ws"), integrationId("lector"), "Lector A", windowId("window-a"));
+		const b = store.dockSurfaceInto(workspaceId("ws"), integrationId("lector"), "Lector B", windowId("window-b"));
+		expect(a.ok && b.ok).toBe(true);
+		if (!a.ok || !b.ok) return;
+
+		store.undockSurface(workspaceId("ws"), a.value.id);
+		expect(store.workspaceViewModel(workspaceId("ws"))?.activeIntegrationIds).toEqual([integrationId("lector")]);
+
+		store.undockSurface(workspaceId("ws"), b.value.id);
+		expect(store.workspaceViewModel(workspaceId("ws"))?.activeIntegrationIds).toEqual([]);
+	});
+});
+
 describe("panel.move", () => {
 	const FOOTER: Panel = { id: panelId("footer"), location: "bottom", alignment: "start", offset: 0, thickness: 3, thicknessUnit: "terminal-cells", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("chat")] };
 	const CHAT_APPLET: AppletDefinition = { id: appletId("chat"), title: "Chat", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 };

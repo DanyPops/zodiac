@@ -24,7 +24,7 @@ describe("LiveWorldTiles", () => {
 		const viewModel: WorldViewModel = {
 			state: "ready",
 			activeWorkspaceId: workspaceId("w1"),
-			workspaces: [{ id: workspaceId("w1"), title: "Bug Triage", activeWindowId: windowId("win1"), windows: [{ id: windowId("win1"), title: "Window 1", active: true, surfaces: [], tile: null }] }],
+			workspaces: [{ id: workspaceId("w1"), title: "Bug Triage", activeWindowId: windowId("win1"), windows: [{ id: windowId("win1"), title: "Window 1", active: true, surfaces: [], tile: null }], activeIntegrationIds: [] }],
 		};
 		render(<LiveWorldTiles connected viewModel={viewModel} />);
 		const el = screen.getByTestId("live-world-tiles");
@@ -41,6 +41,7 @@ describe("LiveWorldTiles", () => {
 					id: workspaceId("w1"),
 					title: "Bug Triage",
 					activeWindowId: windowId("win1"),
+					activeIntegrationIds: [integrationId("activity"), integrationId("terminal")],
 					windows: [
 						{
 							id: windowId("win1"),
