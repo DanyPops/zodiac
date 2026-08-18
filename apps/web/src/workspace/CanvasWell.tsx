@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { cn } from "../platform/cn.js";
 import { WELL_BG } from "@zodiac/ui";
 import { NotificationsPill } from "./NotificationsPill.js";
@@ -8,6 +9,10 @@ interface CanvasWellProps {
 	/** The Window Carousel pager -- undefined before any Workspace/Window exists, in which case the header strip just shows Notifications and the clock. */
 	readonly center?: ReactNode;
 	readonly children: ReactNode;
+	/** Threaded straight through to NotificationsPill -- all default to NotificationsPill's own empty-state defaults, so an existing caller that doesn't know about live notifications yet keeps rendering exactly as before. */
+	readonly pendingApprovals?: readonly VehicleApprovalRequest[];
+	readonly onApproveRequest?: (requestId: string) => void;
+	readonly onDenyRequest?: (requestId: string) => void;
 }
 
 /**
@@ -24,13 +29,13 @@ interface CanvasWellProps {
  * box has no semantic meaning of its own (its content does), it just needs
  * to be findable as "the one shared ancestor" in tests.
  */
-export function CanvasWell({ center, children }: CanvasWellProps): React.JSX.Element {
+export function CanvasWell({ center, children, pendingApprovals, onApproveRequest, onDenyRequest }: CanvasWellProps): React.JSX.Element {
 	return (
 		<div data-canvas-well data-testid="canvas-well" className={cn("relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--app-corner-radius,16px)]", WELL_BG)}>
 			{/* items-start, not items-center: the Carousel's own pill sits above its "Window N" caption, making that slot taller than a bare Notifications/clock pill -- centering would misalign the pills themselves against each other. */}
 			<div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-start gap-2 p-2">
 				<div className="justify-self-start">
-					<NotificationsPill />
+					<NotificationsPill pending={pendingApprovals} onApprove={onApproveRequest} onDeny={onDenyRequest} />
 				</div>
 				{center && (
 					<div data-testid="canvas-well-center" className="justify-self-center">

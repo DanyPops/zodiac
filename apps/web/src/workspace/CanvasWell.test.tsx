@@ -1,9 +1,23 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { CanvasWell } from "./CanvasWell.js";
 
 afterEach(cleanup);
+
+function approvalRequest(overrides: Partial<VehicleApprovalRequest> = {}): VehicleApprovalRequest {
+	return {
+		requestId: "REQ-1",
+		operationName: "issue.create",
+		operationVersion: 1,
+		effect: "external-write",
+		requestedAt: Date.now(),
+		expiresAt: Date.now() + 5 * 60_000,
+		inputHash: "deadbeef",
+		...overrides,
+	};
+}
 
 describe("CanvasWell", () => {
 	it("always renders Notifications and the clock, flush inside its own header strip", () => {
@@ -53,6 +67,23 @@ describe("CanvasWell", () => {
 		const header = container.querySelector("[data-canvas-well] > div") as HTMLElement;
 		expect(header.className).toContain("items-start");
 		expect(header.className).not.toContain("items-center");
+	});
+
+	it("threads pendingApprovals/onApproveRequest/onDenyRequest straight through to NotificationsPill", () => {
+		const onApproveRequest = vi.fn();
+		const onDenyRequest = vi.fn();
+		render(
+			<CanvasWell pendingApprovals={[approvalRequest()]} onApproveRequest={onApproveRequest} onDenyRequest={onDenyRequest}>
+				<p>content</p>
+			</CanvasWell>,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
+		expect(screen.getByText(/issue\.create/)).toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+		expect(onApproveRequest).toHaveBeenCalledExactlyOnceWith("REQ-1");
+		fireEvent.click(screen.getByRole("button", { name: "Deny" }));
+		expect(onDenyRequest).toHaveBeenCalledExactlyOnceWith("REQ-1");
 	});
 
 	it("is flush to its own column's top edge -- no separate header row sits above it (WELL_BG covers the whole box, header included)", () => {

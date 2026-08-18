@@ -41,6 +41,7 @@ import { DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 import { WorldShell } from "../workspace/WorldShell.js";
 import type { CommandIntent, Panel } from "@zodiac/protocol";
+import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
 
@@ -57,6 +58,8 @@ const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then(
 const LiveDaemonPanel = lazy(() => import("../workspace/LiveDaemonPanel.js").then((module) => ({ default: module.LiveDaemonPanel })));
 // Same reasoning again -- useWorldClient's own @zodiac/server/world-client dependency (a full WorldStore implementation) stayed out of the entry bundle only because LiveDaemonPanel was already lazy; using it directly here would have re-introduced exactly that regression (confirmed: check:bundle-budget failed, entryJs 168.2kB vs a 151.4kB budget, before this was made lazy too).
 const LiveWorldPanels = lazy(() => import("../workspace/LiveWorldPanels.js").then((module) => ({ default: module.LiveWorldPanels })));
+// Same lazy-bridge discipline as LiveWorldPanels -- NotificationsPill's real data source (useNotifications' own SSE connection) stays out of the entry bundle the same way.
+const LiveNotifications = lazy(() => import("../workspace/LiveNotifications.js").then((module) => ({ default: module.LiveNotifications })));
 
 export function App(): React.JSX.Element {
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
@@ -188,6 +191,10 @@ export function App(): React.JSX.Element {
 	// below loads and connects -- see its own doc comment for why this isn't
 	// just a direct useWorldClient() call here.
 	const [livePanels, setLivePanels] = useState<readonly Panel[]>([]);
+	// Starts empty (NotificationsPill's own empty-state default covers the gap) until the lazy
+	// LiveNotifications bridge below loads and connects -- see its own doc comment.
+	const [livePendingApprovals, setLivePendingApprovals] = useState<readonly VehicleApprovalRequest[]>([]);
+	const notificationActionsRef = useRef<{ approve: (requestId: string) => void; deny: (requestId: string) => void }>({ approve: () => {}, deny: () => {} });
 	// A ref, not state -- LiveWorldPanels calls onApply on every one of its own
 	// renders (useWorldClient's own apply() has no stable identity to depend
 	// on), so a state update here would cascade into a render loop; see
@@ -322,10 +329,14 @@ export function App(): React.JSX.Element {
 				<div className="min-w-0 flex-1">
 				<Suspense fallback={null}>
 					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} />
+					<LiveNotifications baseUrl={zodiacdBaseUrl} onPending={setLivePendingApprovals} onActions={(actions) => { notificationActionsRef.current = actions; }} />
 				</Suspense>
 				<WorldShell panels={livePanels} left={leftAppletId && appletRenderers[leftAppletId]?.()} right={rightAppletId && appletRenderers[rightAppletId]?.()}>
 				<div className="relative flex min-w-0 flex-1 flex-col gap-2">
 					<CanvasWell
+						pendingApprovals={livePendingApprovals}
+						onApproveRequest={(requestId) => notificationActionsRef.current.approve(requestId)}
+						onDenyRequest={(requestId) => notificationActionsRef.current.deny(requestId)}
 						center={
 							workspace.workspace && workspace.activeWindow ? (
 								<WindowCarousel
