@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./agent": "./src/agent/index.ts",
     "./approval": "./src/approval/index.ts",
+    "./vehicle": "./src/vehicle/index.ts",
     "./pi-agent-dir": "./src/pi-agent-dir.ts",
     "./world": "./src/world/index.ts",
     "./world-client": "./src/world/client.ts",
@@ -23,8 +24,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@danypops/vehicle-client": "^0.10.4",
     "@danypops/vehicle-core": "^0.17.1",
-    "@danypops/vehicle-server": "^0.24.5",
+    "@danypops/vehicle-server": "^0.25.2",
     "@zodiac/protocol": "*"
   },
   "devDependencies": {
