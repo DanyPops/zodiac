@@ -4,9 +4,14 @@ import { join } from "node:path";
 import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
 import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodiac/server";
-import { createApprovalCenter } from "@zodiac/server/approval";
+import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
+import { registerVisualCueOperations } from "@zodiac/server/vehicle";
 import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
-import { createAgentCommandTool, createListIntegrationsTool, createZodiacAgentSession } from "@zodiac/pi";
+import { createAgentCommandTool, createListIntegrationsTool, createVisualCueVehicleResourceLoader, createZodiacAgentSession } from "@zodiac/pi";
+import { resolveZodiacAgentDir } from "@zodiac/server/pi-agent-dir";
+import { HmacApprovalAuthority } from "@danypops/vehicle-server/approval-authority";
+import { VehicleRegistry } from "@danypops/vehicle-server";
+import { LocalVehicleClient } from "@danypops/vehicle-client/local";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import { createZodiacService } from "./server.js";
 import { parseZodiacdArgs } from "./parse-args.js";
@@ -68,7 +73,12 @@ function defaultWorldPanelOptions(): WorldStorePanelOptions {
  * it's only ever called once a session is actually requested, by which
  * point the daemon is already listening.
  */
-function createDaemonAgentIntegrationFactory(getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined, getAllIntegrations: () => readonly IntegrationDefinition[], getDaemonBaseUrl: () => string) {
+function createDaemonAgentIntegrationFactory(
+	getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined,
+	getAllIntegrations: () => readonly IntegrationDefinition[],
+	getDaemonBaseUrl: () => string,
+	vehicleClient: LocalVehicleClient,
+) {
 	return async function createDaemonAgentIntegration(cwd?: string, initialActiveToolNames?: readonly string[], workspaceId?: WorkspaceId): Promise<AgentIntegrationPort> {
 		if (!workspaceId) {
 			const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc", initialActiveToolNames });
@@ -84,14 +94,24 @@ function createDaemonAgentIntegrationFactory(getIntegration: (id: IntegrationId)
 		// dbed439e's own point is that seeing what exists is a strictly weaker
 		// capability than acting on it (zodiac_dispatch_command already gates that).
 		const listTool = createListIntegrationsTool({ daemonUrl: getDaemonBaseUrl(), getAllIntegrations });
+		// propose_visual_cue -- the first Zodiac agent tool built the real Vehicle way
+		// (registerVehicleTools), projected fresh per session (tool registration is inherently
+		// per-ExtensionAPI) but backed by the one shared, daemon-wide VehicleRegistry/
+		// LocalVehicleClient constructed once in main() -- approval/job state stays shared across
+		// every session, never fragmented per-session the way createMonolithVehicle's own fresh-
+		// registry-per-call would.
+		const sessionCwd = cwd ?? process.cwd();
+		const resourceLoader = await createVisualCueVehicleResourceLoader(vehicleClient, sessionCwd, resolveZodiacAgentDir());
 		const { integration } = await createZodiacAgentSession({
-			cwd: cwd ?? process.cwd(),
+			cwd: sessionCwd,
 			mode: "rpc",
-			// Both custom tools must stay active even when initialActiveToolNames is [] (zero docked
+			resourceLoader,
+			// Every custom tool must stay active even when initialActiveToolNames is [] (zero docked
 			// Integrations) -- zodiac_dispatch_command is the trusted, per-call-authorized escape hatch
 			// (including surface.dock itself); list_integrations is how the agent discovers that hatch
-			// even has anything to dock in the first place. Neither is a Vehicle-shaped granted tool.
-			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listTool.name] : undefined,
+			// even has anything to dock in the first place; propose_visual_cue is gated by Vehicle's own
+			// Approval Gate, not by this Workspace tool grant, but still needs to be reachable at all.
+			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listTool.name, "propose_visual_cue"] : undefined,
 			customTools: [dispatchTool, listTool],
 		});
 		return integration;
@@ -139,8 +159,29 @@ async function main(): Promise<void> {
 	// defaults) so future in-process publishers (e.g. a gated Integration invoke, once
 	// integration.invoke handlers can themselves emit a VehicleApprovalRequest) share the
 	// exact same bus/authority a connected client's /api/notifications stream reads from.
+	//
+	// One shared HmacApprovalAuthority, passed to BOTH createApprovalCenter and the
+	// VehicleRegistry's own configureApprovals() below -- ordinary HMAC usage (mint()/verify()
+	// are pure functions of the shared secret, not tied to one call site), not a special case.
+	// This is what lets ApprovalCenter act as the single CQRS-shaped read model over both gate
+	// sources (WorldStore.apply()'s own integration.invoke gate, which already calls
+	// ApprovalCenter.request() directly, and any real VehicleRegistry operation below) without
+	// vehicle.approval.resolve ever needing to be invoked for Zodiac's own resolution flow.
+	const authority = new HmacApprovalAuthority();
 	const bus = createEventBus();
-	const approvalCenter = createApprovalCenter({ bus });
+	const approvalCenter = createApprovalCenter({ bus, authority });
+
+	// zodiacd's first real VehicleRegistry -- shared daemon-wide across every agent session
+	// (never a fresh one per session, which would fragment approval/job state). Registers
+	// visual-cue.propose (see packages/server/src/vehicle/visual-cue-operations.ts); more
+	// operations register here as they land. The one-line bridge is the entire integration
+	// needed for a request raised through this registry to show up in NotificationsPill,
+	// completely unchanged -- see vehicle-registry-approval-bridge.ts's own doc comment.
+	const vehicleRegistry = new VehicleRegistry({ name: "zodiac", version: "1", description: "Zodiac's own daemon-hosted Vehicle operations." });
+	registerVisualCueOperations(vehicleRegistry);
+	vehicleRegistry.configureApprovals({ authority });
+	bridgeVehicleRegistryApprovals(vehicleRegistry, approvalCenter);
+	const vehicleClient = new LocalVehicleClient(vehicleRegistry);
 
 	// Set once the daemon is actually listening, just below -- see
 	// createDaemonAgentIntegrationFactory's own doc comment on why this is
@@ -149,7 +190,7 @@ async function main(): Promise<void> {
 	const createDaemonAgentIntegration = createDaemonAgentIntegrationFactory(getIntegration, getAllIntegrations, () => {
 		if (!daemonBaseUrl) throw new Error("[zodiacd] createDaemonAgentIntegration called before the daemon finished binding its own HTTP server");
 		return daemonBaseUrl;
-	});
+	}, vehicleClient);
 
 	// Fire-and-forget persistence on every change -- a snapshot a few
 	// milliseconds stale after an unclean shutdown is an acceptable loss;

@@ -18,6 +18,8 @@
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --external:@earendil-works/* --external:node-pty --banner:js=\"import{createRequire as __createRequire}from 'module';const require=__createRequire(import.meta.url);\" --outfile=dist/cli.js"
   },
   "dependencies": {
+    "@danypops/vehicle-client": "^0.10.4",
+    "@danypops/vehicle-server": "^0.25.2",
     "@zodiac/agent": "*",
     "@zodiac/pi": "*",
     "@zodiac/protocol": "*",
