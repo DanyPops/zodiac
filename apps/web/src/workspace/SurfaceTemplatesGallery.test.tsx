@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { listCues, runCue } from "@zodiac/ui";
 import { CommandProvider } from "../commands/react.js";
 import { createCommandRegistry } from "../commands/registry.js";
 import { GALLERY_CATEGORIES } from "./gallery-categories.js";
@@ -54,5 +55,28 @@ describe("SurfaceTemplatesGallery", () => {
 		act(() => vi.advanceTimersByTime(3000)); // -> icons again
 		const iconLayer = document.body.querySelector('[class*="grid-cols-2"][class*="opacity-100"]');
 		expect(iconLayer).not.toBeNull();
+	});
+
+	it("registers a real, cosmetic highlight cue for every category card while mounted, and unregisters on unmount", () => {
+		const { unmount } = renderGallery(true);
+		for (const category of GALLERY_CATEGORIES) {
+			expect(listCues()).toContainEqual(expect.objectContaining({ kind: "gallery-category", id: category.id, cue: "highlight" }));
+		}
+		unmount();
+		for (const category of GALLERY_CATEGORIES) {
+			expect(listCues().some((entry) => entry.id === category.id)).toBe(false);
+		}
+	});
+
+	it("running a category's highlight cue applies a real, provable visual change to its own real card, driven by a real transitionend -- not a fixed timer", async () => {
+		renderGallery(true);
+		const category = GALLERY_CATEGORIES[0]!;
+		const card = screen.getByText(category.title).closest("div.flex.flex-col") as HTMLElement;
+		expect(card.className).not.toContain("ring-2");
+
+		const runPromise = runCue(category.id, { applyCommandIntent: vi.fn(), executeLocalCommand: vi.fn() });
+		expect(card.className).toContain("ring-2");
+		card.dispatchEvent(new Event("transitionend"));
+		await runPromise;
 	});
 });
