@@ -4,3 +4,4 @@ export { createZodiacAgentSession, type CreateZodiacAgentSessionOptions, type Zo
 export { createHttpAgentIntegration, createRemoteZodiacAgentSession, type CreateRemoteZodiacAgentSessionOptions, type HttpAgentIntegrationOptions, type RemoteZodiacAgentSession } from "./http-agent-integration.js";
 export { createAgentCommandTool, type CreateAgentCommandToolOptions } from "./agent-command-tool.js";
 export { createListIntegrationsTool, type CreateListIntegrationsToolOptions } from "./list-integrations-tool.js";
+export { createVisualCueVehicleResourceLoader } from "./visual-cue-vehicle-tool.js";
