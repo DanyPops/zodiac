@@ -53,7 +53,16 @@ export const CommandIntentSchema = z.discriminatedUnion("type", [
 	 * dispatcher's job is routing to the Integration by `integrationId`, not
 	 * interpreting `action`/`input` -- see world/store.ts's `apply`.
 	 */
-	z.object({ type: z.literal("integration.invoke"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, action: z.string().trim().min(1), input: z.unknown().optional(), ...commandIdField }),
+	/**
+	 * `approvalCapability` (optional, additive -- no COMMAND_INTENT_MIN_VERSION
+	 * bump needed, mirrors commandId's own precedent) mirrors Vehicle's own
+	 * `enforceGate`'s `presentedCapability` parameter: a capability minted by
+	 * approving a prior VehicleApprovalRequest for this exact operation+input,
+	 * presented alongside a re-submitted intent -- never merged into `input`
+	 * itself, which stays the target Integration's own business payload. See
+	 * world/store.ts's IntegrationInvokeHandler context parameter.
+	 */
+	z.object({ type: z.literal("integration.invoke"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, action: z.string().trim().min(1), input: z.unknown().optional(), approvalCapability: z.string().optional(), ...commandIdField }),
 ]);
 
 export type CommandIntent = z.infer<typeof CommandIntentSchema>;

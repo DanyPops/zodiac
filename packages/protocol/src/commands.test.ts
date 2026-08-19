@@ -92,6 +92,19 @@ describe("CommandIntentSchema", () => {
 	it("rejects a blank action string, same rule as every other non-empty string field in this union", () => {
 		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "" }).success).toBe(false);
 	});
+
+	it("accepts an optional approvalCapability alongside a resubmitted invoke -- a capability presented separately from input, never merged into it", () => {
+		const result = CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search", input: { query: "x" }, approvalCapability: "cap-123" });
+		expect(result.success).toBe(true);
+		if (result.success && result.data.type === "integration.invoke") {
+			expect(result.data.approvalCapability).toBe("cap-123");
+			expect(result.data.input).toEqual({ query: "x" });
+		}
+	});
+
+	it("accepts integration.invoke with approvalCapability omitted, same optionality as every other additive field in this union", () => {
+		expect(CommandIntentSchema.safeParse({ type: "integration.invoke", workspaceId: "w1", integrationId: "lector", action: "symbol.search" }).success).toBe(true);
+	});
 });
 
 describe("CommandIntentSchema version/capability negotiation", () => {
