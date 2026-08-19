@@ -562,4 +562,19 @@ describe("integration.invoke", () => {
 		const secondFixture = fixtureSymbolSearchIntegration();
 		expect(() => store.registerIntegrationInvokeHandler(integrationId("lector"), secondFixture.handler)).not.toThrow();
 	});
+
+	it("passes intent.approvalCapability through to the handler's own third context parameter, distinct from input -- the seam packages/server/src/approval/gated-integration-invoke.ts's gate reads", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		const contexts: (import("./store.js").IntegrationInvokeContext | undefined)[] = [];
+		store.registerIntegrationInvokeHandler(integrationId("lector"), (action, input, context) => {
+			contexts.push(context);
+			return { ok: true, value: null };
+		});
+
+		store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: {}, approvalCapability: "cap-abc" });
+		store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: {} });
+
+		expect(contexts).toEqual([{ presentedCapability: "cap-abc" }, { presentedCapability: undefined }]);
+	});
 });

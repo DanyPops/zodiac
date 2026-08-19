@@ -136,8 +136,22 @@ export interface WorldStorePanelOptions {
  * boundary for where an Integration's execute actually runs (a separate,
  * not-yet-built task) -- a future async out-of-process handler is expected
  * to land as part of that boundary, not here.
+ *
+ * The optional third parameter carries a caller-presented approval
+ * capability (CommandIntent's own `approvalCapability` field) separately
+ * from `input` -- mirrors Vehicle's own `enforceGate(..., presentedCapability)`
+ * split. Every pre-existing two-parameter handler (every fixture in this
+ * package's own tests) stays valid: a function typed to ignore its third
+ * parameter is assignable wherever this three-parameter shape is expected.
+ * See packages/server/src/approval/gated-integration-invoke.ts for the
+ * gating wrapper that actually reads it.
  */
-export type IntegrationInvokeHandler = (action: string, input: unknown) => ContributionOutcome<unknown>;
+export type IntegrationInvokeHandler = (action: string, input: unknown, context?: IntegrationInvokeContext) => ContributionOutcome<unknown>;
+
+/** See IntegrationInvokeHandler's own doc comment. */
+export interface IntegrationInvokeContext {
+	readonly presentedCapability?: string;
+}
 
 /** apply()'s own return value -- see WorldStore.apply's doc comment. */
 export interface ApplyOutcome {
@@ -353,7 +367,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				requireWorkspace(intent.workspaceId);
 				const handler = integrationInvokeHandlers.get(intent.integrationId);
 				if (!handler) throw new Error(`World "${worldId}" has no registered integration.invoke handler for Integration "${intent.integrationId}"`);
-				const invokeResult = handler(intent.action, intent.input);
+				const invokeResult = handler(intent.action, intent.input, { presentedCapability: intent.approvalCapability });
 				return { commandId: intent.commandId, invokeResult };
 			}
 			default:
