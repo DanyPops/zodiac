@@ -6,6 +6,9 @@ export { ConfirmDialog } from "./ConfirmDialog.js";
 export { Picker } from "./Picker.js";
 export type { PickerProps } from "./Picker.js";
 
+export type { CueTarget, CueEffect, CueDefinition, RegisteredCue, CueDispatch } from "./cues.js";
+export { registerCue, listCues, runCue } from "./cues.js";
+
 export type { GlyphSize } from "./glyph-size.js";
 export { GLYPH_SIZE_CLASSES } from "./glyph-size.js";
 export { glyphBadgeClassName } from "./glyph-badge-style.js";
