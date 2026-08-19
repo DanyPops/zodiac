@@ -6,6 +6,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import sonarjs from "eslint-plugin-sonarjs";
 import tseslint from "typescript-eslint";
+import { requireCueRegistration } from "./eslint-rules/require-cue-registration.js";
 
 // Zodiac's own architecture rules, enforced as real ESLint rules against
 // the parsed AST instead of the retired scripts/architecture-boundaries.mjs
@@ -40,6 +41,22 @@ const ADAPTER_ALLOWLIST = [
 // pointer.ts/wisp-target-measurer.ts/drag-tracker.ts were removed from this
 // list as stale entries -- none of those files exist in this repo (verified
 // directly, not assumed) at the time useResizeHandle.ts was added here.
+
+// Files this repo's own *Surface*.tsx/*Gallery*.tsx glob matches today that
+// don't yet call registerCue (packages/ui/src/cues.ts) -- honestly allowlisted
+// rather than silently widening the glob to dodge them. Retrofitting each is
+// real, separate future work per-component (this task only introduced the
+// enforcement mechanism itself, proven against SurfaceTemplatesGallery.tsx's
+// own real CategoryCard registration). Remove an entry here the moment that
+// file gains a real registerCue call, don't leave a stale exemption behind.
+const CUE_REGISTRATION_ALLOWLIST = [
+	"src/conversation/ConversationSurface.tsx", // chat surface: no addressable sub-region of its own yet
+	"src/workspace/ActivitySurface.tsx", // no addressable sub-region of its own yet
+	"src/workspace/TerminalSurface.tsx", // no addressable sub-region of its own yet
+	"src/workspace/TerminalSurfaceLazy.tsx", // pure lazy-loading wrapper, nothing of its own to register
+	"src/workspace/GalleryPreviewFrame.tsx", // pure presentational frame, not a real gallery entry itself
+	"src/workspace/SurfaceTemplatesPillar.tsx", // fixed icon rail, no expand/collapse or other addressable state (verified directly -- see 3aac4037's own corrected premise)
+];
 
 const RESTRICTED_GLOBALS = [
 	{ name: "window", message: "Reach in through a port (ConversationClient/Preferences/ThemeController) instead of the global." },
@@ -209,6 +226,21 @@ export default tseslint.config(
 		ignores: [...ADAPTER_ALLOWLIST, "**/*.test.{ts,tsx}"],
 		rules: {
 			"no-restricted-globals": ["error", ...RESTRICTED_GLOBALS],
+		},
+	},
+
+	// Cue registration: a real Surface/Gallery content file must call
+	// registerCue(...) somewhere, so an agent's read surface (list_visual_cues,
+	// once wired) never silently misses a real piece of UI. See
+	// eslint-rules/require-cue-registration.js's own doc comment for why this
+	// needs a genuinely custom rule rather than reusing no-restricted-globals'
+	// shape.
+	{
+		files: ["src/**/*.tsx"],
+		ignores: ["**/*.test.{ts,tsx}"],
+		plugins: { "zodiac-cues": { rules: { "require-cue-registration": requireCueRegistration } } },
+		rules: {
+			"zodiac-cues/require-cue-registration": ["error", { allowlist: CUE_REGISTRATION_ALLOWLIST }],
 		},
 	},
 
