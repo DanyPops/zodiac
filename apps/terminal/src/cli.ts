@@ -8,10 +8,12 @@ import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";
 import { bootstrapWorkspace } from "./bootstrap/workspace-bootstrap.js";
 import { createLectorHost, type LectorHost } from "./lector/lector-host.js";
-import { parseTerminalArgs } from "./parse-args.js";
+import { parseTerminalArgs, type ZodiacTuiMode } from "./parse-args.js";
 import { createZodiacExtensionUIContext } from "./pi/zodiac-extension-ui-context.js";
 import { startFooterChat } from "./pi/start-footer-chat.js";
 import { SemanticShellApplication } from "./shell/application.js";
+import { buildMonolithGovernance } from "./monolith-governance.js";
+import { spawnLocalDaemon, type LocalDaemon } from "./spawn-local-daemon.js";
 
 /** The classified CLI argument names a real directory, a file (its containing directory is used), or nothing (falls back to the process's own cwd) -- matching how a real `pi` CLI session resolves its own working directory. */
 function resolveAgentCwd(classified: ClassifiedPath): string {
@@ -40,43 +42,83 @@ function fail(message: string): void {
 }
 
 /**
- * Attempts to attach to a real, already-running zodiacd instead of this
- * process's own embedded WorldStore (zodiacd stage 5) -- a single resolved
- * decision reused for both World and the footer chat's own agent session,
- * rather than probing the daemon twice independently: if World can't be
- * reached, there is no reason to expect the agent-session routes on the
- * same daemon would fare any better. Falls back to `undefined` (today's
- * fully-embedded mode, unchanged) on any failure -- a wrong URL, no daemon
- * listening, or one that's simply slow to answer -- so a misconfigured
- * `--daemon`/`ZODIAC_DAEMON_URL` degrades to "just works locally" instead of
- * refusing to start at all.
+ * Attaches to a real, already-running zodiacd -- a single resolved
+ * connection reused for both World and the footer chat's own agent session,
+ * rather than probing the daemon twice independently. Never falls back to
+ * an embedded WorldStore on failure -- a rejection here is a real, explicit
+ * startup error for `main()` to report and exit on (see the "apps/terminal:
+ * explicit mode selection" Papyrus Task's own root-cause finding: silently
+ * downgrading Remote to Monolith produced two structurally different trust
+ * postures for the same chat feature, selected by network luck rather than
+ * an explicit choice). Used by both "remote" mode (an externally-supplied
+ * URL) and "local-server" mode (a URL this process just spawned itself) --
+ * identical code path either way, only how the URL was obtained differs.
  */
-async function attachToDaemon(daemonUrl: string): Promise<(WorldClient & { dispose: () => void }) | undefined> {
+async function attachToDaemon(daemonUrl: string): Promise<WorldClient & { dispose: () => void }> {
   try {
     return await connectRemoteWorldStore({ baseUrl: daemonUrl });
   } catch (error) {
-    process.stderr.write(`Zodiac: could not reach zodiacd at ${daemonUrl} (${error instanceof Error ? error.message : String(error)}) -- falling back to embedded mode\n`);
-    return undefined;
+    throw new Error(`could not reach zodiacd at ${daemonUrl} (${error instanceof Error ? error.message : String(error)})`);
   }
 }
 
+interface ResolvedBacking {
+  readonly world: WorldClient;
+  readonly remoteWorld: (WorldClient & { dispose: () => void }) | undefined;
+  readonly daemonUrl: string | undefined;
+  readonly localDaemon: LocalDaemon | undefined;
+  /** Extra options folded into startFooterChat -- Monolith mode's own real governance object graph, or a daemonUrl for the two attached modes. */
+  readonly chatOptions: { readonly daemonUrl?: string; readonly resourceLoader?: Awaited<ReturnType<typeof buildMonolithGovernance>>["resourceLoader"] };
+}
+
+/**
+ * The one place mode selection actually happens -- resolves `mode` into a
+ * real World backing and whatever startFooterChat needs to match it,
+ * failing loudly (never silently degrading to a different mode) whenever
+ * the chosen mode's own real backing can't be established.
+ */
+async function resolveBacking(mode: ZodiacTuiMode, daemonUrl: string | undefined, cwd: string): Promise<ResolvedBacking> {
+  if (mode === "remote") {
+    if (!daemonUrl) throw new Error("--mode remote requires --daemon <url> (or ZODIAC_DAEMON_URL)");
+    const remoteWorld = await attachToDaemon(daemonUrl);
+    return { world: remoteWorld, remoteWorld, daemonUrl, localDaemon: undefined, chatOptions: { daemonUrl } };
+  }
+  if (mode === "local-server") {
+    const localDaemon = await spawnLocalDaemon();
+    // A real, useful diagnostic for a human too, not just this mode's own
+    // pty tests -- there is otherwise no way to discover which daemon this
+    // process itself spawned (its stdout is captured internally by
+    // spawnLocalDaemon, never forwarded to this terminal's own screen).
+    process.stderr.write(`Zodiac: local-server mode -- spawned zodiacd at ${localDaemon.baseUrl}\n`);
+    const remoteWorld = await attachToDaemon(localDaemon.baseUrl);
+    return { world: remoteWorld, remoteWorld, daemonUrl: localDaemon.baseUrl, localDaemon, chatOptions: { daemonUrl: localDaemon.baseUrl } };
+  }
+  // Monolith: createWorldStore() in-process, plus the same real governance
+  // object graph apps/service's own composition root builds (see
+  // monolith-governance.ts's own doc comment) -- the actual fix for this
+  // mode's own governance gap, not a bare, ungated WorldStore.
+  // initialActiveToolNames is deliberately left unset here (not narrowed to
+  // governance.toolNames): Pi's own default active-tool set already
+  // includes both its built-ins (read/bash/edit/write) *and* anything a
+  // resourceLoader contributes -- confirmed directly by
+  // zodiac-agent-session.ts's own `tools` option only ever being set when
+  // initialActiveToolNames is explicitly given (see visual-cue-vehicle-tool.test.ts's
+  // own "item 4" test, which proves propose_visual_cue is active with no
+  // initialActiveToolNames passed at all). Explicitly setting it here to
+  // governance.toolNames alone would have *excluded* every Pi built-in --
+  // a real regression, not a tightening.
+  const governance = await buildMonolithGovernance(cwd);
+  const world = createWorldStore(worldId("zodiac"), { panels: [DEFAULT_CHAT_PANEL] });
+  return { world, remoteWorld: undefined, daemonUrl: undefined, localDaemon: undefined, chatOptions: { resourceLoader: governance.resourceLoader } };
+}
+
 async function main(): Promise<void> {
-  const { path, daemonUrl } = parseTerminalArgs(process.argv.slice(2));
+  const { path, mode, daemonUrl } = parseTerminalArgs(process.argv.slice(2));
   const classified = classifyPath(path);
   if (classified.kind === "missing") return fail(`no such path: ${classified.path}`);
   if (classified.kind === "denied") return fail(`permission denied: ${classified.path}`);
   if (classified.kind === "unsupported") return fail(`not a file or directory: ${classified.path}`);
 
-  const remoteWorld = daemonUrl ? await attachToDaemon(daemonUrl) : undefined;
-  const attached = remoteWorld !== undefined;
-  // Seeded only for embedded mode -- a real Panel to move via Ctrl+G. A
-  // remote daemon may or may not have seeded its own chat Panel; if it
-  // hasn't, moveChatPanel's own no-op guard (no matching Panel found) still
-  // applies. Its starting geometry matches DEFAULT_EDGE_APPLET_IDS's own
-  // bottom default exactly (see regions.ts), so seeding it changes nothing
-  // visually until Ctrl+G actually moves it.
-  const world: WorldClient = remoteWorld ?? createWorldStore(worldId("zodiac"), { panels: [DEFAULT_CHAT_PANEL] });
-  let host: LectorHost | undefined;
   // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
   // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch
   // already falls back to process.cwd(), matching how a real `pi` CLI session or any ordinary
@@ -84,12 +126,26 @@ async function main(): Promise<void> {
   // guard still additionally requires `lectorHost`, so browsing correctly stays gated on a real
   // workspace having opened -- only openTerminal only ever needed *this*, not that.
   const rootPath = resolveAgentCwd(classified);
+
+  // The one explicit mode decision -- "remote" and "local-server" propagate
+  // a real, actionable failure straight out of main() (never a silent
+  // downgrade to "monolith"); see resolveBacking's own doc comment.
+  let backing: ResolvedBacking;
+  try {
+    backing = await resolveBacking(mode, daemonUrl, rootPath);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+  const { world, remoteWorld, localDaemon, chatOptions } = backing;
+
+  let host: LectorHost | undefined;
   if (classified.kind !== "none") {
     host = createLectorHost();
     await host.activate();
     const bootstrapped = await bootstrapWorkspace(classified, host);
     if (!bootstrapped.ok) {
       await host.dispose();
+      await localDaemon?.stop();
       return fail(bootstrapped.message);
     }
     applyBootstrapToWorld(world, bootstrapped.value);
@@ -104,7 +160,7 @@ async function main(): Promise<void> {
   const terminal = new ProcessTerminal();
   const application = new SemanticShellApplication(world, terminal, undefined, host, rootPath);
   const uiContext = createZodiacExtensionUIContext(application);
-  const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext, daemonUrl: attached ? daemonUrl : undefined });
+  const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext, ...chatOptions });
   if (chat) application.attachFooterChat(chat.footerChat);
   let stopping = false;
 
@@ -130,6 +186,7 @@ async function main(): Promise<void> {
     chat?.dispose();
     unsubscribeWorld();
     remoteWorld?.dispose();
+    await localDaemon?.stop();
     await host?.dispose();
     process.exitCode = exitCode;
   }
