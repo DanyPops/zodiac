@@ -1,8 +1,8 @@
 import type { CommandId, CommandIntent, Panel, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
-import { readSseFrames } from "../net/sse-client.js";
-import type { WorldClientPort } from "./world-client-port.js";
+import { readSseFrames } from "./net/sse-client.js";
+import type { WorldClient } from "./client.js";
 
-/** postCommandIntent's own outcome -- the real, synchronous accept/reject answer WorldClientPort.apply() deliberately never gives a caller. */
+/** postCommandIntent's own outcome -- the real, synchronous accept/reject answer WorldClient.apply() deliberately never gives a caller. */
 export interface PostCommandOutcome {
 	readonly accepted: boolean;
 	readonly commandId?: CommandId;
@@ -13,7 +13,7 @@ export interface PostCommandOutcome {
 
 /**
  * One real POST /api/world/commands round trip, returning its actual
- * accept/reject outcome -- unlike WorldClientPort.apply() (fire-and-forget
+ * accept/reject outcome -- unlike WorldClient.apply() (fire-and-forget
  * by design), a caller building optimistic UI needs exactly this
  * synchronous answer to "did MY specific command succeed," since a
  * rejected command never appears in any future WorldViewModel at all.
@@ -44,14 +44,14 @@ export interface RemoteWorldStoreOptions {
 }
 
 /**
- * A `WorldClientPort` backed by a real, already-running zodiacd instance
+ * A `WorldClient` backed by a real, already-running zodiacd instance
  * instead of an in-process World -- the client half of zodiacd stage 5 (per
  * the "Build zodiacd" Papyrus Task and the Alef prior-art Doc's own
  * RemoteSession precedent: fetch current state once, then an SSE tail for
  * live updates, so a late-attaching client is never left guessing whether
  * it missed something).
  *
- * Returns `WorldClientPort`, not the wider `WorldStore` -- every caller of
+ * Returns `WorldClient`, not the wider `WorldStore` -- every caller of
  * `apply()`/`worldViewModel()` in this codebase today (apps/terminal's own
  * `applyBootstrapToWorld` and `SemanticShellApplication`'s own even-narrower
  * `WorldProjection`) never touches `createWorkspace`/`getWorkspace`/
@@ -62,9 +62,9 @@ export interface RemoteWorldStoreOptions {
  * WorldViewModel projection zodiacd's API actually exposes). Forcing this
  * adapter to implement them anyway (as literal `throw "not supported"`
  * stubs) was a real Interface Segregation violation; `WorldStore` remains
- * structurally a superset of `WorldClientPort`, so a real in-process
+ * structurally a superset of `WorldClient`, so a real in-process
  * `WorldStore` (e.g. `createWorldStore()`) is still substitutable anywhere
- * a `WorldClientPort` is expected -- only the reverse direction (treating
+ * a `WorldClient` is expected -- only the reverse direction (treating
  * this remote adapter as a full `WorldStore`) is no longer offered, because
  * it was never actually true.
  *
@@ -73,7 +73,7 @@ export interface RemoteWorldStoreOptions {
  * reachable, fall back to an embedded WorldStore" without hanging
  * indefinitely on a stale/wrong URL.
  */
-export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions): Promise<WorldClientPort & { dispose: () => void }> {
+export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions): Promise<WorldClient & { dispose: () => void }> {
 	const { baseUrl } = options;
 	const fetcher = options.fetcher ?? fetch;
 

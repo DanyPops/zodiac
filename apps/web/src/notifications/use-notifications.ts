@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
-import { connectRemoteNotifications, type NotificationsClientPort } from "@zodiac/server/notifications";
+import { connectRemoteNotifications, type NotificationsClientPort } from "@zodiac/notifications";
 
 export interface UseNotificationsOptions {
 	/** Injectable for tests -- defaults to the browser global, same convention as useWorldClient. */
@@ -22,7 +22,7 @@ export interface NotificationsState {
  * NotificationsPill.tsx's `pending`/`onApprove`/`onDeny` were plain, hand-fed props with no real
  * daemon connection at all (its own doc comment named this gap explicitly).
  *
- * A thin React wrapper over `connectRemoteNotifications` (`@zodiac/server/notifications`),
+ * A thin React wrapper over `connectRemoteNotifications` (`@zodiac/notifications`),
  * exactly how `useWorldClient` wraps `connectRemoteWorldStore` -- the real fetch/SSE-reconnect
  * logic (and its own `fetcher ?? fetch` default) lives in that adapter, not here, per this
  * repo's own architecture boundary (apps/web's ESLint config bans a literal `fetch` global

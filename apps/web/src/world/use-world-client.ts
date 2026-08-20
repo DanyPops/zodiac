@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CommandIntent, Panel, WorldViewModel } from "@zodiac/protocol";
-import { connectRemoteWorldStore, type WorldClientPort } from "@zodiac/server/world-client";
+import { connectRemoteWorldStore, type WorldClient } from "@zodiac/world";
 
 export interface UseWorldClientOptions {
 	/** Injectable for tests -- defaults to the browser global, same convention as createHttpTerminalClient/createHttpConversationClient. */
@@ -10,7 +10,7 @@ export interface UseWorldClientOptions {
 export interface WorldClientState {
 	/** The daemon's real current WorldViewModel once connected; a real, valid empty WorldViewModel (never null/undefined) before connecting or if the daemon is unreachable, so a consumer never needs a loading-vs-empty special case beyond `connected` itself. */
 	readonly viewModel: WorldViewModel;
-	/** Global World chrome (see WorldClientPort.panels' own doc comment); empty before connecting or while disconnected, same fallback policy as viewModel. Refreshed whenever a fresh viewModel arrives -- not a live per-command reconciliation, see WorldClientPort.panels. */
+	/** Global World chrome (see WorldClient.panels' own doc comment); empty before connecting or while disconnected, same fallback policy as viewModel. Refreshed whenever a fresh viewModel arrives -- not a live per-command reconciliation, see WorldClient.panels. */
 	readonly panels: readonly Panel[];
 	/** False before the initial GET /api/world resolves, and permanently false if it never does (a wrong URL, no daemon listening) -- see connectRemoteWorldStore's own doc comment for that same fallback policy. */
 	readonly connected: boolean;
@@ -31,7 +31,7 @@ function noopApply(): void {
  * finding: apps/web/src/workspace/model.ts's Workspace/Window/Surface model
  * is a fully local mock with no daemon connection at all). Wraps the exact
  * same `connectRemoteWorldStore` adapter apps/terminal's cli.ts already
- * uses, over the same narrow `WorldClientPort` -- so this hook and the
+ * uses, over the same narrow `WorldClient` -- so this hook and the
  * TUI's own render loop (semantic-shell.ts's paintBody()) consume identical
  * wire data, never two independently-maintained projections of it.
  *
@@ -50,7 +50,7 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 
 	useEffect(() => {
 		let disposed = false;
-		let store: (WorldClientPort & { dispose: () => void }) | undefined;
+		let store: (WorldClient & { dispose: () => void }) | undefined;
 
 		setConnected(false);
 		setViewModel(DISCONNECTED_VIEW_MODEL);

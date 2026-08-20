@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { dirname } from "node:path";
-import { connectRemoteWorldStore, createWorldStore, type WorldClientPort } from "@zodiac/server/world";
+import { createWorldStore } from "@zodiac/server/world";
+import { connectRemoteWorldStore, type WorldClient } from "@zodiac/world";
 import { appletId, MIN_FOOTER_HEIGHT, panelId, worldId, type Panel } from "@zodiac/protocol";
 import { Key, matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
 import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
@@ -50,7 +51,7 @@ function fail(message: string): void {
  * `--daemon`/`ZODIAC_DAEMON_URL` degrades to "just works locally" instead of
  * refusing to start at all.
  */
-async function attachToDaemon(daemonUrl: string): Promise<(WorldClientPort & { dispose: () => void }) | undefined> {
+async function attachToDaemon(daemonUrl: string): Promise<(WorldClient & { dispose: () => void }) | undefined> {
   try {
     return await connectRemoteWorldStore({ baseUrl: daemonUrl });
   } catch (error) {
@@ -74,7 +75,7 @@ async function main(): Promise<void> {
   // applies. Its starting geometry matches DEFAULT_EDGE_APPLET_IDS's own
   // bottom default exactly (see regions.ts), so seeding it changes nothing
   // visually until Ctrl+G actually moves it.
-  const world: WorldClientPort = remoteWorld ?? createWorldStore(worldId("zodiac"), { panels: [DEFAULT_CHAT_PANEL] });
+  const world: WorldClient = remoteWorld ?? createWorldStore(worldId("zodiac"), { panels: [DEFAULT_CHAT_PANEL] });
   let host: LectorHost | undefined;
   // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
   // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch

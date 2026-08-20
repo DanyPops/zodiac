@@ -15,7 +15,7 @@ function makeRequest(overrides: Partial<VehicleApprovalRequest> = {}): VehicleAp
 	};
 }
 
-/** Same shape as remote-world-store.test.ts's own fake daemon -- real enough to exercise connectRemoteNotifications' own three routes without a live process. */
+/** Same shape as @zodiac/world's own fake daemon -- real enough to exercise connectRemoteNotifications' own three routes without a live process. */
 function createFakeDaemon(initialPending: readonly VehicleApprovalRequest[] = []) {
 	let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
 	const encoder = new TextEncoder();

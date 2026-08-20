@@ -23,6 +23,7 @@
     "@zodiac/pi": "*",
     "@zodiac/protocol": "*",
     "@zodiac/tui": "*",
+    "@zodiac/world": "*",
     "@danypops/zodiac-lector": "file:vendor/danypops-zodiac-lector-0.0.3.tgz",
     "@danypops/pi-lector": "^0.12.12",
     "@earendil-works/pi-coding-agent": "^0.84.1",

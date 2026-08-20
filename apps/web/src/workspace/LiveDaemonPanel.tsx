@@ -13,7 +13,7 @@ function noopEmit(): void {
 /**
  * The whole "Live Daemon State" floating toggle + panel as one lazy-loaded
  * unit -- `computeTileRects` (@zodiac/server/window) and `connectRemoteWorldStore`
- * (@zodiac/server/world-client) are real, non-trivial code a first paint
+ * (@zodiac/world) are real, non-trivial code a first paint
  * doesn't need, the same reasoning App.tsx's own `WindowDockview` lazy
  * import already documents. Confirmed directly: importing this eagerly
  * pushed the entry chunk over apps/web's own bundle-size budget

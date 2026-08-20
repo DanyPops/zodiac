@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CommandIntent, IntegrationId, SurfaceId, WindowId, WorkspaceId, WorldViewModel } from "@zodiac/protocol";
 import { commandId as makeCommandId, surfaceId as makeSurfaceId } from "@zodiac/protocol/ids";
-import { postCommandIntent, type PostCommandOutcome } from "@zodiac/server/world-client";
+import { postCommandIntent, type PostCommandOutcome } from "@zodiac/world";
 
 export interface DockRequest {
 	readonly workspaceId: WorkspaceId;
@@ -49,7 +49,7 @@ function settleDock(outcome: PostCommandOutcome, rejectedSurfaceId: SurfaceId, s
  * WorldViewModel off onChange -- confirmed once that surfaceId actually
  * appears there, rolled back with a real error if the daemon rejects the
  * command outright (a collision, an invalid Window). Uses postCommandIntent
- * (a real request/response round trip) rather than WorldClientPort.apply()
+ * (a real request/response round trip) rather than WorldClient.apply()
  * (fire-and-forget by design) -- "did MY dock command succeed" is exactly
  * the synchronous accept/reject question a rejected command's own response
  * answers and a future onChange frame never will.

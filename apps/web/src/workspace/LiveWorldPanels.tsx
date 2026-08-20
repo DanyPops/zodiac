@@ -12,7 +12,7 @@ interface LiveWorldPanelsProps {
 /**
  * An invisible bridge, not a visible piece of chrome -- lazy-loaded (see
  * App.tsx's own `lazy()` call for it) so `useWorldClient`'s real dependency
- * (`@zodiac/server/world-client`'s full WorldStore implementation) stays out
+ * (`@zodiac/world`'s full WorldClient implementation) stays out
  * of the critical entry bundle, the same reasoning WindowDockview/
  * LiveDaemonPanel already apply. Reports the live Panel list up via
  * `onPanels` whenever it changes; App.tsx's own default chrome placement

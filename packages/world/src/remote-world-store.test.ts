@@ -162,10 +162,10 @@ describe("connectRemoteWorldStore", () => {
 
 	// The daemon-only members of WorldStore (snapshot/getWorkspace/createWorkspace/
 	// dockSurface/undockSurface/dockSurfaceInto/windowTile) no longer exist on
-	// connectRemoteWorldStore's own return type (WorldClientPort) at all -- the
+	// connectRemoteWorldStore's own return type (WorldClient) at all -- the
 	// invariant a runtime "not supported" throw used to protect is now enforced
-	// at compile time instead, a strictly stronger guarantee. See
-	// world-client-port.ts's own doc comment.
+	// at compile time instead, a strictly stronger guarantee. See client.ts's
+	// own doc comment.
 
 	it("reconnects the SSE stream after it drops, and the reconnect's own first frame resyncs state (idempotent by construction)", async () => {
 		const daemon = createFakeDaemon(EMPTY);

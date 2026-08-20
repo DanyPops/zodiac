@@ -56,7 +56,7 @@ const piClient = createHttpPiClient({ baseUrl: zodiacdBaseUrl });
 const WindowDockview = lazy(() => import("../workspace/WindowDockview.js").then((module) => ({ default: module.WindowDockview })));
 // Same reasoning as WindowDockview above -- see LiveDaemonPanel's own doc comment for the confirmed bundle-budget breach this avoids.
 const LiveDaemonPanel = lazy(() => import("../workspace/LiveDaemonPanel.js").then((module) => ({ default: module.LiveDaemonPanel })));
-// Same reasoning again -- useWorldClient's own @zodiac/server/world-client dependency (a full WorldStore implementation) stayed out of the entry bundle only because LiveDaemonPanel was already lazy; using it directly here would have re-introduced exactly that regression (confirmed: check:bundle-budget failed, entryJs 168.2kB vs a 151.4kB budget, before this was made lazy too).
+// Same reasoning again -- useWorldClient's own @zodiac/world dependency (the WorldClient implementation) stayed out of the entry bundle only because LiveDaemonPanel was already lazy; using it directly here would have re-introduced exactly that regression (confirmed: check:bundle-budget failed, entryJs 168.2kB vs a 151.4kB budget, before this was made lazy too).
 const LiveWorldPanels = lazy(() => import("../workspace/LiveWorldPanels.js").then((module) => ({ default: module.LiveWorldPanels })));
 // Same lazy-bridge discipline as LiveWorldPanels -- NotificationsPill's real data source (useNotifications' own SSE connection) stays out of the entry bundle the same way.
 const LiveNotifications = lazy(() => import("../workspace/LiveNotifications.js").then((module) => ({ default: module.LiveNotifications })));

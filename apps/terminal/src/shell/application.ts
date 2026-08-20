@@ -10,7 +10,7 @@ import { resolveShellCommand, type ShellCommand } from "./keymap.js";
 import { openTerminalPaneNatively } from "./native-terminal.js";
 import { SemanticShell, type ShellFocus } from "./semantic-shell.js";
 
-/** The narrow slice of WorldClientPort (the wire-safe subset zodiacd exposes over HTTP) this shell actually depends on -- both embedded mode's real WorldStore and connectRemoteWorldStore's remote adapter satisfy it in full (GET /api/world/panels exists, see world-client-port.ts). */
+/** The narrow slice of WorldClient (the wire-safe subset zodiacd exposes over HTTP) this shell actually depends on -- both embedded mode's real WorldStore and connectRemoteWorldStore's remote adapter satisfy it in full (GET /api/world/panels exists, see @zodiac/world's client.ts). */
 export interface WorldProjection {
 	worldViewModel(): WorldViewModel;
 	apply(intent: CommandIntent): void;

@@ -1,5 +1,5 @@
 import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
-import { readSseFrames } from "../net/sse-client.js";
+import { readSseFrames } from "./net/sse-client.js";
 
 /** One frame shape notification-routes.ts's own SSE stream ever produces. */
 type NotificationFrame =
@@ -14,7 +14,7 @@ function isNotificationFrame(value: unknown): value is NotificationFrame {
 export interface NotificationsClientPort {
 	/** The current pending list -- empty before the initial SSE snapshot frame arrives. */
 	pending(): readonly VehicleApprovalRequest[];
-	/** Fire-and-forget POST to the daemon's own approve endpoint -- success arrives as the next SSE frame, same convention as WorldClientPort.apply(). */
+	/** Fire-and-forget POST to the daemon's own approve endpoint -- success arrives as the next SSE frame, same convention as WorldClient.apply(). */
 	approve(requestId: string): void;
 	/** Fire-and-forget POST to the daemon's own deny endpoint, same reasoning as approve(). */
 	deny(requestId: string): void;
@@ -34,10 +34,11 @@ export interface RemoteNotificationsOptions {
  * current state via the stream's own first frame, then an SSE tail for live updates; a dropped
  * connection resumes automatically after a short delay; every reconnect's own first frame is
  * always the *current* full pending snapshot, never a replayed delta log, so re-subscribing
- * after a drop is idempotent by construction). Lives here, not in apps/web, for the same
- * architectural-boundary reason remote-world-store.ts does: apps/web's own ESLint rules ban a
- * literal `fetch` global reference outside a small adapter allowlist -- `fetcher ?? fetch`
- * belongs in one real adapter factory, not scattered across every React hook that needs one.
+ * after a drop is idempotent by construction). Lives in this package, not in apps/web, for the
+ * same architectural-boundary reason `@zodiac/world`'s own remote-world-store.ts does: apps/web's
+ * own ESLint rules ban a literal `fetch` global reference outside a small adapter allowlist --
+ * `fetcher ?? fetch` belongs in one real adapter factory, not scattered across every React hook
+ * that needs one.
  */
 export function connectRemoteNotifications(options: RemoteNotificationsOptions): NotificationsClientPort & { dispose: () => void } {
 	const { baseUrl } = options;
