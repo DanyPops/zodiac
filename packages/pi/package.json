@@ -16,6 +16,7 @@
   "dependencies": {
     "@zodiac/agent": "*",
     "@zodiac/server": "*",
+    "@zodiac/ui": "*",
     "@danypops/pi-rpc-protocol": "^0.0.1",
     "@danypops/vehicle-client-pi": "^0.43.4",
     "@danypops/vehicle-core": "^0.17.1",

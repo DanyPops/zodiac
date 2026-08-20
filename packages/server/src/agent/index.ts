@@ -10,5 +10,8 @@ export { watchWorkspaceToolGrants } from "./tool-grant-reactor.js";
 export type { QueryableToolRegistrar } from "./in-memory-tool-registrar.js";
 export { createInMemoryToolRegistrar } from "./in-memory-tool-registrar.js";
 
+export type { PendingClientActions } from "./pending-client-actions.js";
+export { createPendingClientActions, NoClientObservedError } from "./pending-client-actions.js";
+
 export type { IntegrationBucket, IntegrationSummary, ListIntegrationsResult } from "./integration-directory.js";
 export { listIntegrations, MAX_LISTED_INTEGRATIONS, MAX_SUMMARY_BYTES } from "./integration-directory.js";

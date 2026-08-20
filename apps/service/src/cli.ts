@@ -7,8 +7,8 @@ import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type W
 import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodiac/server";
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
 import { registerVisualCueOperations } from "@zodiac/server/vehicle";
-import { createInMemoryToolRegistrar, watchWorkspaceToolGrants, type ToolContribution } from "@zodiac/server/agent";
-import { createAgentCommandTool, createListIntegrationsTool, createVisualCueVehicleResourceLoader, createZodiacAgentSession } from "@zodiac/pi";
+import { createInMemoryToolRegistrar, createPendingClientActions, watchWorkspaceToolGrants, type PendingClientActions, type ToolContribution } from "@zodiac/server/agent";
+import { createAgentCommandTool, createListIntegrationsTool, createListVisualCuesTool, createRemoteBrowserVisualCueClient, createVisualCueVehicleResourceLoader, createZodiacAgentSession } from "@zodiac/pi";
 import { resolveZodiacAgentDir } from "@zodiac/server/pi-agent-dir";
 import { HmacApprovalAuthority } from "@danypops/vehicle-server/approval-authority";
 import { VehicleRegistry } from "@danypops/vehicle-server";
@@ -79,10 +79,22 @@ function createDaemonAgentIntegrationFactory(
 	getAllIntegrations: () => readonly IntegrationDefinition[],
 	getDaemonBaseUrl: () => string,
 	vehicleClient: LocalVehicleClient,
+	pendingClientActions: PendingClientActions,
 ) {
 	return async function createDaemonAgentIntegration(cwd?: string, initialActiveToolNames?: readonly string[], workspaceId?: WorkspaceId): Promise<AgentIntegrationPort> {
+		// Read-only discovery, no Workspace/grant scoping at all (see
+		// createListVisualCuesTool's own doc comment -- no real cue-target user
+		// story is Workspace-scoped) -- active in both branches below, the same
+		// reasoning list_integrations already established for its own read-only
+		// posture.
+		const listVisualCuesTool = createListVisualCuesTool((toolCallId) => createRemoteBrowserVisualCueClient(pendingClientActions, toolCallId));
 		if (!workspaceId) {
-			const { integration } = await createZodiacAgentSession({ cwd: cwd ?? process.cwd(), mode: "rpc", initialActiveToolNames });
+			const { integration } = await createZodiacAgentSession({
+				cwd: cwd ?? process.cwd(),
+				mode: "rpc",
+				initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, listVisualCuesTool.name] : undefined,
+				customTools: [listVisualCuesTool],
+			});
 			return integration;
 		}
 		const dispatchTool = createAgentCommandTool({
@@ -111,9 +123,10 @@ function createDaemonAgentIntegrationFactory(
 			// Integrations) -- zodiac_dispatch_command is the trusted, per-call-authorized escape hatch
 			// (including surface.dock itself); list_integrations is how the agent discovers that hatch
 			// even has anything to dock in the first place; propose_visual_cue is gated by Vehicle's own
-			// Approval Gate, not by this Workspace tool grant, but still needs to be reachable at all.
-			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listTool.name, "propose_visual_cue"] : undefined,
-			customTools: [dispatchTool, listTool],
+			// Approval Gate, not by this Workspace tool grant, but still needs to be reachable at all;
+			// list_visual_cues is the same read-only, Workspace-independent posture as list_integrations.
+			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listTool.name, listVisualCuesTool.name, "propose_visual_cue"] : undefined,
+			customTools: [dispatchTool, listTool, listVisualCuesTool],
 		});
 		return integration;
 	};
@@ -211,10 +224,14 @@ async function main(): Promise<void> {
 	// createDaemonAgentIntegrationFactory's own doc comment on why this is
 	// safe despite being read from a closure defined before that happens.
 	let daemonBaseUrl: string | undefined;
+	// Shared between list_visual_cues' own RemoteBrowserVisualCueClient (registers a pending
+	// call per toolCallId) and agentRoutes' own postClientAction route (resolves it once a real
+	// Client posts back) -- one instance, daemon-wide, never fragmented per-session.
+	const pendingClientActions = createPendingClientActions();
 	const createDaemonAgentIntegration = createDaemonAgentIntegrationFactory(getIntegration, getAllIntegrations, () => {
 		if (!daemonBaseUrl) throw new Error("[zodiacd] createDaemonAgentIntegration called before the daemon finished binding its own HTTP server");
 		return daemonBaseUrl;
-	}, vehicleClient);
+	}, vehicleClient, pendingClientActions);
 
 	// Fire-and-forget persistence on every change -- a snapshot a few
 	// milliseconds stale after an unclean shutdown is an acceptable loss;
@@ -244,6 +261,7 @@ async function main(): Promise<void> {
 		getWorkspaceToolIds: toolRegistrar.toolIds,
 		bus,
 		approvalCenter,
+		pendingClientActions,
 	});
 	daemonBaseUrl = service.baseUrl;
 

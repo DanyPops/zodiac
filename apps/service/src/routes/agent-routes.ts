@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WorkspaceId } from "@zodiac/protocol";
+import type { PendingClientActions } from "@zodiac/server/agent";
 import type { AgentSessionRegistry } from "../agent/agent-session-registry.js";
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
@@ -41,6 +42,17 @@ function matchAction(pathname: string): { sessionId: string; action: string } | 
 	return { sessionId, action };
 }
 
+/** Matches /api/agent/sessions/:id/client-actions/:toolCallId -- the Client's own POST-back half of the round trip a tool like list_visual_cues depends on (PendingClientActions.register()'s own counterpart). Deliberately a separate pattern from ACTION_PATTERN above (a hyphenated segment, a second path component) rather than folding it into that one, general-purpose action dispatcher. */
+const CLIENT_ACTION_PATTERN = /^\/api\/agent\/sessions\/([^/]+)\/client-actions\/([^/]+)$/;
+
+function matchClientAction(pathname: string): { sessionId: string; toolCallId: string } | undefined {
+	const match = CLIENT_ACTION_PATTERN.exec(pathname);
+	if (!match) return undefined;
+	const [, sessionId, toolCallId] = match;
+	if (!sessionId || !toolCallId) return undefined;
+	return { sessionId, toolCallId: decodeURIComponent(toolCallId) };
+}
+
 /**
  * The agent-session half of zodiacd's API (per the "zodiacd API surface"
  * Papyrus Doc): request/reply for session lifecycle and turns, one SSE
@@ -50,8 +62,38 @@ function matchAction(pathname: string): { sessionId: string; action: string } | 
  * conversation another client already started, which is the actual point
  * of zodiacd existing.
  */
-export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[]) {
+export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[], pendingClientActions?: PendingClientActions) {
 	return {
+		/**
+		 * The Client's own POST-back half of the round trip a tool like
+		 * list_visual_cues depends on: the Client observed a real tool-call-start
+		 * SSE event naming this exact toolCallId (see streamEvents below -- the
+		 * same channel, no new one), ran the real action itself, and reports the
+		 * result here on its own initiative -- the same direction every other
+		 * Client-originated call in this codebase already goes, never a daemon
+		 * broadcast-and-race. Always 200s (even a stale/duplicate/late post,
+		 * which resolve() itself already treats as a real, expected no-op) -- the
+		 * one real failure mode (nothing was ever pending) isn't the posting
+		 * Client's own fault to report as an error.
+		 */
+		async postClientAction(req: IncomingMessage, res: ServerResponse): Promise<void> {
+			const url = new URL(req.url ?? "", "http://zodiac.local");
+			const matched = matchClientAction(url.pathname);
+			if (!matched || !pendingClientActions) {
+				writeJson(res, 404, { code: "not-found", message: "No matching client-action route." });
+				return;
+			}
+			let body: unknown;
+			try {
+				body = await readJsonBody(req);
+			} catch {
+				writeJson(res, 400, { code: "invalid-json", message: "Request body was not valid JSON." });
+				return;
+			}
+			const delivered = pendingClientActions.resolve(matched.toolCallId, (body as { result?: unknown } | undefined)?.result);
+			writeJson(res, 200, { delivered });
+		},
+
 		async createSession(req: IncomingMessage, res: ServerResponse): Promise<void> {
 			// Malformed/empty body falls back to defaults (registry's own cwd, no tool grant) rather than failing the request.
 			let cwd: string | undefined;

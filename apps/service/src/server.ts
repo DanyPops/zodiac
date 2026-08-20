@@ -4,6 +4,7 @@ import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
 import type { WorkspaceId } from "@zodiac/protocol";
 import { createEventBus, type EventBus } from "@zodiac/server";
+import type { PendingClientActions } from "@zodiac/server/agent";
 import { createApprovalCenter, type ApprovalCenter } from "@zodiac/server/approval";
 import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
 import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/fixture-conversations.js";
@@ -35,6 +36,8 @@ export interface CreateZodiacServiceOptions {
 	getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[];
 	/** Real EventBus backing /api/notifications' SSE stream -- defaults to a fresh in-process instance. Inject a shared one (as cli.ts does) so anything else that publishes onto "notification" elsewhere in the process (e.g. a future gated Integration invoke) is visible on the same stream a client actually connects to. */
 	bus?: EventBus;
+	/** Shared with whatever constructed this session's own tools (e.g. list_visual_cues' RemoteBrowserVisualCueClient) -- resolves a Client's own POST-back against the exact same registrations that adapter's calls are pending on. Omitted disables the client-actions route entirely (postClientAction always 404s). */
+	pendingClientActions?: PendingClientActions;
 	/** Real ApprovalCenter wired to `bus` -- defaults to a fresh instance over the given/default bus. Inject a shared one so approve()/deny() here agree with whatever originally called request() elsewhere. */
 	approvalCenter?: ApprovalCenter;
 }
@@ -60,7 +63,7 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		options.fixtureMode ? { sessionsRoot: options.sessionsRoot, scan: fixtureScanConversations, readEvents: fixtureReadSessionEvents } : { sessionsRoot: options.sessionsRoot },
 	);
 	const agentSessionRegistry = createAgentSessionRegistry(options.createAgentIntegration);
-	const agentRoutes = createAgentRoutes(agentSessionRegistry, options.getWorkspaceToolIds);
+	const agentRoutes = createAgentRoutes(agentSessionRegistry, options.getWorkspaceToolIds, options.pendingClientActions);
 
 	// Only constructed when explicitly opted into -- see enableTerminal's own
 	// doc comment on why this isn't wired by default.
@@ -127,6 +130,10 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		}
 		if (pathname.endsWith("/events") && pathname.startsWith("/api/agent/sessions/") && req.method === "GET") {
 			agentRoutes.streamEvents(req, res);
+			return;
+		}
+		if (pathname.includes("/client-actions/") && pathname.startsWith("/api/agent/sessions/") && req.method === "POST") {
+			void agentRoutes.postClientAction(req, res);
 			return;
 		}
 		if (pathname.startsWith("/api/agent/sessions/") && req.method === "POST") {

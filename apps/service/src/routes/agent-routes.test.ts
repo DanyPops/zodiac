@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
 import { workspaceId } from "@zodiac/protocol";
+import { createPendingClientActions } from "@zodiac/server/agent";
 import { createAgentSessionRegistry } from "../agent/agent-session-registry.js";
 import { createAgentRoutes } from "./agent-routes.js";
 
@@ -218,5 +219,54 @@ describe("createAgentRoutes", () => {
 
 		const response = await fetch(`${base}/api/agent/sessions/nope/events`);
 		expect(response.status).toBe(404);
+	});
+
+	describe("postClientAction", () => {
+		it("delivers a POSTed result to the matching PendingClientActions registration", async () => {
+			const registry = createAgentSessionRegistry(() => fakeIntegration());
+			const pendingClientActions = createPendingClientActions();
+			const routes = createAgentRoutes(registry, undefined, pendingClientActions);
+			const base = await listen((req, res) => {
+				void routes.postClientAction(req, res);
+			});
+
+			const pending = pendingClientActions.register("call-1", 2_000);
+			const response = await fetch(`${base}/api/agent/sessions/sess-1/client-actions/call-1`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ result: { cues: [{ id: "a" }] } }),
+			});
+			expect(response.ok).toBe(true);
+			expect(await response.json()).toEqual({ delivered: true });
+			await expect(pending).resolves.toEqual({ cues: [{ id: "a" }] });
+		});
+
+		it("reports delivered: false for a toolCallId nothing is pending under -- a late/duplicate POST, never a 500", async () => {
+			const registry = createAgentSessionRegistry(() => fakeIntegration());
+			const pendingClientActions = createPendingClientActions();
+			const routes = createAgentRoutes(registry, undefined, pendingClientActions);
+			const base = await listen((req, res) => {
+				void routes.postClientAction(req, res);
+			});
+
+			const response = await fetch(`${base}/api/agent/sessions/sess-1/client-actions/never-registered`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ result: {} }),
+			});
+			expect(response.ok).toBe(true);
+			expect(await response.json()).toEqual({ delivered: false });
+		});
+
+		it("404s when no PendingClientActions was ever given to createAgentRoutes", async () => {
+			const registry = createAgentSessionRegistry(() => fakeIntegration());
+			const routes = createAgentRoutes(registry);
+			const base = await listen((req, res) => {
+				void routes.postClientAction(req, res);
+			});
+
+			const response = await fetch(`${base}/api/agent/sessions/sess-1/client-actions/call-1`, { method: "POST", body: "{}" });
+			expect(response.status).toBe(404);
+		});
 	});
 });

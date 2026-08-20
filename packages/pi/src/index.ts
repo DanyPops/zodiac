@@ -5,3 +5,5 @@ export { createHttpAgentIntegration, createRemoteZodiacAgentSession, type Create
 export { createAgentCommandTool, type CreateAgentCommandToolOptions } from "./agent-command-tool.js";
 export { createListIntegrationsTool, type CreateListIntegrationsToolOptions } from "./list-integrations-tool.js";
 export { createVisualCueVehicleResourceLoader } from "./visual-cue-vehicle-tool.js";
+export type { VisualCueClientPort } from "./list-visual-cues-tool.js";
+export { createHeadlessVisualCueClient, createListVisualCuesTool, createRemoteBrowserVisualCueClient } from "./list-visual-cues-tool.js";
