@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WorkspaceId } from "@zodiac/protocol";
 import type { PendingClientActions } from "@zodiac/server/agent";
 import type { AgentSessionRegistry } from "../agent/agent-session-registry.js";
+import { writeSseFrame } from "./sse-writer.js";
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
 	res.statusCode = status;
@@ -62,7 +63,8 @@ function matchClientAction(pathname: string): { sessionId: string; toolCallId: s
  * conversation another client already started, which is the actual point
  * of zodiacd existing.
  */
-export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[], pendingClientActions?: PendingClientActions) {
+export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[], pendingClientActions?: PendingClientActions, options?: { maxSseBufferedBytes?: number }) {
+	const maxSseBufferedBytes = options?.maxSseBufferedBytes;
 	return {
 		/**
 		 * The Client's own POST-back half of the round trip a tool like
@@ -190,14 +192,25 @@ export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceTo
 			// the same requirement Alef's own RemoteSession solves via a separate
 			// /history fetch before its /events SSE connects (see the "prior art
 			// from ~/Workspace/alef" Papyrus Doc); here it's one channel instead.
+			//
+			// A slow/non-reading client replaying up to MAX_HISTORY_EVENTS (5,000) events in
+			// one tight synchronous loop is exactly the kind of burst sse-writer.ts's own
+			// buffered-bytes cap (not Node's small default highWaterMark) is sized to absorb --
+			// but a genuinely stuck client still must not accumulate history forever, hence the
+			// break the moment a frame reports the connection is already gone.
 			for (const event of registry.history(sessionId)) {
-				res.write(`data: ${JSON.stringify(event)}\n\n`);
+				if (!writeSseFrame(res, event, maxSseBufferedBytes)) return;
 			}
 			const unsubscribeEvent = integration.onEvent((event) => {
-				res.write(`data: ${JSON.stringify(event)}\n\n`);
+				// See sse-writer.ts's own doc comment (grounded in opencode's real 187GB RSS
+				// incident) -- a per-connection close on a slow client, never daemon-wide.
+				if (!writeSseFrame(res, event, maxSseBufferedBytes)) {
+					unsubscribeEvent();
+					unsubscribeExit();
+				}
 			});
 			const unsubscribeExit = integration.onExit((reason) => {
-				res.write(`data: ${JSON.stringify({ type: "session-exited", reason })}\n\n`);
+				if (!writeSseFrame(res, { type: "session-exited", reason }, maxSseBufferedBytes)) return;
 				res.end();
 			});
 			req.on("close", () => {

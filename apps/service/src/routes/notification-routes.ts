@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { EventBus } from "@zodiac/server";
 import type { ApprovalCenter } from "@zodiac/server/approval";
+import { writeSseFrame } from "./sse-writer.js";
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
 	res.statusCode = status;
@@ -23,7 +24,8 @@ function writeJson(res: ServerResponse, status: number, body: unknown): void {
  * POST approve/deny are thin transport wrappers over ApprovalCenter's own already-real,
  * already-tested domain methods -- this file adds zero new domain logic.
  */
-export function createNotificationRoutes(bus: EventBus, approvalCenter: ApprovalCenter) {
+export function createNotificationRoutes(bus: EventBus, approvalCenter: ApprovalCenter, options?: { maxSseBufferedBytes?: number }) {
+	const maxSseBufferedBytes = options?.maxSseBufferedBytes;
 	return {
 		streamNotifications(req: IncomingMessage, res: ServerResponse): void {
 			res.writeHead(200, {
@@ -32,9 +34,11 @@ export function createNotificationRoutes(bus: EventBus, approvalCenter: Approval
 				Connection: "keep-alive",
 			});
 			res.flushHeaders();
-			res.write(`data: ${JSON.stringify({ type: "notifications.snapshot", pending: approvalCenter.pending() })}\n\n`);
+			if (!writeSseFrame(res, { type: "notifications.snapshot", pending: approvalCenter.pending() }, maxSseBufferedBytes)) return;
 			const subscribed = bus.onAny("notification", (message) => {
-				res.write(`data: ${JSON.stringify(message)}\n\n`);
+				// See sse-writer.ts's own doc comment (grounded in opencode's real 187GB RSS
+				// incident) -- a per-connection close on a slow client, never daemon-wide.
+				if (!writeSseFrame(res, message, maxSseBufferedBytes) && subscribed.ok) subscribed.value();
 			});
 			if (!subscribed.ok) {
 				// Bounded per EventBus's own per-(channel, wildcard) listener cap -- fail loudly and

@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import { connect } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
 import { workspaceId } from "@zodiac/protocol";
@@ -219,6 +220,110 @@ describe("createAgentRoutes", () => {
 
 		const response = await fetch(`${base}/api/agent/sessions/nope/events`);
 		expect(response.status).toBe(404);
+	});
+
+	/**
+	 * Grounded in anomalyco/opencode issue #16697's own forensics ("Memory leak forensics: 187GB
+	 * RSS, SSE AsyncQueue as root cause") -- see world-routes.test.ts's own equivalent test for the
+	 * full rationale (raw non-reading socket, res.cork() for deterministic accumulation independent
+	 * of OS buffer sizing, an actively-draining second client proving per-connection isolation).
+	 * Individual ZodiacAgentEvents are fixed-size and independent of each other, matching
+	 * notification-routes.test.ts's own shape rather than world-routes.test.ts's cumulative one.
+	 */
+	it("streamEvents (live tail) destroys a connection whose own buffered bytes exceed the configured cap, and never touches any other connected client", async () => {
+		const integration = fakeIntegration();
+		const registry = createAgentSessionRegistry(() => integration);
+		const maxSseBufferedBytes = 300_000;
+		const routes = createAgentRoutes(registry, undefined, undefined, { maxSseBufferedBytes });
+		let capturedRes: import("node:http").ServerResponse | undefined;
+		const base = await listen((req, res) => {
+			if (!capturedRes) {
+				capturedRes = res;
+				res.cork(); // never uncorked -- see world-routes.test.ts's own doc comment
+			}
+			void routes.streamEvents(req, res);
+		});
+		const id = await registry.create();
+		const url = new URL(base);
+
+		const slowSocket = connect({ host: url.hostname, port: Number(url.port) });
+		await new Promise<void>((resolve, reject) => {
+			slowSocket.once("connect", () => resolve());
+			slowSocket.once("error", reject);
+		});
+		slowSocket.write(`GET /api/agent/sessions/${id}/events HTTP/1.1\r\nHost: ${url.host}\r\nConnection: keep-alive\r\n\r\n`);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		const healthyController = new AbortController();
+		const healthyResponse = await fetch(`${base}/api/agent/sessions/${id}/events`, { signal: healthyController.signal });
+		const healthyReader = healthyResponse.body?.getReader();
+		if (!healthyReader) throw new Error("expected a readable body");
+
+		// 15 independent, fixed-size (~60KB) assistant-message-end events -- comfortably exceeds the
+		// 300KB cap for the never-draining slow client, never once for the actively-draining healthy
+		// one. tool-call-end's own unknown-typed output is the real, concrete unbounded-payload risk
+		// named in this Task's own body (a tool call can legitimately return megabytes, e.g. a large
+		// file read) -- this event type exercises that same size class directly.
+		const bigText = "x".repeat(60_000);
+		for (let index = 0; index < 15; index += 1) {
+			integration.emit({ type: "assistant-message-end", text: bigText });
+			await healthyReader.read();
+		}
+
+		expect(capturedRes?.destroyed).toBe(true);
+
+		integration.emit({ type: "error", message: "after-destroy" });
+		const decoder = new TextDecoder();
+		let received = "";
+		while (!received.includes("after-destroy")) {
+			const next = await healthyReader.read();
+			if (next.done) throw new Error("healthy client's own stream ended unexpectedly");
+			received += decoder.decode(next.value);
+		}
+		expect(received).toContain("after-destroy");
+
+		healthyController.abort();
+		slowSocket.destroy();
+	});
+
+	/**
+	 * The replay-then-tail path's own history loop (registry.history(sessionId), written before a
+	 * live subscription even exists) is a real, distinct write site from the live tail above --
+	 * proves it independently rather than assuming the same guard covers both by construction.
+	 */
+	it("streamEvents (history replay) stops replaying once a late-attaching client's own buffered bytes exceed the configured cap", async () => {
+		const integration = fakeIntegration();
+		const registry = createAgentSessionRegistry(() => integration);
+		const id = await registry.create();
+		// All emitted before any subscriber connects -- accumulated into the session's own history,
+		// replayed synchronously to the very first attaching client in one tight loop.
+		const bigText = "x".repeat(60_000);
+		for (let index = 0; index < 15; index += 1) {
+			integration.emit({ type: "assistant-message-end", text: bigText });
+		}
+
+		const maxSseBufferedBytes = 300_000;
+		const routes = createAgentRoutes(registry, undefined, undefined, { maxSseBufferedBytes });
+		let capturedRes: import("node:http").ServerResponse | undefined;
+		const base = await listen((req, res) => {
+			if (!capturedRes) {
+				capturedRes = res;
+				// The whole point here: the replay loop itself is a single, tight, synchronous burst
+				// against ONE connection -- no separate "healthy" comparison is needed the way the live
+				// tail test above needs one, since a real client reading at a real pace would drain
+				// each frame across real, separate ticks; corking isolates and proves the loop itself
+				// still respects the same per-write cap check, deterministically.
+				res.cork();
+			}
+			void routes.streamEvents(req, res);
+		});
+
+		// Corked from before even the response headers are flushed, so a genuinely destroyed
+		// connection here means fetch() itself never receives a valid HTTP response at all -- a
+		// real, legitimate outcome for a peer that closes before delivering anything, not a bug in
+		// this test's own expectations.
+		await expect(fetch(`${base}/api/agent/sessions/${id}/events`)).rejects.toThrow();
+		expect(capturedRes?.destroyed).toBe(true);
 	});
 
 	describe("postClientAction", () => {

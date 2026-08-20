@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { CommandIntentSchema, parseWithSchema } from "@zodiac/protocol";
 import type { WorldStore } from "@zodiac/server/world";
+import { writeSseFrame } from "./sse-writer.js";
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
 	res.statusCode = status;
@@ -38,7 +39,8 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
  * broadcast channel every attached client subscribes to via WorldStore's
  * own onChange hook.
  */
-export function createWorldRoutes(world: WorldStore) {
+export function createWorldRoutes(world: WorldStore, options?: { maxSseBufferedBytes?: number }) {
+	const maxSseBufferedBytes = options?.maxSseBufferedBytes;
 	return {
 		getWorld(_req: IncomingMessage, res: ServerResponse): void {
 			writeJson(res, 200, world.worldViewModel());
@@ -98,9 +100,12 @@ export function createWorldRoutes(world: WorldStore) {
 			// and gets the current snapshot as its own first frame here so a
 			// late-joining client never has to guess whether it missed anything.
 			res.flushHeaders();
-			res.write(`data: ${JSON.stringify(world.worldViewModel())}\n\n`);
+			if (!writeSseFrame(res, world.worldViewModel(), maxSseBufferedBytes)) return;
 			const unsubscribe = world.onChange((viewModel) => {
-				res.write(`data: ${JSON.stringify(viewModel)}\n\n`);
+				// Falls behind on the World's own broadcast -- see sse-writer.ts's own doc comment
+				// (grounded in opencode's real 187GB RSS incident). This is a per-connection close,
+				// never a daemon-wide one -- every other attached client keeps receiving updates.
+				if (!writeSseFrame(res, viewModel, maxSseBufferedBytes)) unsubscribe();
 			});
 			req.on("close", () => unsubscribe());
 		},
