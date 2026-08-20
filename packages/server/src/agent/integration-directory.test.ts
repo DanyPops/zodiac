@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { integrationId, type IntegrationDefinition } from "@zodiac/protocol";
-import { listIntegrations, MAX_LISTED_INTEGRATIONS, MAX_SUMMARY_BYTES } from "./integration-directory.js";
+import { integrationId, workspaceId, type IntegrationDefinition } from "@zodiac/protocol";
+import { deriveAgentSpace, describeIntegrationCatalog, listIntegrations, MAX_LISTED_INTEGRATIONS, MAX_SUMMARY_BYTES, summarizeWorkspaces } from "./integration-directory.js";
 
 function integration(id: string, capabilities: { renderable?: boolean; hasApi?: boolean } = {}): IntegrationDefinition {
 	return { id: integrationId(id), title: id, capabilities: { renderable: capabilities.renderable ?? false, hasApi: capabilities.hasApi ?? true } };
@@ -51,5 +51,59 @@ describe("listIntegrations -- read-only Integration directory for the agent's ow
 		expect(result.undocked.items[0]!.summary).toContain("renders content");
 		expect(result.undocked.items[0]!.summary).toContain("exposes an API");
 		expect(result.undocked.items[1]!.summary).not.toContain("renders content");
+	});
+});
+
+describe("describeIntegrationCatalog -- backs the reshaped, Workspace-independent list_integrations", () => {
+	it("reports the full catalog with no docked/undocked partition at all", () => {
+		const a = integration("a");
+		const b = integration("b");
+		const result = describeIntegrationCatalog([a, b]);
+		expect(result.items.map((entry) => entry.id).sort()).toEqual([a.id, b.id].sort());
+	});
+
+	it("caps and marks truncation exactly like listIntegrations' own buckets do -- same underlying bound, not a separate one", () => {
+		const many = Array.from({ length: MAX_LISTED_INTEGRATIONS + 3 }, (_, index) => integration(`cat${index}`));
+		const result = describeIntegrationCatalog(many);
+		expect(result.items).toHaveLength(MAX_LISTED_INTEGRATIONS);
+		expect(result.truncated).toBe(true);
+	});
+});
+
+describe("deriveAgentSpace -- backs list_agentspace, AgentSpace subset Workspace always by construction", () => {
+	it("reports only docked Integrations that also declare hasApi -- the same gate authorizeAgentCommand/deriveWorkspaceToolIds already apply", () => {
+		const callable = integration("callable", { hasApi: true });
+		const renderOnly = integration("render-only", { hasApi: false, renderable: true });
+		const result = deriveAgentSpace([callable, renderOnly]);
+		expect(result.items.map((entry) => entry.id)).toEqual([callable.id]);
+	});
+
+	it("reports nothing when every docked Integration is render-only -- a real, honest empty AgentSpace, not an error", () => {
+		const result = deriveAgentSpace([integration("a", { hasApi: false })]);
+		expect(result.items).toEqual([]);
+		expect(result.totalCount).toBe(0);
+	});
+
+	it("never reports an Integration that wasn't in the docked set handed to it -- this function only ever narrows, never widens", () => {
+		const docked = [integration("docked-and-callable", { hasApi: true })];
+		const result = deriveAgentSpace(docked);
+		expect(result.items.map((entry) => entry.id)).toEqual(["docked-and-callable"]);
+	});
+});
+
+describe("summarizeWorkspaces -- backs list_workspaces, global, not scoped to any one Workspace", () => {
+	it("reports id/title only, for every real Workspace given", () => {
+		const result = summarizeWorkspaces([
+			{ id: workspaceId("ws-a"), title: "Alpha" },
+			{ id: workspaceId("ws-b"), title: "Beta" },
+		]);
+		expect(result).toEqual([
+			{ id: workspaceId("ws-a"), title: "Alpha" },
+			{ id: workspaceId("ws-b"), title: "Beta" },
+		]);
+	});
+
+	it("reports an empty list for a World with no Workspaces at all -- a real, honest empty answer", () => {
+		expect(summarizeWorkspaces([])).toEqual([]);
 	});
 });

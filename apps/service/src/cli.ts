@@ -8,7 +8,7 @@ import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodia
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
 import { registerVisualCueOperations } from "@zodiac/server/vehicle";
 import { createInMemoryToolRegistrar, createPendingClientActions, watchWorkspaceToolGrants, type PendingClientActions, type ToolContribution } from "@zodiac/server/agent";
-import { createAgentCommandTool, createListIntegrationsTool, createListVisualCuesTool, createRemoteBrowserVisualCueClient, createVisualCueVehicleResourceLoader, createZodiacAgentSession } from "@zodiac/pi";
+import { createAgentCommandTool, createListAgentSpaceTool, createListIntegrationsTool, createListVisualCuesTool, createListWorkspaceTool, createListWorkspacesTool, createRemoteBrowserVisualCueClient, createVisualCueVehicleResourceLoader, createZodiacAgentSession } from "@zodiac/pi";
 import { resolveZodiacAgentDir } from "@zodiac/server/pi-agent-dir";
 import { HmacApprovalAuthority } from "@danypops/vehicle-server/approval-authority";
 import { VehicleRegistry } from "@danypops/vehicle-server";
@@ -85,15 +85,22 @@ function createDaemonAgentIntegrationFactory(
 		// Read-only discovery, no Workspace/grant scoping at all (see
 		// createListVisualCuesTool's own doc comment -- no real cue-target user
 		// story is Workspace-scoped) -- active in both branches below, the same
-		// reasoning list_integrations already established for its own read-only
-		// posture.
+		// reasoning list_integrations/list_workspaces already establish for their
+		// own genuinely global, Workspace-independent read-only posture (see the
+		// "Reshape list_integrations" Papyrus Task). list_workspace/list_agentspace
+		// stay Workspace-branch-only below, deliberately -- both reveal one specific
+		// Workspace's own docked state, which a cwd-only, non-Workspace-bound
+		// session has no other access to either; same conservative scoping
+		// zodiac_dispatch_command/propose_visual_cue already get.
 		const listVisualCuesTool = createListVisualCuesTool((toolCallId) => createRemoteBrowserVisualCueClient(pendingClientActions, toolCallId));
+		const listIntegrationsTool = createListIntegrationsTool({ getAllIntegrations });
+		const listWorkspacesTool = createListWorkspacesTool({ daemonUrl: getDaemonBaseUrl() });
 		if (!workspaceId) {
 			const { integration } = await createZodiacAgentSession({
 				cwd: cwd ?? process.cwd(),
 				mode: "rpc",
-				initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, listVisualCuesTool.name] : undefined,
-				customTools: [listVisualCuesTool],
+				initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, listVisualCuesTool.name, listIntegrationsTool.name, listWorkspacesTool.name] : undefined,
+				customTools: [listVisualCuesTool, listIntegrationsTool, listWorkspacesTool],
 			});
 			return integration;
 		}
@@ -103,10 +110,11 @@ function createDaemonAgentIntegrationFactory(
 			sessionPolicy: { allowed: true },
 			getIntegration,
 		});
-		// Read-only, so it carries no grant/session-policy check of its own --
+		// Read-only, so they carry no grant/session-policy check of their own --
 		// dbed439e's own point is that seeing what exists is a strictly weaker
 		// capability than acting on it (zodiac_dispatch_command already gates that).
-		const listTool = createListIntegrationsTool({ daemonUrl: getDaemonBaseUrl(), getAllIntegrations });
+		const listWorkspaceTool = createListWorkspaceTool({ daemonUrl: getDaemonBaseUrl(), getAllIntegrations });
+		const listAgentSpaceTool = createListAgentSpaceTool({ daemonUrl: getDaemonBaseUrl(), getAllIntegrations });
 		// propose_visual_cue -- the first Zodiac agent tool built the real Vehicle way
 		// (registerVehicleTools), projected fresh per session (tool registration is inherently
 		// per-ExtensionAPI) but backed by the one shared, daemon-wide VehicleRegistry/
@@ -121,12 +129,13 @@ function createDaemonAgentIntegrationFactory(
 			resourceLoader,
 			// Every custom tool must stay active even when initialActiveToolNames is [] (zero docked
 			// Integrations) -- zodiac_dispatch_command is the trusted, per-call-authorized escape hatch
-			// (including surface.dock itself); list_integrations is how the agent discovers that hatch
-			// even has anything to dock in the first place; propose_visual_cue is gated by Vehicle's own
-			// Approval Gate, not by this Workspace tool grant, but still needs to be reachable at all;
-			// list_visual_cues is the same read-only, Workspace-independent posture as list_integrations.
-			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listTool.name, listVisualCuesTool.name, "propose_visual_cue"] : undefined,
-			customTools: [dispatchTool, listTool, listVisualCuesTool],
+			// (including surface.dock itself); list_workspace/list_agentspace are how the agent discovers
+			// what's docked/callable there even before anything is; propose_visual_cue is gated by
+			// Vehicle's own Approval Gate, not by this Workspace tool grant, but still needs to be
+			// reachable at all; list_visual_cues/list_integrations/list_workspaces are the same
+			// read-only, Workspace-independent posture.
+			initialActiveToolNames: initialActiveToolNames !== undefined ? [...initialActiveToolNames, dispatchTool.name, listWorkspaceTool.name, listAgentSpaceTool.name, listVisualCuesTool.name, listIntegrationsTool.name, listWorkspacesTool.name, "propose_visual_cue"] : undefined,
+			customTools: [dispatchTool, listWorkspaceTool, listAgentSpaceTool, listVisualCuesTool, listIntegrationsTool, listWorkspacesTool],
 		});
 		return integration;
 	};

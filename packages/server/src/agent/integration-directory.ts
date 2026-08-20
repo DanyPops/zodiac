@@ -1,5 +1,5 @@
 import { isVehicleCredentialFieldName } from "@danypops/vehicle-core";
-import type { IntegrationDefinition, IntegrationId } from "@zodiac/protocol";
+import type { IntegrationDefinition, IntegrationId, WorkspaceId } from "@zodiac/protocol";
 
 /** Caps how many Integrations one list_integrations call reports -- bounds the tool's own output, not a UI pagination concern. */
 export const MAX_LISTED_INTEGRATIONS = 50;
@@ -65,10 +65,44 @@ function toBucket(definitions: readonly IntegrationDefinition[]): IntegrationBuc
 	return { items, truncated: definitions.length > MAX_LISTED_INTEGRATIONS, totalCount: definitions.length };
 }
 
-/** Pure partition + redaction + capping -- no daemon/HTTP dependency, so this is unit-testable in isolation from list-integrations-tool.ts's own fetch plumbing. */
+/**
+ * Pure partition + redaction + capping -- no daemon/HTTP dependency, so this
+ * is unit-testable in isolation from list-workspace-tool.ts's own fetch
+ * plumbing. Backs `list_workspace` -- see the "Reshape list_integrations"
+ * Papyrus Task for why this moved out of a Workspace-scoped
+ * `list_integrations` (this repository's own real domain model: Workspace
+ * = everything docked, regardless of hasApi).
+ */
 export function listIntegrations(all: readonly IntegrationDefinition[], dockedIds: ReadonlySet<IntegrationId>): ListIntegrationsResult {
 	const docked: IntegrationDefinition[] = [];
 	const undocked: IntegrationDefinition[] = [];
 	for (const definition of all) (dockedIds.has(definition.id) ? docked : undocked).push(definition);
 	return { docked: toBucket(docked), undocked: toBucket(undocked) };
+}
+
+/** Backs the reshaped, Workspace-independent `list_integrations`: the full Integration catalog this Zodiac install knows about, no docked/undocked partition at all -- that partition is now `list_workspace`'s own job. */
+export function describeIntegrationCatalog(all: readonly IntegrationDefinition[]): IntegrationBucket {
+	return toBucket(all);
+}
+
+/**
+ * Backs `list_agentspace`: the strict subset of a Workspace's docked
+ * Integrations the agent can actually act on -- gated on `capabilities.hasApi`,
+ * the exact same check `deriveWorkspaceToolIds` (tool-grant.ts) and
+ * `authorizeAgentCommand` (authorize-command.ts) already apply. AgentSpace
+ * subset Workspace always, by construction: this function only ever removes
+ * entries from `docked`, never adds any.
+ */
+export function deriveAgentSpace(docked: readonly IntegrationDefinition[]): IntegrationBucket {
+	return toBucket(docked.filter((definition) => definition.capabilities.hasApi));
+}
+
+export interface WorkspaceSummary {
+	readonly id: WorkspaceId;
+	readonly title: string;
+}
+
+/** Backs `list_workspaces`: which Workspaces exist at all, global, not scoped to any one of them -- id/title only, the same minimal shape a Workspace-picker UI needs, never the full docked-Surface tree. */
+export function summarizeWorkspaces(workspaces: readonly { readonly id: WorkspaceId; readonly title: string }[]): readonly WorkspaceSummary[] {
+	return workspaces.map((workspace) => ({ id: workspace.id, title: workspace.title }));
 }

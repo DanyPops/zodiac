@@ -16,10 +16,14 @@ const extensionPath = resolve(packageRoot, "src/fixtures/agent-command-extension
 type ZodiacdProcess = ChildProcessByStdio<null, Readable, Readable>;
 
 /**
- * Test 5 of dbed439e's own plan: a real Pi process, scripted so a request
- * implying a missing capability leads it to call list_integrations, proven
- * against a real spawned daemon -- reuses agent-command-tool.process.test.ts's
- * own fixture extension (it already registers both tools) and spawn helpers.
+ * Test 5 of dbed439e's own plan, retargeted at list_workspace (see the
+ * "Reshape list_integrations" Papyrus Task -- the docked/undocked partition
+ * this test proves moved there unchanged; the reshaped, global
+ * list_integrations no longer takes a workspaceId at all): a real Pi
+ * process, scripted so a request implying a missing capability leads it to
+ * call list_workspace, proven against a real spawned daemon -- reuses
+ * agent-command-tool.process.test.ts's own fixture extension (it registers
+ * every tool) and spawn helpers.
  */
 async function waitForZodiacdReady(child: ZodiacdProcess): Promise<string> {
 	return new Promise((resolveReady, reject) => {
@@ -94,12 +98,12 @@ function spawnAgent(options: { daemonUrl: string; integrations: unknown[]; scrip
 			ZODIAC_AGENT_TOOL_DAEMON_URL: options.daemonUrl,
 			ZODIAC_AGENT_TOOL_GRANT: JSON.stringify({ workspaceId: "ws-agent", allowedCommandTypes: [] }),
 			ZODIAC_AGENT_TOOL_INTEGRATIONS: JSON.stringify(options.integrations),
-			[SCRIPT_ENV_VAR]: encodeFauxScript([{ type: "toolCall", name: "list_integrations", arguments: options.scriptArgs }]),
+			[SCRIPT_ENV_VAR]: encodeFauxScript([{ type: "toolCall", name: "list_workspace", arguments: options.scriptArgs }]),
 		},
 	});
 }
 
-describe("Agent Integration tool: list_integrations against a real daemon and a real Pi process", () => {
+describe("Agent Integration tool: list_workspace against a real daemon and a real Pi process", () => {
 	it("a real Pi tool call reports the real docked/undocked split for a real Workspace, and the fauxProvider's own generated reply text is never inspected by this test", async () => {
 		const url = await startDaemon();
 		await humanApply(url, { type: "workspace.create", workspaceId: "ws-agent", title: "Agent Workspace" });

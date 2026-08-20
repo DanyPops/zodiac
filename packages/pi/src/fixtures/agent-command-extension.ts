@@ -2,6 +2,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { workspaceId, type CommandIntent, type IntegrationDefinition } from "@zodiac/protocol";
 import { createAgentCommandTool } from "../agent-command-tool.js";
 import { createListIntegrationsTool } from "../list-integrations-tool.js";
+import { createListWorkspaceTool } from "../list-workspace-tool.js";
+import { createListWorkspacesTool } from "../list-workspaces-tool.js";
+import { createListAgentSpaceTool } from "../list-agentspace-tool.js";
 
 /**
  * Test-only wiring shim: registers the real zodiac_dispatch_command tool
@@ -26,5 +29,8 @@ export default function (pi: ExtensionAPI): void {
 		getIntegration: (id) => integrationsRaw.find((definition) => definition.id === id),
 	});
 	pi.registerTool(tool);
-	pi.registerTool(createListIntegrationsTool({ daemonUrl, getAllIntegrations: () => integrationsRaw }));
+	pi.registerTool(createListIntegrationsTool({ getAllIntegrations: () => integrationsRaw }));
+	pi.registerTool(createListWorkspacesTool({ daemonUrl }));
+	pi.registerTool(createListWorkspaceTool({ daemonUrl, getAllIntegrations: () => integrationsRaw }));
+	pi.registerTool(createListAgentSpaceTool({ daemonUrl, getAllIntegrations: () => integrationsRaw }));
 }

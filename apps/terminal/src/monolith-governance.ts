@@ -29,12 +29,17 @@ export interface MonolithGovernance {
  * `createWorldStore()` with no Approval Gate and no Vehicle wiring gave an
  * embedded agent session an ungated posture nobody chose on purpose.
  *
- * Deliberately does NOT wire `zodiac_dispatch_command`/`list_integrations`
- * (createAgentCommandTool/createListIntegrationsTool) -- both are hardwired
- * to an HTTP `daemonUrl` (see packages/pi/src/agent-command-tool.ts's own
- * `CreateAgentCommandToolOptions`), which Monolith mode has none of by
- * definition (zero listening sockets, zero network, per this task's own
- * three-mode table). `propose_visual_cue`'s own wiring
+ * Deliberately does NOT wire `zodiac_dispatch_command`
+ * (createAgentCommandTool) -- it's hardwired to an HTTP `daemonUrl` (see
+ * packages/pi/src/agent-command-tool.ts's own `CreateAgentCommandToolOptions`),
+ * which Monolith mode has none of by definition (zero listening sockets,
+ * zero network, per this task's own three-mode table). `list_integrations`
+ * itself no longer has this constraint after the "Reshape list_integrations"
+ * Papyrus Task -- it's now a pure, daemonUrl-free function of an injected
+ * `getAllIntegrations()` callback -- but Monolith mode still doesn't wire it
+ * here, for a different, real reason: this process has no Integration
+ * catalog source of its own to inject (no Workspace/WorldStore-derived
+ * IntegrationDefinition list exists in Monolith mode today). `propose_visual_cue`'s own wiring
  * (`createVisualCueVehicleResourceLoader`) has no such constraint -- it
  * already takes a `LocalVehicleClient` directly, an ordinary in-process
  * object, never an HTTP endpoint -- which is exactly why it's the one Vehicle

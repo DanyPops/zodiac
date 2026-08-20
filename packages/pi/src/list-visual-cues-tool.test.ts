@@ -3,6 +3,11 @@ import { createPendingClientActions } from "@zodiac/server/agent";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHeadlessVisualCueClient, createListVisualCuesTool, createRemoteBrowserVisualCueClient } from "./list-visual-cues-tool.js";
 
+/** See agent-command-tool.test.ts's own doc comment for why this shape/cast exists. */
+function run(toolDefinition: { execute: unknown }, toolCallId: string, params: unknown): Promise<{ content: { type: string; text: string }[]; details: unknown }> {
+	return (toolDefinition.execute as (toolCallId: string, params: unknown, signal: undefined, onUpdate: undefined, ctx: unknown) => Promise<{ content: { type: string; text: string }[]; details: unknown }>)(toolCallId, params, undefined, undefined, {});
+}
+
 describe("createHeadlessVisualCueClient", () => {
 	const unregisters: Array<() => void> = [];
 	afterEach(() => {
@@ -36,7 +41,7 @@ describe("list_visual_cues (the Pi tool)", () => {
 		unregisters.push(registerCue({ kind: "gallery-category", id: "tickets" }, { cue: "pulse", description: "Try Tickets" }));
 		const tool = createListVisualCuesTool(() => createHeadlessVisualCueClient());
 
-		const result = await tool.execute("call-1", {});
+		const result = await run(tool, "call-1", {});
 
 		expect(result.details).toMatchObject({ observed: true });
 		const details = result.details as { cues: readonly { id: string }[] };
@@ -47,7 +52,7 @@ describe("list_visual_cues (the Pi tool)", () => {
 		const pendingClientActions = createPendingClientActions();
 		const tool = createListVisualCuesTool((toolCallId) => createRemoteBrowserVisualCueClient(pendingClientActions, toolCallId, 10));
 
-		const result = await tool.execute("call-2", {});
+		const result = await run(tool, "call-2", {});
 
 		expect(result.details).toEqual({ observed: false, cues: [] });
 	});

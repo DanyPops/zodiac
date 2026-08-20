@@ -4,6 +4,9 @@ export { createZodiacAgentSession, type CreateZodiacAgentSessionOptions, type Zo
 export { createHttpAgentIntegration, createRemoteZodiacAgentSession, type CreateRemoteZodiacAgentSessionOptions, type HttpAgentIntegrationOptions, type RemoteZodiacAgentSession } from "./http-agent-integration.js";
 export { createAgentCommandTool, type CreateAgentCommandToolOptions } from "./agent-command-tool.js";
 export { createListIntegrationsTool, type CreateListIntegrationsToolOptions } from "./list-integrations-tool.js";
+export { createListWorkspacesTool, type CreateListWorkspacesToolOptions } from "./list-workspaces-tool.js";
+export { createListWorkspaceTool, type CreateListWorkspaceToolOptions } from "./list-workspace-tool.js";
+export { createListAgentSpaceTool, type CreateListAgentSpaceToolOptions } from "./list-agentspace-tool.js";
 export { createVisualCueVehicleResourceLoader } from "./visual-cue-vehicle-tool.js";
 export type { VisualCueClientPort } from "./list-visual-cues-tool.js";
 export { createHeadlessVisualCueClient, createListVisualCuesTool, createRemoteBrowserVisualCueClient } from "./list-visual-cues-tool.js";
