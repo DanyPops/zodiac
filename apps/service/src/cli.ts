@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { acquireDaemonLock, LOOPBACK_HOST, releaseDaemonLock, removeDaemonHandle, writeDaemonHandle } from "@danypops/vehicle-server/paths";
 import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
 import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodiac/server";
@@ -146,6 +147,29 @@ async function loadOrCreateWorld(snapshotPort: ReturnType<typeof createJsonFileS
 async function main(): Promise<void> {
 	const args = parseZodiacdArgs(process.argv.slice(2));
 	const stateDir = args.stateDir ?? resolveZodiacServiceStateDir();
+
+	// Scoped to this instance's own stateDir, not a single shared machine-wide
+	// XDG location the way @danypops/vehicle-server/paths's own resolveDaemonPaths
+	// assumes -- zodiacd is legitimately multi-instance by design (every test in
+	// this repo already spawns several concurrent zodiacd processes, each with
+	// its own --state-dir; daemon-multi-client.test.ts and
+	// daemon-attach.pty.test.ts both rely on this). The real invariant worth
+	// enforcing is narrower than "one zodiacd on this machine, ever": it's "at
+	// most one zodiacd writing to *this* World snapshot at a time" -- exactly
+	// what scoping both the lock and the handle to stateDir itself protects,
+	// while still reusing writeDaemonHandle/readDaemonHandle/acquireDaemonLock's
+	// own atomic (write-then-rename / O_CREAT|O_EXCL), validated-shape
+	// implementations rather than reinventing them (see the "zodiacd adopts the
+	// ecosystem's real daemon handle-file + single-instance-lock convention"
+	// Papyrus Task).
+	const handlePath = join(stateDir, "daemon.json");
+	const lockPath = join(stateDir, "daemon.lock");
+	const lock = acquireDaemonLock(lockPath);
+	if (!lock.acquired) {
+		console.error(`[zodiacd] another zodiacd instance already holds ${stateDir} (pid ${lock.holderPid ?? "unknown"}) -- refusing to start a second one against the same state`);
+		process.exit(1);
+	}
+
 	const sessionsRoot = args.sessionsRoot ?? DEFAULT_SESSIONS_ROOT;
 	const snapshotPort = createJsonFileSnapshotPort({ filePath: join(stateDir, "world.json") });
 
@@ -222,10 +246,37 @@ async function main(): Promise<void> {
 		approvalCenter,
 	});
 	daemonBaseUrl = service.baseUrl;
+
+	// A real, machine-readable readiness signal -- the actual mechanism the
+	// ecosystem already uses (papyrus/pipes/web-spider/jittor) for "is this
+	// daemon alive, and what's its port" instead of a caller parsing stdout.
+	// Written BEFORE the human-facing console.log below, deliberately: a
+	// caller that still only knows to watch stdout (see the "zodiacd adopts
+	// the ecosystem's real daemon handle-file..." Papyrus Task's own
+	// migration-in-progress callers) must never observe "listening on" before
+	// the handle file genuinely exists -- confirmed as a real, reproduced race
+	// during this task's own development, not a hypothetical. DaemonHandle's
+	// own `host` field is typed to the literal LOOPBACK_HOST ("127.0.0.1") --
+	// every @danypops daemon binds loopback-only by hard invariant (see
+	// paths.ts's own module doc comment), but zodiacd deliberately allows
+	// `--host 0.0.0.0` (with an explicit warning above). Writing a handle
+	// claiming "127.0.0.1" while actually bound elsewhere would be a real lie
+	// in the one file this convention promises is trustworthy -- skip it
+	// entirely in that case rather than force a false value through a type
+	// assertion.
+	const { hostname: handleHost, port: handlePort } = new URL(service.baseUrl);
+	if (handleHost === LOOPBACK_HOST) {
+		writeDaemonHandle(handlePath, { host: LOOPBACK_HOST, port: Number(handlePort), pid: process.pid });
+	} else {
+		console.error(`[zodiacd] not writing a daemon handle file: bound to ${handleHost}, not ${LOOPBACK_HOST} -- the handle-file convention only describes loopback daemons`);
+	}
+
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
 
 	const shutdown = (signal: string) => {
 		console.log(`[zodiacd] ${signal} received, shutting down`);
+		removeDaemonHandle(handlePath);
+		releaseDaemonLock(lockPath);
 		void service.close().then(() => process.exit(0));
 	};
 	process.on("SIGINT", () => shutdown("SIGINT"));

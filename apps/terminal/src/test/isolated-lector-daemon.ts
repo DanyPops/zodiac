@@ -1,10 +1,10 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { connectLectorClientAt, type LectorClient, resolveLectorPaths } from "@danypops/lector";
 import { readDaemonHandle } from "@danypops/vehicle-server/paths";
+import { spawnManagedProcess, type ManagedProcess } from "@danypops/pi-process-harness";
 
 const require = createRequire(import.meta.url);
 
@@ -13,6 +13,14 @@ const require = createRequire(import.meta.url);
  * which only Bun provides -- see startLectorDaemon's own "requires the Bun runtime" failure
  * under Node. Zodiac's own test runner is Node/Vitest, so a real isolated daemon here must
  * be a genuine separate Bun process, exactly like a real deployment -- never in-process.
+ *
+ * Spawn/bounded-stderr/graceful-shutdown lifecycle is @danypops/pi-process-harness's own
+ * spawnManagedProcess, not hand-rolled here -- this file used to independently reimplement
+ * exactly that (a real, found duplication -- see the "zodiacd adopts the ecosystem's real
+ * daemon handle-file..." Papyrus Task). Readiness stays a handle/token-file poll raced
+ * against the process's own early exit (spawnCompanionDaemon's own generic poll loop
+ * doesn't race an early exit at all -- it would wait out the full timeout on a crash instead
+ * of failing fast with the real stderr, a real regression this keeps deliberately avoiding).
  */
 function lectorCliPath(): string {
 	const packageJsonPath = require.resolve("@danypops/lector/package.json");
@@ -37,26 +45,27 @@ export async function startIsolatedLectorDaemon(): Promise<{ client: LectorClien
 	const env = { ...process.env, XDG_DATA_HOME: root, XDG_STATE_HOME: root, XDG_RUNTIME_DIR: root, XDG_CONFIG_HOME: root };
 	const paths = resolveLectorPaths({ env });
 
-	let child: ChildProcess | undefined;
-	let stderr = "";
+	let child: ManagedProcess | undefined;
 	try {
-		child = spawn("bun", [lectorCliPath(), "serve", "--dynamic-workspaces"], { env, stdio: ["ignore", "ignore", "pipe"] });
-		child.stderr?.on("data", (chunk: Buffer) => {
-			stderr += chunk.toString();
+		child = spawnManagedProcess({ command: "bun", args: [lectorCliPath(), "serve", "--dynamic-workspaces"], env });
+		// A real exit later (e.g. this daemon's own stop() killing it after the race below
+		// already settled the other way) would otherwise reject with no listener left --
+		// swallowed here, not on `exited` itself, so the race below still sees the real
+		// rejection if the process exits *before* readiness.
+		const exited = child.waitForExit().then((code) => {
+			throw new Error(`Lector daemon exited early (code ${code}): ${child?.stderr}`);
 		});
-		const exited = new Promise<never>((_resolveExit, rejectExit) => {
-			child?.once("exit", (code) => rejectExit(new Error(`Lector daemon exited early (code ${code}): ${stderr}`)));
-		});
+		exited.catch(() => {});
 		await Promise.race([waitFor(() => existsSync(paths.handle) && existsSync(paths.token), 15_000, "the Lector daemon handle/token files"), exited]);
 	} catch (error) {
-		child?.kill();
+		await child?.dispose();
 		rmSync(root, { recursive: true, force: true });
 		throw error;
 	}
 
 	const handle = readDaemonHandle(paths.handle);
 	if (!handle) {
-		child.kill();
+		await child.dispose();
 		rmSync(root, { recursive: true, force: true });
 		throw new Error("Lector daemon wrote a handle file that could not be read back");
 	}
@@ -64,8 +73,7 @@ export async function startIsolatedLectorDaemon(): Promise<{ client: LectorClien
 	return {
 		client: connectLectorClientAt(`http://${handle.host}:${handle.port}`, token),
 		stop: async () => {
-			child?.kill();
-			await new Promise<void>((resolveStop) => child?.once("exit", () => resolveStop()));
+			await child?.dispose();
 			rmSync(root, { recursive: true, force: true });
 		},
 	};

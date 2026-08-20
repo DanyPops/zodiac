@@ -1,12 +1,9 @@
-import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Readable } from "node:stream";
+import { spawnManagedProcess, type ManagedProcess } from "@danypops/pi-process-harness";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-
-type ZodiacdProcess = ChildProcessByStdio<null, Readable, Readable>;
 
 /**
  * The one test in this repo that actually proves zodiacd's whole reason for
@@ -16,50 +13,44 @@ type ZodiacdProcess = ChildProcessByStdio<null, Readable, Readable>;
  * connected in parallel, changing state through one and observing it through
  * another. Mirrors apps/terminal's own *.pty.test.ts precedent of spawning the
  * real built binary rather than exercising route handlers in-process.
+ *
+ * Spawn/bounded-stderr/graceful-shutdown lifecycle is @danypops/pi-process-harness's
+ * own spawnManagedProcess, not hand-rolled here -- this file used to
+ * independently reimplement exactly that (a real, found duplication -- see
+ * the "zodiacd adopts the ecosystem's real daemon handle-file..." Papyrus Task).
  */
 
-let daemon: ZodiacdProcess;
+let daemon: ManagedProcess;
 let baseUrl: string;
 let stateDir: string;
 
-async function waitForReady(child: ZodiacdProcess): Promise<string> {
+async function waitForReady(managedProcess: ManagedProcess): Promise<string> {
 	return new Promise((resolve, reject) => {
 		let stdout = "";
-		let stderr = "";
-		const onData = (chunk: Buffer) => {
+		const unsubscribe = managedProcess.onStdout((chunk) => {
 			stdout += chunk.toString("utf8");
-			const match = /listening on (http:\/\/\S+)/.exec(stdout);
-			const url = match?.[1];
+			const url = /listening on (http:\/\/\S+)/.exec(stdout)?.[1];
 			if (url) {
-				child.stdout.off("data", onData);
+				unsubscribe();
 				resolve(url);
 			}
-		};
-		child.stdout.on("data", onData);
-		child.stderr.on("data", (chunk: Buffer) => {
-			stderr += chunk.toString("utf8");
 		});
-		child.once("exit", (code) => reject(new Error(`zodiacd exited early (code ${code}) before reporting ready.\nstderr: ${stderr}`)));
-		child.once("error", reject);
-		setTimeout(() => reject(new Error(`zodiacd did not report ready within 15s.\nstdout: ${stdout}\nstderr: ${stderr}`)), 15_000);
+		void managedProcess.waitForExit().then((code) => {
+			if (!stdout.includes("listening on")) reject(new Error(`zodiacd exited early (code ${code}) before reporting ready.\nstderr: ${managedProcess.stderr}`));
+		});
+		setTimeout(() => reject(new Error(`zodiacd did not report ready within 15s.\nstdout: ${stdout}\nstderr: ${managedProcess.stderr}`)), 15_000);
 	});
 }
 
 beforeAll(async () => {
 	stateDir = await mkdtemp(join(tmpdir(), "zodiacd-multi-client-"));
 	const cli = new URL("../dist/cli.js", import.meta.url).pathname;
-	daemon = spawn(process.execPath, [cli, "--port", "0", "--host", "127.0.0.1", "--state-dir", stateDir, "--enable-terminal"], { stdio: ["ignore", "pipe", "pipe"] });
+	daemon = spawnManagedProcess({ command: process.execPath, args: [cli, "--port", "0", "--host", "127.0.0.1", "--state-dir", stateDir, "--enable-terminal"] });
 	baseUrl = await waitForReady(daemon);
 }, 20_000);
 
 afterAll(async () => {
-	if (daemon && !daemon.killed) {
-		daemon.kill("SIGTERM");
-		await new Promise<void>((resolve) => {
-			daemon.once("exit", () => resolve());
-			setTimeout(resolve, 2000);
-		});
-	}
+	await daemon?.dispose();
 	await rm(stateDir, { recursive: true, force: true });
 });
 
