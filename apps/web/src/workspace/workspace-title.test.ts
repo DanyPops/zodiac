@@ -66,6 +66,7 @@ function fakeClient(): PiClient & { emit(event: ZodiacAgentEvent): void } {
 		createSession: vi.fn(async () => "naming-session-1"),
 		sendPrompt: vi.fn(async () => {}),
 		abort: vi.fn(async () => {}),
+		postClientAction: vi.fn(async () => {}),
 		streamEvents: vi.fn((_sessionId, onEvent) => {
 			listener = onEvent;
 			return () => {

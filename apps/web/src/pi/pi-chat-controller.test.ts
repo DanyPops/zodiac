@@ -10,6 +10,7 @@ function fakeClient(): PiClient & { emit(event: ZodiacAgentEvent): void } {
 		createSession: vi.fn(async () => "session-1"),
 		sendPrompt: vi.fn(async () => {}),
 		abort: vi.fn(async () => {}),
+		postClientAction: vi.fn(async () => {}),
 		streamEvents: vi.fn((_sessionId, onEvent) => {
 			listener = onEvent;
 			return () => {
@@ -95,6 +96,18 @@ describe("createPiChatController", () => {
 
 		client.emit({ type: "tool-call-end", toolCallId: "call_1", toolName: "bash", output: { output: "ok" }, isError: false });
 		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "tool-call", response: { output: "ok" } });
+	});
+
+	it("calls onToolCall with the real sessionId for every tool-call-start event -- generic, never inspects toolName itself", async () => {
+		const client = fakeClient();
+		const onToolCall = vi.fn();
+		const controller = createPiChatController(client, { onToolCall });
+		controller.sendMessage("hi");
+		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
+
+		client.emit({ type: "tool-call-start", toolCallId: "call_1", toolName: "list_visual_cues", input: {} });
+
+		expect(onToolCall).toHaveBeenCalledWith({ sessionId: "session-1", toolCallId: "call_1", toolName: "list_visual_cues", input: {} });
 	});
 
 	it("surfaces an error event, clearing busy", async () => {

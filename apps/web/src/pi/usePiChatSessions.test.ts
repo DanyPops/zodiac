@@ -18,6 +18,7 @@ function fakeMultiSessionClient(): PiClient & { emit(sessionId: string, event: Z
 		}),
 		sendPrompt: vi.fn(async () => {}),
 		abort: vi.fn(async () => {}),
+		postClientAction: vi.fn(async () => {}),
 		streamEvents: vi.fn((sessionId, onEvent) => {
 			listeners.set(sessionId, onEvent);
 			return () => listeners.delete(sessionId);

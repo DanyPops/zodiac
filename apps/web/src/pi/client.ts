@@ -18,6 +18,17 @@ export interface PiClient {
 	/** Subscribes to a session's live event stream; returns an unsubscribe function that closes the underlying connection. */
 	streamEvents: (sessionId: string, onEvent: (event: ZodiacAgentEvent) => void, onError?: (error: unknown) => void) => () => void;
 	abort: (sessionId: string, signal?: AbortSignal) => Promise<void>;
+	/**
+	 * The Client's own POST-back half of the round trip a tool like
+	 * list_visual_cues depends on (see PendingClientActions on the daemon
+	 * side) -- reports `result` for the given `toolCallId`, observed via a
+	 * real tool-call-start SSE event on this same session's own stream.
+	 * Never throws on a stale/late/duplicate post (the daemon's own route
+	 * already treats that as a real, expected no-op, not an error) -- but
+	 * does throw on a genuine transport failure, same convention as every
+	 * other method here.
+	 */
+	postClientAction: (sessionId: string, toolCallId: string, result: unknown, signal?: AbortSignal) => Promise<void>;
 }
 
 export interface CreatePiClientOptions {
@@ -63,6 +74,16 @@ export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClien
 		async abort(sessionId, signal) {
 			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/abort`, { method: "POST", signal });
 			if (!response.ok) throw new Error(`pi-abort:${response.status}`);
+		},
+
+		async postClientAction(sessionId, toolCallId, result, signal) {
+			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/client-actions/${encodeURIComponent(toolCallId)}`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ result }),
+				signal,
+			});
+			if (!response.ok) throw new Error(`pi-post-client-action:${response.status}`);
 		},
 
 		streamEvents(sessionId, onEvent, onError) {

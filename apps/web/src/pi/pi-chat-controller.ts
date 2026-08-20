@@ -19,6 +19,18 @@ export interface PiChatController {
 export interface PiChatControllerOptions {
 	/** Bound to this controller's own session at creation -- see PiClientCreateSessionOptions. */
 	readonly cwd?: string;
+	/**
+	 * Fired for every real tool-call-start event this controller observes,
+	 * generic and Zodiac-domain-agnostic on purpose (this controller itself
+	 * carries no visual-cue-specific -- or any other tool-specific -- logic).
+	 * The actual reason this exists: a Client-side handler for a tool like
+	 * list_visual_cues (see createVisualCueClientActionHandler) needs to
+	 * observe the exact same tool-call-start events this controller already
+	 * receives, without opening a second SSE connection to the same session
+	 * just to get them (a real, avoidable cost -- see the SSE
+	 * backpressure/connection-budget audit task).
+	 */
+	readonly onToolCall?: (event: { sessionId: string; toolCallId: string; toolName: string; input: unknown }) => void;
 }
 
 function describeError(error: unknown): string {
@@ -42,6 +54,12 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 	let hasStarted = false;
 	let sessionPromise: Promise<string> | undefined;
 	let unsubscribeEvents: (() => void) | undefined;
+	// Set once ensureSession()'s own session-creation Promise resolves --
+	// tool-call-start events only ever start arriving after that point (they
+	// flow through client.streamEvents(sessionId, ...), subscribed there),
+	// so this is always defined by the time handleEvent's own "tool-call-start"
+	// case below could possibly run.
+	let currentSessionId: string | undefined;
 	let assistantTimestamp: number | undefined;
 	let disposed = false;
 	const toolCallIndex = new Map<string, number>();
@@ -93,6 +111,7 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 				const item: ToolCallItem = { kind: "tool-call", toolCallId: event.toolCallId, toolName: event.toolName, request: event.input, response: undefined, timestamp: Date.now() };
 				toolCallIndex.set(event.toolCallId, items.length);
 				items = [...items, item];
+				if (currentSessionId) options.onToolCall?.({ sessionId: currentSessionId, toolCallId: event.toolCallId, toolName: event.toolName, input: event.input });
 				notify();
 				return;
 			}
@@ -120,6 +139,7 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 			// A dispose() that raced this session's own creation still must not
 			// leave a dangling event subscription behind it.
 			if (disposed) return sessionId;
+			currentSessionId = sessionId;
 			unsubscribeEvents = client.streamEvents(sessionId, handleEvent, () => {
 				error = "Lost connection to Pi.";
 				notify();

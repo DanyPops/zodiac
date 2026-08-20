@@ -133,4 +133,22 @@ describe("createHttpPiClient", () => {
 		unsubscribe();
 		expect(FakeEventSource.instances[0]!.closed).toBe(true);
 	});
+
+	it("postClientAction POSTs the given result to the session's own client-actions route, keyed by toolCallId", async () => {
+		const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { delivered: true }));
+		const client = createHttpPiClient({ fetcher });
+		await client.postClientAction("s1", "call-1", { cues: [{ id: "a" }] });
+		expect(fetcher).toHaveBeenCalledWith("/api/agent/sessions/s1/client-actions/call-1", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ result: { cues: [{ id: "a" }] } }),
+			signal: undefined,
+		});
+	});
+
+	it("postClientAction throws on a genuine transport failure", async () => {
+		const fetcher = vi.fn().mockResolvedValue(jsonResponse(500, { code: "internal" }));
+		const client = createHttpPiClient({ fetcher });
+		await expect(client.postClientAction("s1", "call-1", {})).rejects.toThrow(/pi-post-client-action/);
+	});
 });

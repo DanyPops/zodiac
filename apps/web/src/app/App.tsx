@@ -10,6 +10,7 @@ import { useConversationWorkspace } from "../conversation/useConversationWorkspa
 import { createHttpPiClient } from "../pi/client.js";
 import { resolveZodiacdBaseUrl } from "../platform/zodiacd-config.js";
 import { usePiChatSessions } from "../pi/usePiChatSessions.js";
+import { createVisualCueClientActionHandler } from "../pi/visual-cue-client-action.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
 import { PAGE_BG } from "@zodiac/ui";
@@ -48,6 +49,12 @@ import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provi
 const zodiacdBaseUrl = resolveZodiacdBaseUrl();
 const conversationClient = createHttpConversationClient({ baseUrl: zodiacdBaseUrl });
 const piClient = createHttpPiClient({ baseUrl: zodiacdBaseUrl });
+// The browser-side half of list_visual_cues' own Client-initiated round trip
+// (see the "apps/web: real client-action listener" Papyrus Task) -- watches
+// every real tool-call-start event any chat session observes (via
+// PiChatControllerOptions.onToolCall below) and posts this Client's own real
+// listCues() result back once it sees this exact tool named.
+const visualCueClientAction = createVisualCueClientActionHandler((sessionId, toolCallId, result) => piClient.postClientAction(sessionId, toolCallId, result));
 
 // The docking engine (dockview-react + its CSS theme) is a real ~80kB gzip
 // dependency -- split into its own chunk so the core shell (Workspace
@@ -101,7 +108,7 @@ export function App(): React.JSX.Element {
 	// data sources rather than one merged one. Undefined exactly when there is
 	// no active Workspace yet (the empty-state landing renders instead of
 	// anything that would read this).
-	const piChat = workspace.workspace ? piChatSessions.chatFor(workspace.workspace.id) : undefined;
+	const piChat = workspace.workspace ? piChatSessions.chatFor(workspace.workspace.id, { onToolCall: visualCueClientAction }) : undefined;
 	const activeConversationItems = piChat?.hasStarted ? piChat.items : conversationWorkspace.conversationItems;
 	const activeConversationLoading = piChat?.hasStarted ? piChat.busy : conversationWorkspace.conversationLoading;
 	const activeConversationError = piChat?.hasStarted ? piChat.error : conversationWorkspace.conversationError;
@@ -293,7 +300,7 @@ export function App(): React.JSX.Element {
 				const id = userWorkspaces.createWorkspace(heuristicTitle, DEFAULT_WORKSPACE_GLYPH_ID);
 				if (!id) return;
 				workspace.selectWorkspace(id);
-				piChatSessions.chatFor(id).sendMessage(text);
+				piChatSessions.chatFor(id, { onToolCall: visualCueClientAction }).sendMessage(text);
 				setDraft("");
 				void titleFromPrompt(text).then((llmTitle) => {
 					if (llmTitle) renameWorkspace(id, llmTitle);
