@@ -647,9 +647,11 @@ test("keyboard-only flow reaches selection, canvas, Chat, theme, palette, and sh
 test("a user can rebind a command and the override survives reload", async ({ page }) => {
 	await page.keyboard.press("Control+/");
 	await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
-	await page.getByRole("button", { name: "Change shortcut for Open command palette" }).click();
+	// A Picker row (packages/ui/src/Picker.tsx), built on cmdk's Command.Item -- a real
+	// role="option" inside role="listbox", not a plain button, even though it's mouse-clickable.
+	await page.getByRole("option", { name: "Change shortcut for Open command palette" }).click();
 	await page.keyboard.press("Control+P");
-	await expect(page.getByRole("button", { name: "Change shortcut for Open command palette" })).toContainText("Ctrl+P");
+	await expect(page.getByRole("option", { name: "Change shortcut for Open command palette" })).toContainText("Ctrl+P");
 	await page.keyboard.press("Escape");
 
 	await page.keyboard.press("Control+P");

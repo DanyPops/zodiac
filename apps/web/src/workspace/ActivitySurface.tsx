@@ -3,7 +3,11 @@ import { Wrench } from "lucide-react";
 /** The Activity Surface Template's docked content -- split out from surface-templates.tsx so that data/registry module exports only data, never a mix of data and components (required for reliable Fast Refresh). */
 export function ActivitySurfaceContent(): React.JSX.Element {
 	return (
-		<div className="h-full overflow-auto p-6">
+		// tabIndex={0}: this scrollable region's own content is plain text/dl, with no focusable
+		// descendant of its own (unlike e.g. WorkspaceSelection's overflow-auto list of buttons) --
+		// axe's scrollable-region-focusable rule (WCAG 2.1.1 Keyboard) needs the region itself to be
+		// reachable so a keyboard-only user can still scroll it via arrow keys.
+		<div tabIndex={0} className="h-full overflow-auto p-6">
 			<div className="mx-auto max-w-3xl">
 				<h3 className="text-sm font-semibold text-gray-950 dark:text-white">Workspace activity</h3>
 				<p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">

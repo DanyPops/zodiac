@@ -69,7 +69,17 @@ export function WorldShell({ panels, top, bottom, left, right, children }: World
 		<div data-testid="world-shell" style={style}>
 			{top !== undefined && <div style={{ gridArea: "top" }}>{top}</div>}
 			{left !== undefined && <div style={{ gridArea: "left" }}>{left}</div>}
-			<div style={{ gridArea: "center", minWidth: 0, minHeight: 0 }}>{children}</div>
+			{/* display: flex/flexDirection: column -- children is App.tsx's own "relative flex min-w-0
+				flex-1 flex-col gap-2" wrapper, whose own flex-1 needs an actual flex (or grid)
+				container as ITS parent to mean anything at all. Without this, this cell defaulted to
+				display: block (CSS Grid only auto-stretches its own direct children, not descendants
+				any further down), so flex-1 here was a silent no-op: the whole CanvasWell/WindowDockview
+				subtree collapsed to its own natural content height instead of filling this cell's real
+				~700px, clipped away almost entirely by <section>'s own overflow-hidden -- a real,
+				confirmed root cause of intermittent "element intercepts pointer events" E2E failures
+				(the clipped-but-still-laid-out tab bar/panes kept real, but effectively unpaintable,
+				bounding-rect coordinates a real click could never actually land on). */}
+			<div style={{ gridArea: "center", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>{children}</div>
 			{right !== undefined && <div style={{ gridArea: "right" }}>{right}</div>}
 			{bottom !== undefined && <div style={{ gridArea: "bottom" }}>{bottom}</div>}
 		</div>
