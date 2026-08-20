@@ -22,9 +22,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@danypops/vehicle-client": "^0.10.4",
-    "@danypops/vehicle-core": "^0.17.1",
-    "@danypops/vehicle-server": "^0.25.2",
+    "@danypops/vehicle-client": "^0.10.5",
+    "@danypops/vehicle-core": "^0.18.0",
+    "@danypops/vehicle-server": "^0.26.0",
     "@zodiac/protocol": "*"
   },
   "devDependencies": {

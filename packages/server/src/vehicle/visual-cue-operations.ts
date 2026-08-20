@@ -5,11 +5,27 @@
  * gating is unconditional (`requiresApproval: true`), never computed from `steps`' own content --
  * VehicleOperationDescriptor's gating fields are frozen at defineVehicleOperation() call time,
  * with no per-invocation hook, confirmed by direct read of enforceGate()'s own signature.
+ *
+ * Grant-governed Job execution (see the "propose_visual_cue: Grant-governed Job execution"
+ * Papyrus Task): `background: {supported: true}` lets `invokeOrRunAsJob` (vehicle-client-pi)
+ * dispatch this operation through a real Vehicle Job instead of one held-open live invoke() call
+ * -- transparent to the model, no new tool surface. A proposal with more steps than
+ * `FREE_STEP_BUDGET` asks Vehicle's own Grant primitive for more budget before accepting,
+ * exactly the pattern proven in vehicle-server's own vehicle-grant.test.ts: invoke
+ * vehicle.grant.continue, catch a real approval-required VehicleError, suspend via
+ * context.steerInputs, resume once a human approves (or throw once explicitly denied). A small
+ * proposal (at or under the free budget) never touches Grant at all -- unconditional
+ * requiresApproval already gates the whole operation regardless of size; Grant additionally
+ * governs *how large a single already-approved proposal may be* before needing a fresh ask.
  */
-import { bindVehicleOperation, defineVehicleOperation, defineVehicleSchema } from "@danypops/vehicle-core";
+import { bindVehicleOperation, defineVehicleOperation, defineVehicleSchema, grantBudgetExhausted, isVehicleError, mergeGrantBudget, VehicleError, type VehicleGrantBudget } from "@danypops/vehicle-core";
 import type { VehicleRegistry } from "@danypops/vehicle-server";
+import { VEHICLE_GRANT_CONTINUE_OPERATION_NAME } from "@danypops/vehicle-server/grant";
 
 export const VISUAL_CUE_PROPOSE_OPERATION_NAME = "visual-cue.propose";
+
+/** A proposal at or under this many steps is accepted without ever consulting Grant -- only a genuinely large sequence needs the extra ask. */
+export const FREE_STEP_BUDGET = 5;
 
 export interface VisualCueStepTarget {
 	readonly kind: string;
@@ -93,11 +109,15 @@ const outputSchema = defineVehicleSchema<VisualCueProposeOutput>({
  * Registers visual-cue.propose against `registry`. Call after `registry.configureApprovals(...)`
  * so `requiresApproval: true` actually has a policy to be gated by (harmless either order --
  * `resolvesToApprovalRequired()` is false until configureApprovals() runs -- but there is then
- * nothing to gate against until that call happens).
+ * nothing to gate against until that call happens). Also call
+ * `registerVehicleGrantOperation(registry)` (from `@danypops/vehicle-server/grant`) once,
+ * daemon-wide, before this -- `vehicle.grant.continue` must already be registered for the
+ * Grant-aware step below to have anything to invoke.
  *
- * The handler itself does nothing beyond acknowledging -- browser-side relay of the approved
- * steps over the notification transport, and Grant-governed Job execution of any step carrying
- * a real CommandIntent, are real, separate, not-yet-built scope (see the owning task's own body).
+ * The handler's own real work is still just acknowledging -- browser-side relay of the approved
+ * steps over the notification transport is real, separate, not-yet-built scope (see the owning
+ * task's own body). The Grant check below governs *whether this call may proceed at all* given
+ * its own size, not the (not-yet-built) execution of its steps.
  */
 export function registerVisualCueOperations(registry: VehicleRegistry): void {
 	const operation = defineVehicleOperation({
@@ -110,10 +130,48 @@ export function registerVisualCueOperations(registry: VehicleRegistry): void {
 		effect: "external-write",
 		requiresApproval: true,
 		idempotency: { mode: "unsafe" },
+		longRunning: true,
 		limits: { defaultTimeoutMs: 5_000, maxTimeoutMs: 5_000, maxRequestBytes: 16_384, maxResponseBytes: 1_024 },
+		// VehicleJobWakeBudget (this Job's own per-wake-cycle allowance: {maxCount, maxBytes}) is a
+		// genuinely different type from VehicleGrantBudget (the agent-facing {maxTurns, ...} resource
+		// ceiling the handler itself uses below, via FREE_STEP_BUDGET) -- confirmed directly, a real
+		// type mismatch caught before assuming they were interchangeable. This operation's own
+		// single-shot handler needs no real wake-cycle budgeting of its own (it returns in one tick
+		// once ungated), so these are left generous/unbounded-in-practice rather than tuned.
+		background: {
+			supported: true,
+			defaultWakeBudget: { maxCount: 100, maxBytes: 100_000 },
+			maxWakeBudget: { maxCount: 100, maxBytes: 100_000 },
+		},
 	});
 	registry.register(
 		"visual-cue",
-		bindVehicleOperation(operation, () => async (context) => ({ accepted: true, stepCount: context.input.steps.length })),
+		bindVehicleOperation(operation, () => async (context) => {
+			const stepCount = context.input.steps.length;
+			let remaining: VehicleGrantBudget = mergeGrantBudget({ maxTurns: FREE_STEP_BUDGET }, { maxTurns: -stepCount });
+			const steerIterator = context.steerInputs?.[Symbol.asyncIterator]();
+			while (grantBudgetExhausted(remaining)) {
+				context.reportProgress({ phase: "awaiting-grant-approval", stepCount, freeStepBudget: FREE_STEP_BUDGET });
+				try {
+					await registry.invoke(VEHICLE_GRANT_CONTINUE_OPERATION_NAME, 1, { requestedBudget: { maxTurns: stepCount } });
+					// Grant approvals aren't configured at all (ungated) -- proceed with whatever budget already is.
+					break;
+				} catch (error) {
+					if (!isVehicleError(error) || error.code !== "approval-required") throw error;
+					if (!steerIterator) throw error;
+					const { value } = await steerIterator.next();
+					if (value && typeof value === "object" && (value as { denied?: boolean }).denied) {
+						// A real VehicleError, not a plain Error -- the registry's own handler-invocation
+						// wrapper (`if (isVehicleError(error)) throw error;`) only ever preserves an
+						// already-VehicleError's own message verbatim; a plain Error gets rewrapped into a
+						// generic "... handler failed" message, losing this denial's own real reason --
+						// confirmed directly, not assumed, before shipping this.
+						throw new VehicleError("grant-continuation-denied", `visual-cue.propose: Grant continuation denied for a ${String(stepCount)}-step proposal`, { category: "authorization", retryable: false });
+					}
+					remaining = mergeGrantBudget(remaining, value as VehicleGrantBudget);
+				}
+			}
+			return { accepted: true, stepCount };
+		}),
 	);
 }

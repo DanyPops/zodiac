@@ -7,6 +7,8 @@ import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type W
 import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodiac/server";
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
 import { registerVisualCueOperations } from "@zodiac/server/vehicle";
+import { registerVehicleGrantOperation } from "@danypops/vehicle-server/grant";
+import { VehicleJobStore } from "@danypops/vehicle-server/jobs";
 import { createInMemoryToolRegistrar, createPendingClientActions, watchWorkspaceToolGrants, type PendingClientActions, type ToolContribution } from "@zodiac/server/agent";
 import { createAgentCommandTool, createListAgentSpaceTool, createListIntegrationsTool, createListVisualCuesTool, createListWorkspaceTool, createListWorkspacesTool, createRemoteBrowserVisualCueClient, createVisualCueVehicleResourceLoader, createZodiacAgentSession } from "@zodiac/pi";
 import { resolveZodiacAgentDir } from "@zodiac/server/pi-agent-dir";
@@ -219,15 +221,25 @@ async function main(): Promise<void> {
 
 	// zodiacd's first real VehicleRegistry -- shared daemon-wide across every agent session
 	// (never a fresh one per session, which would fragment approval/job state). Registers
-	// visual-cue.propose (see packages/server/src/vehicle/visual-cue-operations.ts); more
+	// visual-cue.propose (see packages/server/src/vehicle/visual-cue-operations.ts) and
+	// vehicle.grant.continue (the Grant primitive's own operation, needed for
+	// visual-cue.propose's own Grant-aware step -- see that operation's own doc comment); more
 	// operations register here as they land. The one-line bridge is the entire integration
 	// needed for a request raised through this registry to show up in NotificationsPill,
 	// completely unchanged -- see vehicle-registry-approval-bridge.ts's own doc comment.
 	const vehicleRegistry = new VehicleRegistry({ name: "zodiac", version: "1", description: "Zodiac's own daemon-hosted Vehicle operations." });
+	registerVehicleGrantOperation(vehicleRegistry);
 	registerVisualCueOperations(vehicleRegistry);
 	vehicleRegistry.configureApprovals({ authority });
 	bridgeVehicleRegistryApprovals(vehicleRegistry, approvalCenter);
-	const vehicleClient = new LocalVehicleClient(vehicleRegistry);
+	// Opts LocalVehicleClient into Vehicle Jobs (submitJob/pollJob/tailJob/steerJob/cancelJob) --
+	// see the "propose_visual_cue: Grant-governed Job execution" Papyrus Task. Without this,
+	// invokeOrRunAsJob's own capability check (descriptor.background?.supported &&
+	// client.submitJob && client.pollJob) fails by construction regardless of what a descriptor
+	// declares, and every background-capable operation silently falls back to a plain,
+	// held-open invoke() -- confirmed directly before this task began, not assumed.
+	const vehicleJobStore = new VehicleJobStore(vehicleRegistry);
+	const vehicleClient = new LocalVehicleClient(vehicleRegistry, { jobStore: vehicleJobStore });
 
 	// Set once the daemon is actually listening, just below -- see
 	// createDaemonAgentIntegrationFactory's own doc comment on why this is
