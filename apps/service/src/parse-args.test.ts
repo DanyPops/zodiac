@@ -4,7 +4,7 @@ import { DEFAULT_HOST, DEFAULT_PORT, parseZodiacdArgs } from "./parse-args.js";
 describe("parseZodiacdArgs", () => {
 	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env, fixtureMode/enableTerminal false", () => {
 		const args = parseZodiacdArgs([], {});
-		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false });
+		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false, integrationPackageJsonPaths: [] });
 	});
 
 	it("ZODIAC_ENABLE_TERMINAL=1 or --enable-terminal enables enableTerminal -- off by default, real RCE exposure once reachable off loopback", () => {
@@ -37,6 +37,14 @@ describe("parseZodiacdArgs", () => {
 		const args = parseZodiacdArgs(["--sessions-root", "/tmp/sessions", "--state-dir", "/tmp/state"]);
 		expect(args.sessionsRoot).toBe("/tmp/sessions");
 		expect(args.stateDir).toBe("/tmp/state");
+	});
+
+	it("accepts only explicitly configured Integration package.json paths from repeated flags or a JSON env array", () => {
+		expect(parseZodiacdArgs(["--integration-package", "/a/package.json", "--integration-package", "/b/package.json"], {}).integrationPackageJsonPaths).toEqual(["/a/package.json", "/b/package.json"]);
+		expect(parseZodiacdArgs([], { ZODIAC_INTEGRATION_PACKAGES: JSON.stringify(["/c/package.json"]) }).integrationPackageJsonPaths).toEqual(["/c/package.json"]);
+		expect(() => parseZodiacdArgs([], { ZODIAC_INTEGRATION_PACKAGES: "not-json" })).toThrow(/ZODIAC_INTEGRATION_PACKAGES/);
+		expect(() => parseZodiacdArgs([], { ZODIAC_INTEGRATION_PACKAGES: JSON.stringify([42]) })).toThrow(/ZODIAC_INTEGRATION_PACKAGES/);
+		expect(() => parseZodiacdArgs(["--integration-package"], {})).toThrow(/integration-package/);
 	});
 
 	it("rejects a non-numeric or negative --port", () => {

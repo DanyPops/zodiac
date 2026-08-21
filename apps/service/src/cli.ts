@@ -2,9 +2,10 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { acquireDaemonLock, LOOPBACK_HOST, releaseDaemonLock, removeDaemonHandle, writeDaemonHandle } from "@danypops/vehicle-server/paths";
-import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
+import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type ContributionCommand, type ContributionResourceProvider, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
-import { createAppletRegistry, createEventBus, seedBuiltinApplets } from "@zodiac/server";
+import { createAppletRegistry, createEventBus, seedBuiltinApplets, type AppletRegistry } from "@zodiac/server";
+import { loadConfiguredIntegrationPackages } from "@zodiac/server/contribution-loader";
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
 import { registerVisualCueOperations } from "@zodiac/server/vehicle";
 import { registerVehicleGrantOperation } from "@danypops/vehicle-server/grant";
@@ -55,9 +56,7 @@ const DEFAULT_WORLD_PANELS: readonly Panel[] = [
 	{ id: panelId("surface-templates"), location: "right", alignment: "start", offset: 0, thickness: 56, thicknessUnit: "px", lengthMode: "fill", visibilityMode: "normal", startCap: null, endCap: null, body: [appletId("surface-templates")] },
 ];
 
-function defaultWorldPanelOptions(): WorldStorePanelOptions {
-	const registry = createAppletRegistry();
-	seedBuiltinApplets(registry);
+function defaultWorldPanelOptions(registry: AppletRegistry): WorldStorePanelOptions {
 	const byId = new Map(registry.applets().map((applet) => [applet.id, applet]));
 	return { panels: DEFAULT_WORLD_PANELS, getApplet: (id) => byId.get(id) };
 }
@@ -155,8 +154,8 @@ function loadToolGrantConfig(): { getIntegration: (id: IntegrationId) => Integra
 }
 
 /** Loads the persisted World if one exists, exiting loudly on a corrupted snapshot rather than silently discarding it (see the JSON-file WorldSnapshotPort's own doc comment). */
-async function loadOrCreateWorld(snapshotPort: ReturnType<typeof createJsonFileSnapshotPort>): Promise<WorldStore> {
-	const panelOptions = defaultWorldPanelOptions();
+async function loadOrCreateWorld(snapshotPort: ReturnType<typeof createJsonFileSnapshotPort>, applets: AppletRegistry): Promise<WorldStore> {
+	const panelOptions = defaultWorldPanelOptions(applets);
 	const loaded = await snapshotPort.load();
 	if (loaded === undefined) return createWorldStore(WORLD_ID, panelOptions);
 
@@ -196,8 +195,37 @@ async function main(): Promise<void> {
 
 	const sessionsRoot = args.sessionsRoot ?? DEFAULT_SESSIONS_ROOT;
 	const snapshotPort = createJsonFileSnapshotPort({ filePath: join(stateDir, "world.json") });
+	const applets = createAppletRegistry();
+	seedBuiltinApplets(applets);
+	const contributionCommands = new Map<string, ContributionCommand>();
+	const contributionProviders = new Map<string, ContributionResourceProvider>();
+	let configuredIntegrations: Awaited<ReturnType<typeof loadConfiguredIntegrationPackages>>;
+	try {
+		configuredIntegrations = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: args.integrationPackageJsonPaths,
+			applets,
+			host: {
+				registerCommand(command) {
+					if (contributionCommands.has(command.id)) throw new Error(`Duplicate configured contribution command: ${command.id}`);
+					contributionCommands.set(command.id, command);
+					return () => contributionCommands.delete(command.id);
+				},
+				registerResourceProvider(provider) {
+					if (contributionProviders.has(provider.scheme)) throw new Error(`Duplicate configured contribution resource scheme: ${provider.scheme}`);
+					contributionProviders.set(provider.scheme, provider);
+					return () => contributionProviders.delete(provider.scheme);
+				},
+			},
+		});
+	} catch (error) {
+		releaseDaemonLock(lockPath);
+		throw error;
+	}
+	if (configuredIntegrations.integrations.length > 0) {
+		console.log(`[zodiacd] loaded ${configuredIntegrations.integrations.length} configured Integration contribution(s): ${configuredIntegrations.integrations.map((entry) => `${entry.provenance.packageId}/${entry.kind}/${entry.id}`).join(", ")}`);
+	}
 
-	const world = await loadOrCreateWorld(snapshotPort);
+	const world = await loadOrCreateWorld(snapshotPort, applets);
 
 	const toolRegistrar = createInMemoryToolRegistrar();
 	const { getIntegration, getAllIntegrations, getContribution } = loadToolGrantConfig();
@@ -312,11 +340,19 @@ async function main(): Promise<void> {
 
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
 
+	let shuttingDown = false;
 	const shutdown = (signal: string) => {
+		if (shuttingDown) return;
+		shuttingDown = true;
 		console.log(`[zodiacd] ${signal} received, shutting down`);
 		removeDaemonHandle(handlePath);
-		releaseDaemonLock(lockPath);
-		void service.close().then(() => process.exit(0));
+		void configuredIntegrations.dispose()
+			.catch((error: unknown) => console.error(`[zodiacd] configured Integration disposal failed: ${String(error)}`))
+			.then(() => service.close())
+			.finally(() => {
+				releaseDaemonLock(lockPath);
+				process.exit(0);
+			});
 	};
 	process.on("SIGINT", () => shutdown("SIGINT"));
 	process.on("SIGTERM", () => shutdown("SIGTERM"));

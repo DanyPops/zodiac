@@ -14,6 +14,7 @@
     "./world": "./src/world/index.ts",
     "./window": "./src/window/index.ts",
     "./conversations": "./src/conversations/index.ts",
+    "./contribution-loader": "./src/contribution/configured-loader.ts",
     "./net": "./src/net/sse-client.ts"
   },
   "scripts": {

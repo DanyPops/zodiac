@@ -20,12 +20,12 @@ export type ZodiacIntegrationKind = ContributionPointKind;
 /** One contribution point a package activates. `entry` is a module path relative to the package root, resolved by the caller -- this module never touches the filesystem beyond reading the manifest itself. */
 export const ZodiacIntegrationEntrySchema = z.object({
 	kind: ZodiacIntegrationKindSchema,
-	entry: z.string().trim().min(1),
+	entry: z.string().trim().min(1).max(1_024),
 });
 export type ZodiacIntegrationEntry = z.infer<typeof ZodiacIntegrationEntrySchema>;
 
 export const ZodiacManifestFieldSchema = z.object({
-	integrations: z.array(ZodiacIntegrationEntrySchema).min(1),
+	integrations: z.array(ZodiacIntegrationEntrySchema).min(1).max(32),
 });
 export type ZodiacManifestField = z.infer<typeof ZodiacManifestFieldSchema>;
 

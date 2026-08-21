@@ -30,8 +30,10 @@ describe("readZodiacManifest", () => {
 		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "not-a-real-kind", entry: "./x.ts" }] } })).toThrow();
 	});
 
-	it("throws on an empty integrations array", () => {
+	it("bounds the number and path length of declared integrations", () => {
 		expect(() => readZodiacManifest({ zodiac: { integrations: [] } })).toThrow();
+		expect(() => readZodiacManifest({ zodiac: { integrations: Array.from({ length: 33 }, (_, index) => ({ kind: "applet", entry: `./${index}.js` })) } })).toThrow();
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "editor", entry: `./${"x".repeat(1_025)}` }] } })).toThrow();
 	});
 
 	it("throws on a malformed \"zodiac\" field rather than silently contributing nothing", () => {

@@ -1,9 +1,4 @@
-import {
-	ContributionCardinalitySchema,
-	ContributionProvenanceSchema,
-	type ContributionPointDefinition,
-	type ContributionProvenance,
-} from "@zodiac/protocol";
+import type { ContributionCardinality, ContributionPointDefinition, ContributionProvenance } from "@zodiac/protocol";
 
 export type ContributionPointMap = { [kind: string]: { readonly id: string } };
 
@@ -26,6 +21,21 @@ export class ContributionCardinalityError extends Error {
 	}
 }
 
+function parseCardinality(value: string): ContributionCardinality {
+	if (value === "exactly-one" || value === "zero-or-one" || value === "zero-or-many") return value;
+	throw new Error(`Unknown contribution cardinality: ${value}`);
+}
+
+function parseProvenance(value: ContributionProvenance): ContributionProvenance {
+	const packageId = value.packageId.trim();
+	const version = value.version.trim();
+	const source = value.source.trim();
+	if (packageId.length === 0 || packageId.length > 214) throw new Error("Contribution provenance packageId is invalid");
+	if (version.length === 0 || version.length > 100) throw new Error("Contribution provenance version is invalid");
+	if (source.length === 0 || source.length > 2_048) throw new Error("Contribution provenance source is invalid");
+	return { packageId, version, source };
+}
+
 export interface ContributionPointRegistry<TPoints extends { [K in keyof TPoints]: { readonly id: string } }> {
 	register<K extends keyof TPoints & string>(kind: K, value: TPoints[K], provenance: ContributionProvenance): () => void;
 	entries<K extends keyof TPoints & string>(kind: K): readonly RegisteredContribution<TPoints[K]>[];
@@ -46,7 +56,7 @@ export function createContributionPointRegistry<TPoints extends { [K in keyof TP
 
 	for (const definition of definitions) {
 		if (cardinality.has(definition.kind)) throw new Error(`Duplicate contribution point definition: ${definition.kind}`);
-		cardinality.set(definition.kind, ContributionCardinalitySchema.parse(definition.cardinality));
+		cardinality.set(definition.kind, parseCardinality(definition.cardinality));
 		values.set(definition.kind, []);
 	}
 
@@ -66,7 +76,7 @@ export function createContributionPointRegistry<TPoints extends { [K in keyof TP
 			}
 			const entry: RegisteredContribution<TPoints[typeof kind]> = {
 				value,
-				provenance: Object.freeze(ContributionProvenanceSchema.parse(provenance)),
+				provenance: Object.freeze(parseProvenance(provenance)),
 			};
 			records.push(entry);
 			let registered = true;

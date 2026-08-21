@@ -7,6 +7,8 @@ export interface ZodiacdArgs {
 	fixtureMode: boolean;
 	/** Wires the terminal-session routes (a real shell over WebSocket) -- off by default: real RCE exposure once the daemon is reachable off loopback, and there is no auth yet (see the "zodiacd API surface" Papyrus Doc's Terminal sessions section). */
 	enableTerminal: boolean;
+	/** Explicit package.json files only; bounded and resolved by the Integration loader. */
+	integrationPackageJsonPaths: readonly string[];
 }
 
 export const DEFAULT_PORT = 4390;
@@ -26,6 +28,19 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 	let stateDir: string | undefined;
 	let fixtureMode = env.ZODIAC_FIXTURE_MODE === "1";
 	let enableTerminal = env.ZODIAC_ENABLE_TERMINAL === "1";
+	let integrationPackageJsonPaths: string[] = [];
+	if (env.ZODIAC_INTEGRATION_PACKAGES !== undefined) {
+		let configured: unknown;
+		try {
+			configured = JSON.parse(env.ZODIAC_INTEGRATION_PACKAGES) as unknown;
+		} catch {
+			throw new Error("zodiacd: ZODIAC_INTEGRATION_PACKAGES must be a JSON array of package.json paths");
+		}
+		if (!Array.isArray(configured) || configured.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+			throw new Error("zodiacd: ZODIAC_INTEGRATION_PACKAGES must be a JSON array of package.json paths");
+		}
+		integrationPackageJsonPaths = configured;
+	}
 
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
@@ -35,9 +50,14 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 		else if (arg === "--state-dir") stateDir = argv[++i];
 		else if (arg === "--fixture-mode") fixtureMode = true;
 		else if (arg === "--enable-terminal") enableTerminal = true;
+		else if (arg === "--integration-package") {
+			const path = argv[++i];
+			if (!path) throw new Error("zodiacd: --integration-package requires a package.json path");
+			integrationPackageJsonPaths.push(path);
+		}
 	}
 
 	if (!Number.isInteger(port) || port < 0) throw new Error(`zodiacd: invalid --port "${port}"`);
 
-	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal };
+	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal, integrationPackageJsonPaths };
 }

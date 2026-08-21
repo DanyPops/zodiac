@@ -8,7 +8,7 @@ type AppletPoints = { applet: AppletDefinition };
 
 /** Applets use the same named-point/cardinality/provenance registry as editor contributions loaded by an ExecutionStrategy. */
 export interface AppletRegistry {
-	registerApplet: (definition: AppletDefinition, provenance?: ContributionProvenance) => void;
+	registerApplet: (definition: AppletDefinition, provenance?: ContributionProvenance) => () => void;
 	applets: () => readonly AppletDefinition[];
 	registrations: () => readonly RegisteredContribution<AppletDefinition>[];
 }
@@ -16,7 +16,7 @@ export interface AppletRegistry {
 export function createAppletRegistry(): AppletRegistry {
 	const registry = createContributionPointRegistry<AppletPoints>([APPLET_CONTRIBUTION_POINT]);
 	return {
-		registerApplet: (definition, provenance = BUILTIN_PROVENANCE) => { registry.register("applet", definition, provenance); },
+		registerApplet: (definition, provenance = BUILTIN_PROVENANCE) => registry.register("applet", definition, provenance),
 		applets: () => registry.entries("applet").map((entry) => entry.value),
 		registrations: () => registry.entries("applet"),
 	};
