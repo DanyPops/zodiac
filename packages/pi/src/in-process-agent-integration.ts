@@ -4,8 +4,10 @@ import type { AgentIntegrationPort, AgentSessionControlOutcome, ZodiacAgentEvent
 
 export interface InProcessAgentIntegrationOptions {
 	readonly resolveModel?: (provider: string, modelId: string) => Parameters<AgentSession["setModel"]>[0] | undefined;
-	readonly resume?: (sessionPath: string) => Promise<AgentSessionControlOutcome>;
-	readonly fork?: (entryId: string) => Promise<AgentSessionControlOutcome>;
+	/** Loads and fully binds a replacement session; the adapter preserves its listeners while swapping the underlying SDK session. */
+	readonly resumeSession?: (sessionPath: string) => Promise<AgentSession | undefined>;
+	/** Creates and fully binds a forked replacement from the current session. */
+	readonly forkSession?: (session: AgentSession, entryId: string) => Promise<AgentSession | undefined>;
 }
 
 /**
@@ -17,8 +19,9 @@ export interface InProcessAgentIntegrationOptions {
  * deliberately left to the caller -- this adapter's only job is wrapping an
  * already-live session, not owning its setup policy.
  */
-export function createInProcessAgentIntegration(session: AgentSession, options: InProcessAgentIntegrationOptions = {}): AgentIntegrationPort {
+export function createInProcessAgentIntegration(initialSession: AgentSession, options: InProcessAgentIntegrationOptions = {}): AgentIntegrationPort {
 	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
+	let session = initialSession;
 	let unsubscribeSession: (() => void) | undefined;
 	/**
 	 * Accumulated text of the assistant message currently streaming, reset on
@@ -122,10 +125,29 @@ export function createInProcessAgentIntegration(session: AgentSession, options: 
 		}
 	}
 
-	unsubscribeSession = session.subscribe((event) => {
-		const translated = translate(event);
-		if (translated) emit(translated);
-	});
+	function subscribeSession(): void {
+		unsubscribeSession = session.subscribe((event) => {
+			const translated = translate(event);
+			if (translated) emit(translated);
+		});
+	}
+
+	async function replaceSession(load: () => Promise<AgentSession | undefined>): Promise<AgentSessionControlOutcome> {
+		try {
+			const replacement = await load();
+			if (!replacement) return { ok: false, reason: "unsupported", message: "This session is not persisted and cannot be replaced or forked." };
+			unsubscribeSession?.();
+			const previous = session;
+			session = replacement;
+			subscribeSession();
+			previous.dispose();
+			return { ok: true };
+		} catch (error) {
+			return { ok: false, reason: "failed", message: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	subscribeSession();
 
 	return {
 		/** A convenience over AgentSession.prompt(): auto-selects "steer" while the agent is already streaming, instead of requiring every caller to branch on session.isStreaming itself. Use steer()/followUp() directly for explicit control over queueing. */
@@ -161,10 +183,12 @@ export function createInProcessAgentIntegration(session: AgentSession, options: 
 				}
 			},
 			async resume(sessionPath) {
-				return options.resume?.(sessionPath) ?? { ok: false, reason: "unsupported", message: "This embedded session was not constructed with a replaceable AgentSessionRuntime." };
+				if (!options.resumeSession) return { ok: false, reason: "unsupported", message: "This embedded session was not constructed with replacement support." };
+				return replaceSession(() => options.resumeSession!(sessionPath));
 			},
 			async fork(entryId) {
-				return options.fork?.(entryId) ?? { ok: false, reason: "unsupported", message: "This embedded session was not constructed with a replaceable AgentSessionRuntime." };
+				if (!options.forkSession) return { ok: false, reason: "unsupported", message: "This embedded session was not constructed with fork support." };
+				return replaceSession(() => options.forkSession!(session, entryId));
 			},
 		},
 		onEvent(listener) {

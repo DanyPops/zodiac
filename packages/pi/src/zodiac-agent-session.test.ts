@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { fauxProvider } from "@earendil-works/pi-ai/compat";
 import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, type InlineExtension, type ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -124,6 +127,35 @@ describe("createZodiacAgentSession", () => {
 
 		expect(session.getActiveToolNames()).toEqual([customTool.name]);
 		expect(session.getToolDefinition(customTool.name)).toBeDefined();
+	});
+
+	it("persists Zodiac-owned sessions and replaces the embedded session on fork", async () => {
+		const faux = fauxProvider();
+		const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), allowModelNetwork: false });
+		modelRuntime.registerNativeProvider(faux.provider);
+		await modelRuntime.setRuntimeApiKey(faux.getModel().provider, "test-key");
+		const agentDir = mkdtempSync(join(tmpdir(), "zodiac-agent-session-"));
+		const created = await createZodiacAgentSession({
+			cwd: process.cwd(),
+			mode: "rpc",
+			agentDir,
+			modelRuntime,
+			resourceLoader: new DefaultResourceLoader({ cwd: process.cwd(), agentDir, noExtensions: true }),
+			settingsManager: SettingsManager.inMemory(),
+		});
+		disposers.push(() => {
+			created.integration.dispose();
+			rmSync(agentDir, { recursive: true, force: true });
+		});
+		const initialSessionId = created.session.sessionId;
+		const initialSessionPath = created.session.sessionFile;
+		if (!initialSessionPath) throw new Error("expected a persisted session file");
+		const userEntryId = created.session.sessionManager.appendMessage({ role: "user", content: "fork this", timestamp: Date.now() });
+
+		expect(await created.integration.session!.fork(userEntryId)).toEqual({ ok: true });
+		expect(created.session.sessionId).not.toBe(initialSessionId);
+		expect(await created.integration.session!.resume(initialSessionPath)).toEqual({ ok: true });
+		expect(created.session.sessionFile).toBe(initialSessionPath);
 	});
 
 	it("returns a real AgentIntegrationPort backed by the constructed AgentSession", async () => {

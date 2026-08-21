@@ -80,54 +80,61 @@ export async function createZodiacAgentSession(options: CreateZodiacAgentSession
 			modelsPath: join(agentDir, "models.json"),
 			signal: AbortSignal.timeout(5_000),
 		}));
-	const settingsManager = options.settingsManager ?? SettingsManager.create(options.cwd, agentDir);
-	const { session } = await createAgentSession({
-		cwd: options.cwd,
-		agentDir,
-		modelRuntime,
-		resourceLoader: options.resourceLoader,
-		sessionManager: options.sessionManager ?? SessionManager.inMemory(options.cwd),
-		settingsManager,
-		...(options.initialActiveToolNames !== undefined ? { tools: [...options.initialActiveToolNames] } : {}),
-		...(options.customTools !== undefined ? { customTools: [...options.customTools] } : {}),
-	});
-	// createAgentSession() alone never fires session_start -- that only
-	// happens inside bindExtensions() (confirmed by reading pi-coding-agent's
-	// own source: AgentSession.bindExtensions() is the sole call site of
-	// `_extensionRunner.emit(sessionStartEvent)`). Without this, an installed
-	// extension's own session_start-triggered logic -- most concretely,
-	// @danypops/pi-packed's Profile mechanism narrowing active tools
-	// per-workspace via a real pi-setup.json -- silently never runs, even
-	// though its tools remain fully registered and callable.
-	await session.bindExtensions({ mode: options.mode, uiContext: options.uiContext });
-	// createAgentSession()'s own internal default-model resolution
-	// (findInitialModel) runs *before* any extension has been activated --
-	// confirmed live: a custom-provider extension's own registerProvider()
-	// call (e.g. pi-mono's anthropic-vertex example) only actually executes
-	// inside bindExtensions(), never at construction time. A model from such
-	// a provider is therefore structurally invisible to findInitialModel(),
-	// even when it's the user's own explicitly configured default in
-	// settings.json -- the session silently runs against whatever provider
-	// *was* already known instead. Once bindExtensions() has run, re-resolve
-	// the configured default by name and switch to it if it's now available
-	// and different from what was already picked -- session.setModel() itself
-	// validates auth and throws if it isn't, so a still-unavailable default
-	// safely leaves the already-working fallback model in place.
-	//
-	// This *requires* every caller's own build to keep @earendil-works/* out
-	// of its esbuild bundle (see apps/terminal's and apps/service's own
-	// package.json build scripts' --external flag) -- see this same
-	// reasoning previously documented in apps/terminal/src/pi/start-footer-chat.ts.
-	const preferredProvider = settingsManager.getDefaultProvider();
-	const preferredModelId = settingsManager.getDefaultModel();
-	if (preferredProvider && preferredModelId) {
-		const preferredModel = modelRuntime.getModel(preferredProvider, preferredModelId);
-		if (preferredModel && preferredModel.id !== session.model?.id) {
-			await session.setModel(preferredModel).catch(() => {
-				/* not actually authed yet (e.g. extension needs its own /login) -- keep the already-working model */
-			});
+	async function createBoundSession(sessionManager: SessionManager): Promise<AgentSession> {
+		const cwd = sessionManager.getCwd() || options.cwd;
+		const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+		const { session } = await createAgentSession({
+			cwd,
+			agentDir,
+			modelRuntime,
+			resourceLoader: options.resourceLoader,
+			sessionManager,
+			settingsManager,
+			...(options.initialActiveToolNames !== undefined ? { tools: [...options.initialActiveToolNames] } : {}),
+			...(options.customTools !== undefined ? { customTools: [...options.customTools] } : {}),
+		});
+		// createAgentSession() alone never fires session_start -- that only
+		// happens inside bindExtensions(). Replacements must bind exactly like
+		// the initial session or installed extension/profile behavior silently
+		// disappears after resume/fork.
+		await session.bindExtensions({ mode: options.mode, uiContext: options.uiContext });
+		// Re-resolve an extension-provided preferred model after extensions bind;
+		// createAgentSession's initial resolution necessarily runs before then.
+		const preferredProvider = settingsManager.getDefaultProvider();
+		const preferredModelId = settingsManager.getDefaultModel();
+		if (preferredProvider && preferredModelId) {
+			const preferredModel = modelRuntime.getModel(preferredProvider, preferredModelId);
+			if (preferredModel && preferredModel.id !== session.model?.id) {
+				await session.setModel(preferredModel).catch(() => {
+					/* not actually authed yet -- keep the already-working fallback */
+				});
+			}
 		}
+		return session;
 	}
-	const integration = createInProcessAgentIntegration(session, { resolveModel: (provider, modelId) => modelRuntime.getModel(provider, modelId) });
-	return { session, integration };
+
+	// Zodiac-owned sessions persist under Zodiac's own namespaced agentDir,
+	// never the user's generic Pi session store. Persistence is what makes the
+	// shared resume/fork control contract real in the embedded zodiacd host.
+	const initialSessionManager = options.sessionManager ?? SessionManager.create(options.cwd, join(agentDir, "sessions"));
+	let activeSession = await createBoundSession(initialSessionManager);
+	const integration = createInProcessAgentIntegration(activeSession, {
+		resolveModel: (provider, modelId) => modelRuntime.getModel(provider, modelId),
+		resumeSession: async (sessionPath) => {
+			activeSession = await createBoundSession(SessionManager.open(sessionPath));
+			return activeSession;
+		},
+		forkSession: async (session, entryId) => {
+			const sessionPath = session.sessionManager.createBranchedSession(entryId);
+			if (!sessionPath) return undefined;
+			activeSession = await createBoundSession(SessionManager.open(sessionPath));
+			return activeSession;
+		},
+	});
+	return {
+		get session() {
+			return activeSession;
+		},
+		integration,
+	};
 }
