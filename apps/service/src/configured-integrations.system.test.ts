@@ -51,14 +51,22 @@ describe("zodiacd configured Integration loading", () => {
 			version: "1.0.0",
 			zodiac: { integrations: [{ kind: "editor", entry: "./editor.mjs" }] },
 		}));
-		writeFileSync(entry, `import { writeFileSync } from "node:fs";\nexport default { describe: () => ({ id: "fixture-lector", title: "Fixture Lector", commands: [], resourceSchemes: [], contributionPoints: ["editor"] }), activate: () => writeFileSync(${JSON.stringify(marker)}, "activated"), dispose: () => {} };\n`);
+		writeFileSync(entry, `import { writeFileSync } from "node:fs";\nexport default { describe: () => ({ id: "fixture-lector", title: "Fixture Lector", commands: [{ id: "lector.workspace.open", title: "Open Workspace" }], resourceSchemes: ["lector"], contributionPoints: ["editor"] }), activate: (host) => { writeFileSync(${JSON.stringify(marker)}, "activated"); host.registerCommand({ id: "lector.workspace.open", title: "Open Workspace", execute: async (input) => ({ ok: true, value: { uri: "lector://workspace/ws?path=", kind: "workspace", title: input.path, readOnly: true } }) }); host.registerResourceProvider({ scheme: "lector", read: async () => ({ ok: true, value: { kind: "tree", entries: [{ name: "src", kind: "directory" }] } }) }); }, dispose: () => {} };\n`);
 
 		const daemon = spawnZodiacd(stateDir, join(packageRoot, "package.json"));
 		const stdout = await waitForStdout(daemon, /listening on http:\/\//);
+		const baseUrl = stdout.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
+		if (!baseUrl) throw new Error(`missing zodiacd URL in ${stdout}`);
 		expect(stdout).toContain("loaded 1 configured Integration contribution");
 		expect(stdout).toContain("@fixture/zodiac-lector/editor/fixture-lector");
 		expect(existsSync(marker)).toBe(true);
 		expect(readFileSync(marker, "utf8")).toBe("activated");
+		const catalog = await (await fetch(`${baseUrl}/api/contributions`)).json() as { contributions: Array<{ id: string }> };
+		expect(catalog.contributions.map((entry) => entry.id)).toEqual(["fixture-lector"]);
+		const opened = await (await fetch(`${baseUrl}/api/contributions/fixture-lector/invoke`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ commandId: "lector.workspace.open", input: { path: "/tmp/project" } }) })).json() as { ok: boolean; value: { uri: string } };
+		expect(opened).toMatchObject({ ok: true, value: { uri: "lector://workspace/ws?path=" } });
+		const tree = await (await fetch(`${baseUrl}/api/contributions/fixture-lector/read`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resource: { uri: opened.value.uri, kind: "workspace", title: "project", readOnly: true }, bounds: { maxBytes: 1024, maxEntries: 10 } }) })).json();
+		expect(tree).toMatchObject({ ok: true, value: { kind: "tree", entries: [{ name: "src", kind: "directory" }] } });
 	});
 
 	it("fails startup with package-scoped diagnostics for a malformed configured export", async () => {

@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import { WebSocketServer } from "ws";
 import type { AgentIntegrationPort } from "@zodiac/agent";
 import type { WorldStore } from "@zodiac/server/world";
-import type { WorkspaceId } from "@zodiac/protocol";
+import type { ContributionCommand, ContributionDescription, ContributionResourceProvider, WorkspaceId } from "@zodiac/protocol";
 import { createEventBus, type EventBus } from "@zodiac/server";
 import type { PendingClientActions } from "@zodiac/server/agent";
 import type { VehicleSurfaceGateway } from "@zodiac/server/vehicle";
@@ -12,6 +12,7 @@ import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/f
 import { createAgentRoutes } from "./routes/agent-routes.js";
 import { createWorldRoutes } from "./routes/world-routes.js";
 import { createConversationsRoutes } from "./routes/conversations-routes.js";
+import { createContributionRoutes } from "./routes/contribution-routes.js";
 import { createNotificationRoutes } from "./routes/notification-routes.js";
 import { createTerminalRoutes } from "./routes/terminal-routes.js";
 import { createToolGrantRoutes } from "./routes/tool-grant-routes.js";
@@ -44,6 +45,12 @@ export interface CreateZodiacServiceOptions {
 	approvalCenter?: ApprovalCenter;
 	/** Optional server-side Vehicle proxy. Bearer tokens remain behind this port and never enter browser-visible responses. */
 	vehicleSurfaces?: VehicleSurfaceGateway;
+	/** Explicitly loaded package contributions exposed through bounded same-origin routes. */
+	contributions?: {
+		descriptions: readonly ContributionDescription[];
+		commands: ReadonlyMap<string, ContributionCommand>;
+		providers: ReadonlyMap<string, ContributionResourceProvider>;
+	};
 }
 
 export interface ZodiacService {
@@ -76,6 +83,7 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 	const webSocketServer = terminalRoutes ? new WebSocketServer({ noServer: true }) : undefined;
 	const toolGrantRoutes = options.getWorkspaceToolIds ? createToolGrantRoutes(options.getWorkspaceToolIds) : undefined;
 	const vehicleSurfaceRoutes = options.vehicleSurfaces ? createVehicleSurfaceRoutes(options.vehicleSurfaces) : undefined;
+	const contributionRoutes = options.contributions ? createContributionRoutes(options.contributions) : undefined;
 
 	const server = createServer((req, res) => {
 		// A browser-served static build (dist/) is necessarily a different origin
@@ -156,6 +164,19 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		const toolsMatch = toolGrantRoutes && req.method === "GET" ? /^\/api\/world\/workspaces\/([^/]+)\/tools$/.exec(pathname) : null;
 		if (toolGrantRoutes && toolsMatch) {
 			toolGrantRoutes.getWorkspaceTools(toolsMatch[1] ?? "", res);
+			return;
+		}
+		if (contributionRoutes && pathname === "/api/contributions" && req.method === "GET") {
+			contributionRoutes.list(req, res);
+			return;
+		}
+		const contributionMatch = contributionRoutes ? /^\/api\/contributions\/([^/]+)\/(invoke|read)$/.exec(pathname) : null;
+		if (contributionRoutes && contributionMatch) {
+			const contributionId = decodeURIComponent(contributionMatch[1] ?? "");
+			const action = contributionMatch[2];
+			if (action === "invoke" && req.method === "POST") void contributionRoutes.invoke(req, res, contributionId);
+			else if (action === "read" && req.method === "POST") void contributionRoutes.read(req, res, contributionId);
+			else { res.statusCode = 405; res.end(); }
 			return;
 		}
 		if (vehicleSurfaceRoutes && pathname === "/api/vehicle-surfaces" && req.method === "GET") {

@@ -70,6 +70,31 @@ export interface ContributionHost {
  */
 export type ContributionCapability = string;
 
+export const ContributionCommandDescriptionSchema = z.object({
+  id: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
+});
+
+export const ContributionDescriptionSchema = z.object({
+  id: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
+  commands: z.array(ContributionCommandDescriptionSchema).max(1_000),
+  resourceSchemes: z.array(z.string().trim().min(1).max(100)).max(100),
+  version: z.string().trim().min(1).max(100).optional(),
+  capabilities: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  contributionPoints: z.array(ContributionPointKindSchema).max(10).optional(),
+});
+
+export const ContributionInvokeRequestSchema = z.object({
+  commandId: z.string().trim().min(1).max(200),
+  input: z.unknown().optional(),
+});
+
+export const ContributionResourceReadRequestSchema = z.object({
+  resource: ContributionResourceReferenceSchema,
+  bounds: ContributionReadBoundsSchema,
+});
+
 export interface ContributionDescription {
   readonly id: string;
   readonly title: string;

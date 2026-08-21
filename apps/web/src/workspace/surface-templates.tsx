@@ -1,9 +1,10 @@
-import { Activity, BookOpenCheck, SquareTerminal } from "lucide-react";
+import { Activity, BookOpenCheck, Code2, SquareTerminal } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { IntegrationId } from "@zodiac/protocol/ids";
 import { ActivitySurfaceContent } from "./ActivitySurface.js";
 import { TerminalSurfaceLazy } from "./TerminalSurfaceLazy.js";
 import { PapyrusSurfaceLazy } from "../vehicle-surface/PapyrusSurfaceLazy.js";
+import { LectorSurfaceLazy } from "../lector-surface/LectorSurfaceLazy.js";
 
 export interface SurfaceTemplateIconProps {
 	"aria-hidden"?: boolean | "true" | "false";
@@ -37,6 +38,7 @@ export interface SurfaceTemplateDefinition {
 export const ACTIVITY_TEMPLATE_ID = "activity" as IntegrationId;
 export const TERMINAL_TEMPLATE_ID = "terminal" as IntegrationId;
 export const PAPYRUS_TEMPLATE_ID = "papyrus" as IntegrationId;
+export const LECTOR_TEMPLATE_ID = "lector" as IntegrationId;
 
 export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 	{
@@ -47,6 +49,15 @@ export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 		dockCommandTitle: "Dock Activity",
 		dockCommandDescription: "Dock a new Activity Surface into the active Window.",
 		render: () => <ActivitySurfaceContent />,
+	},
+	{
+		integrationId: LECTOR_TEMPLATE_ID,
+		title: "Lector",
+		icon: Code2,
+		dockCommandId: "template.dockLector",
+		dockCommandTitle: "Dock Lector",
+		dockCommandDescription: "Dock a bounded file tree and read-only source view backed by the configured package-owned Lector contribution.",
+		render: () => <LectorSurfaceLazy />,
 	},
 	{
 		integrationId: PAPYRUS_TEMPLATE_ID,

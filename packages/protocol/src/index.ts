@@ -48,10 +48,14 @@ export type {
 export {
   APPLET_CONTRIBUTION_POINT,
   ContributionCardinalitySchema,
+  ContributionCommandDescriptionSchema,
+  ContributionDescriptionSchema,
+  ContributionInvokeRequestSchema,
   ContributionPointDefinitionSchema,
   ContributionPointKindSchema,
   ContributionProvenanceSchema,
   ContributionReadBoundsSchema,
+  ContributionResourceReadRequestSchema,
   ContributionResourceReferenceSchema,
   EDITOR_CONTRIBUTION_POINT,
 } from "./contributions.js";

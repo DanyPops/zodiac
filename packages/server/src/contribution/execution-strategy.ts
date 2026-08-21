@@ -1,4 +1,4 @@
-import type { ContributionHost, ContributionProvenance, ZodiacContribution } from "@zodiac/protocol";
+import type { ContributionDescription, ContributionHost, ContributionProvenance, ZodiacContribution } from "@zodiac/protocol";
 
 export interface EditorContributionRegistration {
 	readonly id: string;
@@ -7,6 +7,7 @@ export interface EditorContributionRegistration {
 
 export interface ActiveContribution {
 	readonly id: string;
+	readonly description: ContributionDescription;
 	readonly provenance: ContributionProvenance;
 	dispose(): Promise<void>;
 }
@@ -49,6 +50,7 @@ export function createInProcessExecutionStrategy(
 			let active = true;
 			return {
 				id: description.id,
+				description,
 				provenance,
 				async dispose() {
 					if (!active) return;

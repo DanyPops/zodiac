@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   APPLET_CONTRIBUTION_POINT,
   ContributionCardinalitySchema,
+  ContributionDescriptionSchema,
+  ContributionInvokeRequestSchema,
   ContributionPointDefinitionSchema,
   ContributionProvenanceSchema,
   ContributionReadBoundsSchema,
+  ContributionResourceReadRequestSchema,
   ContributionResourceReferenceSchema,
   EDITOR_CONTRIBUTION_POINT,
   type ZodiacContribution,
@@ -31,6 +34,13 @@ describe("package contribution contract", () => {
     expect(ContributionResourceReferenceSchema.safeParse({ uri: "x".repeat(2_049), kind: "workspace", title: "abc", readOnly: true }).success).toBe(false);
     expect(ContributionReadBoundsSchema.safeParse({ maxBytes: 4 * 1024 * 1024, maxEntries: 10_000 }).success).toBe(true);
     expect(ContributionReadBoundsSchema.safeParse({ maxBytes: 4 * 1024 * 1024 + 1, maxEntries: 10_001 }).success).toBe(false);
+  });
+
+  it("bounds contribution HTTP catalog, invoke, and resource-read contracts", () => {
+    expect(ContributionDescriptionSchema.safeParse({ id: "lector", title: "Lector", commands: [{ id: "lector.workspace.open", title: "Open Workspace" }], resourceSchemes: ["lector"], contributionPoints: ["editor"] }).success).toBe(true);
+    expect(ContributionInvokeRequestSchema.safeParse({ commandId: "lector.workspace.open", input: { path: "/repo" } }).success).toBe(true);
+    expect(ContributionResourceReadRequestSchema.safeParse({ resource: { uri: "lector://workspace/ws?path=", kind: "workspace", title: "repo", readOnly: true }, bounds: { maxBytes: 1024, maxEntries: 100 } }).success).toBe(true);
+    expect(ContributionInvokeRequestSchema.safeParse({ commandId: "x".repeat(201) }).success).toBe(false);
   });
 
   it("supports describe, activate registration, and disposal without a renderer dependency", async () => {

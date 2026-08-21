@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import {
 	AppletDefinitionSchema,
 	EDITOR_CONTRIBUTION_POINT,
+	type ContributionDescription,
 	type ContributionHost,
 	type ContributionPointKind,
 	type ContributionProvenance,
@@ -54,6 +55,7 @@ export interface LoadedConfiguredIntegration {
 	readonly kind: ContributionPointKind;
 	readonly id: string;
 	readonly entry: string;
+	readonly description?: ContributionDescription;
 	readonly provenance: ContributionProvenance;
 }
 
@@ -201,7 +203,7 @@ export async function loadConfiguredIntegrationPackages(options: LoadConfiguredI
 					throw new ConfiguredIntegrationLoadError("activation-failed", entry, `Failed activating ${pkg.provenance.packageId} editor contribution`, { packageId: pkg.provenance.packageId, cause: error });
 				}
 				cleanup.push(() => active.dispose());
-				loaded.push({ kind: "editor", id: active.id, entry, provenance: pkg.provenance });
+				loaded.push({ kind: "editor", id: active.id, entry, description: active.description, provenance: pkg.provenance });
 			}
 		}
 	} catch (error) {

@@ -315,6 +315,11 @@ async function main(): Promise<void> {
 		approvalCenter,
 		pendingClientActions,
 		vehicleSurfaces,
+		contributions: {
+			descriptions: configuredIntegrations.integrations.flatMap((entry) => entry.description ? [entry.description] : []),
+			commands: contributionCommands,
+			providers: contributionProviders,
+		},
 	});
 	daemonBaseUrl = service.baseUrl;
 
