@@ -24,6 +24,9 @@ export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions }
 
 export type { SurfaceRenderer } from "./renderer.js";
 
+export type { VehicleSurfaceEvent, VehicleSurfaceEventDescriptor, VehicleSurfaceFailure, VehicleSurfaceInvokeRequest, VehicleSurfaceInvokeResult, VehicleSurfaceManifest, VehicleSurfaceOperation } from "./vehicle-surface.js";
+export { VehicleSurfaceEventSchema, VehicleSurfaceEventDescriptorSchema, VehicleSurfaceFailureSchema, VehicleSurfaceInvokeRequestSchema, VehicleSurfaceInvokeResultSchema, VehicleSurfaceManifestSchema, VehicleSurfaceOperationSchema } from "./vehicle-surface.js";
+
 export type { Location, EdgeLocation, PanelAlignment, FormFactor, LengthMode, VisibilityMode, AppletSlot, AppletDefinition, Panel, PanelThicknessUnit } from "./panel.js";
 export { LocationSchema, EdgeLocationSchema, PanelAlignmentSchema, FormFactorSchema, LengthModeSchema, VisibilityModeSchema, AppletSlotSchema, AppletDefinitionSchema, PanelSchema, PanelThicknessUnitSchema, formFactorForLocation, validatePanelAppletAssignment } from "./panel.js";
 

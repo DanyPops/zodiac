@@ -54,6 +54,7 @@ const CUE_REGISTRATION_ALLOWLIST = [
 	"src/workspace/ActivitySurface.tsx", // no addressable sub-region of its own yet
 	"src/workspace/TerminalSurface.tsx", // no addressable sub-region of its own yet
 	"src/workspace/TerminalSurfaceLazy.tsx", // pure lazy-loading wrapper, nothing of its own to register
+	"src/vehicle-surface/PapyrusSurfaceLazy.tsx", // pure lazy-loading/composition wrapper; the loaded VehicleSurface owns the real refresh cue
 	"src/workspace/GalleryPreviewFrame.tsx", // pure presentational frame, not a real gallery entry itself
 	"src/workspace/SurfaceTemplatesPillar.tsx", // fixed icon rail, no expand/collapse or other addressable state (verified directly -- see 3aac4037's own corrected premise)
 ];

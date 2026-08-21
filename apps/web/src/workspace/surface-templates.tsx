@@ -1,8 +1,9 @@
-import { Activity, SquareTerminal } from "lucide-react";
+import { Activity, BookOpenCheck, SquareTerminal } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { IntegrationId } from "@zodiac/protocol/ids";
 import { ActivitySurfaceContent } from "./ActivitySurface.js";
 import { TerminalSurfaceLazy } from "./TerminalSurfaceLazy.js";
+import { PapyrusSurfaceLazy } from "../vehicle-surface/PapyrusSurfaceLazy.js";
 
 export interface SurfaceTemplateIconProps {
 	"aria-hidden"?: boolean | "true" | "false";
@@ -35,6 +36,7 @@ export interface SurfaceTemplateDefinition {
 // surface-templates.test.ts instead.
 export const ACTIVITY_TEMPLATE_ID = "activity" as IntegrationId;
 export const TERMINAL_TEMPLATE_ID = "terminal" as IntegrationId;
+export const PAPYRUS_TEMPLATE_ID = "papyrus" as IntegrationId;
 
 export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 	{
@@ -45,6 +47,15 @@ export const SURFACE_TEMPLATE_REGISTRY: readonly SurfaceTemplateDefinition[] = [
 		dockCommandTitle: "Dock Activity",
 		dockCommandDescription: "Dock a new Activity Surface into the active Window.",
 		render: () => <ActivitySurfaceContent />,
+	},
+	{
+		integrationId: PAPYRUS_TEMPLATE_ID,
+		title: "Papyrus",
+		icon: BookOpenCheck,
+		dockCommandId: "template.dockPapyrus",
+		dockCommandTitle: "Dock Papyrus",
+		dockCommandDescription: "Dock live Papyrus Tasks, Docs, Rules, and Discussions through zodiacd's token-safe Vehicle proxy.",
+		render: () => <PapyrusSurfaceLazy />,
 	},
 	{
 		integrationId: TERMINAL_TEMPLATE_ID,

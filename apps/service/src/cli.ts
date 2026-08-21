@@ -7,7 +7,7 @@ import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type W
 import { createAppletRegistry, createEventBus, seedBuiltinApplets, type AppletRegistry } from "@zodiac/server";
 import { loadConfiguredIntegrationPackages } from "@zodiac/server/contribution-loader";
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
-import { registerVisualCueOperations } from "@zodiac/server/vehicle";
+import { createSharedVehicleSurfaceGateway, registerVisualCueOperations } from "@zodiac/server/vehicle";
 import { registerVehicleGrantOperation } from "@danypops/vehicle-server/grant";
 import { VehicleJobStore } from "@danypops/vehicle-server/jobs";
 import { createInMemoryToolRegistrar, createPendingClientActions, watchWorkspaceToolGrants, type PendingClientActions, type ToolContribution } from "@zodiac/server/agent";
@@ -298,6 +298,9 @@ async function main(): Promise<void> {
 		process.stderr.write("[zodiacd] WARNING: --enable-terminal exposes a real shell over the network. No auth is implemented yet -- loopback only.\n");
 	}
 
+	const vehicleSurfaces = createSharedVehicleSurfaceGateway({
+		definitions: [{ id: "papyrus", title: "Papyrus", vehicleName: "papyrus", invalidationTopics: ["tasks"] }],
+	});
 	const service = await createZodiacService({
 		world,
 		sessionsRoot,
@@ -311,6 +314,7 @@ async function main(): Promise<void> {
 		bus,
 		approvalCenter,
 		pendingClientActions,
+		vehicleSurfaces,
 	});
 	daemonBaseUrl = service.baseUrl;
 

@@ -5,6 +5,7 @@ import type { WorldStore } from "@zodiac/server/world";
 import type { WorkspaceId } from "@zodiac/protocol";
 import { createEventBus, type EventBus } from "@zodiac/server";
 import type { PendingClientActions } from "@zodiac/server/agent";
+import type { VehicleSurfaceGateway } from "@zodiac/server/vehicle";
 import { createApprovalCenter, type ApprovalCenter } from "@zodiac/server/approval";
 import { createAgentSessionRegistry } from "./agent/agent-session-registry.js";
 import { fixtureReadSessionEvents, fixtureScanConversations } from "./fixtures/fixture-conversations.js";
@@ -14,6 +15,7 @@ import { createConversationsRoutes } from "./routes/conversations-routes.js";
 import { createNotificationRoutes } from "./routes/notification-routes.js";
 import { createTerminalRoutes } from "./routes/terminal-routes.js";
 import { createToolGrantRoutes } from "./routes/tool-grant-routes.js";
+import { createVehicleSurfaceRoutes } from "./routes/vehicle-surface-routes.js";
 import { createTerminalSessionRegistry } from "./terminal/terminal-session-registry.js";
 import type { TerminalPtyFactory } from "./terminal/terminal-pty-port.js";
 
@@ -40,6 +42,8 @@ export interface CreateZodiacServiceOptions {
 	pendingClientActions?: PendingClientActions;
 	/** Real ApprovalCenter wired to `bus` -- defaults to a fresh instance over the given/default bus. Inject a shared one so approve()/deny() here agree with whatever originally called request() elsewhere. */
 	approvalCenter?: ApprovalCenter;
+	/** Optional server-side Vehicle proxy. Bearer tokens remain behind this port and never enter browser-visible responses. */
+	vehicleSurfaces?: VehicleSurfaceGateway;
 }
 
 export interface ZodiacService {
@@ -71,6 +75,7 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 	const terminalRoutes = terminalSessionRegistry ? createTerminalRoutes(terminalSessionRegistry) : undefined;
 	const webSocketServer = terminalRoutes ? new WebSocketServer({ noServer: true }) : undefined;
 	const toolGrantRoutes = options.getWorkspaceToolIds ? createToolGrantRoutes(options.getWorkspaceToolIds) : undefined;
+	const vehicleSurfaceRoutes = options.vehicleSurfaces ? createVehicleSurfaceRoutes(options.vehicleSurfaces) : undefined;
 
 	const server = createServer((req, res) => {
 		// A browser-served static build (dist/) is necessarily a different origin
@@ -151,6 +156,23 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		const toolsMatch = toolGrantRoutes && req.method === "GET" ? /^\/api\/world\/workspaces\/([^/]+)\/tools$/.exec(pathname) : null;
 		if (toolGrantRoutes && toolsMatch) {
 			toolGrantRoutes.getWorkspaceTools(toolsMatch[1] ?? "", res);
+			return;
+		}
+		if (vehicleSurfaceRoutes && pathname === "/api/vehicle-surfaces" && req.method === "GET") {
+			vehicleSurfaceRoutes.list(req, res);
+			return;
+		}
+		const vehicleSurfaceMatch = vehicleSurfaceRoutes ? /^\/api\/vehicle-surfaces\/([^/]+)\/(manifest|invoke|events)$/.exec(pathname) : null;
+		if (vehicleSurfaceRoutes && vehicleSurfaceMatch) {
+			const surfaceId = decodeURIComponent(vehicleSurfaceMatch[1] ?? "");
+			const action = vehicleSurfaceMatch[2];
+			if (action === "manifest" && req.method === "GET") void vehicleSurfaceRoutes.manifest(req, res, surfaceId);
+			else if (action === "invoke" && req.method === "POST") void vehicleSurfaceRoutes.invoke(req, res, surfaceId);
+			else if (action === "events" && req.method === "GET") void vehicleSurfaceRoutes.events(req, res, surfaceId);
+			else {
+				res.statusCode = 405;
+				res.end();
+			}
 			return;
 		}
 		if (pathname === "/api/notifications" && req.method === "GET") {
