@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { panelId, workspaceId } from "@zodiac/protocol";
+import { commandId, panelId, workspaceId } from "@zodiac/protocol";
 import type { Panel, WorldViewModel } from "@zodiac/protocol";
 import { useWorldClient } from "./use-world-client.js";
 
@@ -14,8 +14,9 @@ function createFakeDaemon(initial: WorldViewModel, initialPanels: readonly Panel
 	const posted: unknown[] = [];
 	let panels = initialPanels;
 
-	function push(viewModel: WorldViewModel): void {
-		controller?.enqueue(encoder.encode(`data: ${JSON.stringify(viewModel)}\n\n`));
+	function push(viewModel: WorldViewModel, acknowledgedCommandId?: string): void {
+		const change = { viewModel, ...(acknowledgedCommandId ? { commandId: acknowledgedCommandId } : {}) };
+		controller?.enqueue(encoder.encode(`data: ${JSON.stringify(change)}\n\n`));
 	}
 
 	const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -65,6 +66,16 @@ describe("useWorldClient", () => {
 		const updated: WorldViewModel = { state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w2") };
 		daemon.push(updated);
 		await waitFor(() => expect(result.current.viewModel).toEqual(updated));
+	});
+
+	it("records command acknowledgements independently of what changed in the WorldViewModel", async () => {
+		const daemon = createFakeDaemon(EMPTY);
+		const { result } = renderHook(() => useWorldClient("http://fake", { fetcher: daemon.fetcher }));
+		await waitFor(() => expect(result.current.connected).toBe(true));
+
+		daemon.push(EMPTY, commandId("cmd-undock"));
+
+		await waitFor(() => expect(result.current.acknowledgedCommandIds).toContain("cmd-undock"));
 	});
 
 	it("reflects the daemon's Panel list once connected, and picks up a later change via the next onChange", async () => {

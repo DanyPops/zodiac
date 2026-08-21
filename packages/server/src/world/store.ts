@@ -20,6 +20,7 @@ import {
 	type WorkspaceId,
 	type WorkspaceViewModel,
 	type World,
+	type WorldChange,
 	type WorldId,
 	type WorldViewModel,
 	formFactorForLocation,
@@ -96,7 +97,7 @@ export interface WorldStore {
 	 * broadcast (SSE) connection. Never fires for a mutation that throws.
 	 * Returns an unsubscribe function.
 	 */
-	onChange: (listener: (viewModel: WorldViewModel) => void) => () => void;
+	onChange: (listener: (change: WorldChange) => void) => () => void;
 }
 
 function assertNeverIntent(intent: never): never {
@@ -216,7 +217,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	for (const workspace of initialWorkspaces.values()) {
 		for (const surface of workspace.surfaces) surfaceById.set(surface.id, { workspaceId: workspace.id, surface });
 	}
-	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
+	const changeListeners = new Set<(change: WorldChange) => void>();
 	const panels = new Map((panelOptions.panels ?? []).map((panel) => [panel.id, panel]));
 	const getApplet = panelOptions.getApplet ?? (() => undefined);
 	const getIntegration = panelOptions.getIntegration ?? (() => undefined);
@@ -261,9 +262,9 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		}
 	}
 
-	function emitChange(): void {
-		const viewModel = worldViewModel();
-		for (const listener of changeListeners) listener(viewModel);
+	function emitChange(commandId?: CommandId): void {
+		const change: WorldChange = { viewModel: worldViewModel(), ...(commandId !== undefined ? { commandId } : {}) };
+		for (const listener of changeListeners) listener(change);
 	}
 
 	function requireWorkspace(workspaceId: WorkspaceId): Workspace {
@@ -272,13 +273,13 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return workspace;
 	}
 
-	function createWorkspace(workspaceId: WorkspaceId, title: string): Workspace {
+	function createWorkspace(workspaceId: WorkspaceId, title: string, acknowledgedCommandId?: CommandId): Workspace {
 		if (workspaces.has(workspaceId)) throw new Error(`World "${worldId}" already has a Workspace "${workspaceId}"`);
 		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: "Window 0" };
 		tileByWindow.set(window.id, null);
 		const workspace: Workspace = { id: workspaceId, title, windows: [window], surfaces: [], activeWindowIndex: 0 };
 		workspaces.set(workspaceId, workspace);
-		emitChange();
+		emitChange(acknowledgedCommandId);
 		return workspace;
 	}
 
@@ -319,7 +320,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return { ok: true, value: workspace };
 	}
 
-	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId): Surface {
+	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId, acknowledgedCommandId?: CommandId): Surface {
 		const workspace = requireWorkspace(workspaceId);
 		const activeWindow = workspace.windows[workspace.activeWindowIndex];
 		if (!activeWindow) throw new Error(`Workspace "${workspaceId}" has an out-of-bounds activeWindowIndex ${workspace.activeWindowIndex}`);
@@ -330,12 +331,12 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, surfaces: [...workspace.surfaces, surface] });
 		surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(activeWindow.id, inserted.value);
-		emitChange();
+		emitChange(acknowledgedCommandId);
 		return surface;
 	}
 
 	/** The typed-outcome sibling of dockSurface, docking into a caller-named Window instead of always the active one -- see WorldStore.dockSurfaceInto's own doc comment. */
-	function dockSurfaceInto(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, targetWindowId: WindowId, requestedSurfaceId?: SurfaceId): DockIntoOutcome {
+	function dockSurfaceInto(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, targetWindowId: WindowId, requestedSurfaceId?: SurfaceId, acknowledgedCommandId?: CommandId): DockIntoOutcome {
 		const workspace = workspaces.get(workspaceId);
 		if (!workspace) return { ok: false, reason: "workspace-not-found", workspaceId };
 		const targetWindow = workspace.windows.find((window) => window.id === targetWindowId);
@@ -349,11 +350,11 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, surfaces: [...workspace.surfaces, surface] });
 		surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(targetWindowId, inserted.value);
-		emitChange();
+		emitChange(acknowledgedCommandId);
 		return { ok: true, value: surface };
 	}
 
-	function undockSurface(workspaceId: WorkspaceId, surfaceId: SurfaceId): void {
+	function undockSurface(workspaceId: WorkspaceId, surfaceId: SurfaceId, acknowledgedCommandId?: CommandId): void {
 		const workspace = requireWorkspace(workspaceId);
 		const indexed = surfaceById.get(surfaceId);
 		const surface = indexed?.workspaceId === workspaceId ? indexed.surface : undefined;
@@ -363,7 +364,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 			surfaceById.delete(surfaceId);
 		}
 		workspaces.set(workspaceId, { ...workspace, surfaces: workspace.surfaces.filter((candidate) => candidate.id !== surfaceId) });
-		emitChange();
+		emitChange(acknowledgedCommandId);
 	}
 
 	function moveSurfaceToWindow(workspaceId: WorkspaceId, surfaceId: SurfaceId, targetWindowId: WindowId): MoveSurfaceOutcome {
@@ -409,7 +410,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, activeWindowIndex });
 	}
 
-	function movePanel(targetPanelId: PanelId, placement: Extract<CommandIntent, { type: "panel.move" }>["placement"]): void {
+	function movePanel(targetPanelId: PanelId, placement: Extract<CommandIntent, { type: "panel.move" }>["placement"], acknowledgedCommandId?: CommandId): void {
 		const panel = panels.get(targetPanelId);
 		if (!panel) throw new Error(`World "${worldId}" has no Panel "${targetPanelId}"`);
 		const formFactor = formFactorForLocation(placement.location);
@@ -419,53 +420,54 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 			if (applet && !applet.supportedFormFactors.has(formFactor)) throw new Error(`Cannot move Panel "${targetPanelId}" to Location "${placement.location}": Applet "${assignedAppletId}" does not support FormFactor "${formFactor}"`);
 		}
 		panels.set(targetPanelId, { ...panel, location: placement.location, alignment: placement.alignment, offset: placement.offset });
-		emitChange();
+		emitChange(acknowledgedCommandId);
 	}
 
 	/** Never touches thicknessUnit -- a resize only ever changes magnitude, never which unit space it's declared in. See PanelThicknessUnit's own doc comment (panel.ts): a caller resizing a Panel outside its own unit space is a caller bug this function doesn't police. */
-	function resizePanel(targetPanelId: PanelId, thickness: number): void {
+	function resizePanel(targetPanelId: PanelId, thickness: number, acknowledgedCommandId?: CommandId): void {
 		const panel = panels.get(targetPanelId);
 		if (!panel) throw new Error(`World "${worldId}" has no Panel "${targetPanelId}"`);
 		panels.set(targetPanelId, { ...panel, thickness });
-		emitChange();
+		emitChange(acknowledgedCommandId);
 	}
 
 	function apply(intent: CommandIntent): ApplyOutcome {
 		switch (intent.type) {
 			case "workspace.create":
-				createWorkspace(intent.workspaceId, intent.title);
+				createWorkspace(intent.workspaceId, intent.title, intent.commandId);
 				return { commandId: intent.commandId };
 			case "surface.dock": {
 				if (intent.windowId !== undefined) {
-					const result = dockSurfaceInto(intent.workspaceId, intent.integrationId, intent.title, intent.windowId, intent.surfaceId);
+					const result = dockSurfaceInto(intent.workspaceId, intent.integrationId, intent.title, intent.windowId, intent.surfaceId, intent.commandId);
 					if (!result.ok) throw new Error(`Cannot dock into Window "${intent.windowId}": ${result.reason}`);
 					return { commandId: intent.commandId, surfaceId: result.value.id };
 				}
-				const surface = dockSurface(intent.workspaceId, intent.integrationId, intent.title, intent.surfaceId);
+				const surface = dockSurface(intent.workspaceId, intent.integrationId, intent.title, intent.surfaceId, intent.commandId);
 				return { commandId: intent.commandId, surfaceId: surface.id };
 			}
 			case "surface.undock":
-				undockSurface(intent.workspaceId, intent.surfaceId);
+				undockSurface(intent.workspaceId, intent.surfaceId, intent.commandId);
 				return { commandId: intent.commandId };
 			case "window.next":
 				moveActiveWindow(intent.workspaceId, 1);
-				emitChange();
+				emitChange(intent.commandId);
 				return { commandId: intent.commandId };
 			case "window.previous":
 				moveActiveWindow(intent.workspaceId, -1);
-				emitChange();
+				emitChange(intent.commandId);
 				return { commandId: intent.commandId };
 			case "panel.move":
-				movePanel(intent.panelId, intent.placement);
+				movePanel(intent.panelId, intent.placement, intent.commandId);
 				return { commandId: intent.commandId };
 			case "panel.resize":
-				resizePanel(intent.panelId, intent.thickness);
+				resizePanel(intent.panelId, intent.thickness, intent.commandId);
 				return { commandId: intent.commandId };
 			case "integration.invoke": {
 				requireWorkspace(intent.workspaceId);
 				const handler = integrationInvokeHandlers.get(intent.integrationId);
 				if (!handler) throw new Error(`World "${worldId}" has no registered integration.invoke handler for Integration "${intent.integrationId}"`);
 				const invokeResult = handler(intent.action, intent.input, { presentedCapability: intent.approvalCapability });
+				emitChange(intent.commandId);
 				return { commandId: intent.commandId, invokeResult };
 			}
 			default:

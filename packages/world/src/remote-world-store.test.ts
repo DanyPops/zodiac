@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { commandId, panelId, workspaceId } from "@zodiac/protocol";
-import type { Panel, WorldViewModel } from "@zodiac/protocol";
+import type { Panel, WorldChange, WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore, postCommandIntent } from "./remote-world-store.js";
 
 const EMPTY: WorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
@@ -20,6 +20,10 @@ function createFakeDaemon(initial: WorldViewModel, initialPanels: readonly Panel
 
 	function push(viewModel: WorldViewModel): void {
 		controller?.enqueue(encoder.encode(`data: ${JSON.stringify(viewModel)}\n\n`));
+	}
+
+	function pushChange(change: WorldChange): void {
+		controller?.enqueue(encoder.encode(`data: ${JSON.stringify(change)}\n\n`));
 	}
 
 	function closeStream(): void {
@@ -51,7 +55,7 @@ function createFakeDaemon(initial: WorldViewModel, initialPanels: readonly Panel
 		throw new Error(`fake daemon: unhandled request ${url}`);
 	});
 
-	return { fetcher, push, closeStream, posted, eventsRequestCount: () => eventsRequests, setPanels: (next: readonly Panel[]) => { panels = next; } };
+	return { fetcher, push, pushChange, closeStream, posted, eventsRequestCount: () => eventsRequests, setPanels: (next: readonly Panel[]) => { panels = next; } };
 }
 
 describe("connectRemoteWorldStore", () => {
@@ -66,7 +70,7 @@ describe("connectRemoteWorldStore", () => {
 		const daemon = createFakeDaemon(EMPTY);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
 		const seen: WorldViewModel[] = [];
-		store.onChange((viewModel) => seen.push(viewModel));
+		store.onChange((change) => seen.push(change.viewModel));
 
 		const ready: WorldViewModel = { state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w1") };
 		daemon.push(ready);
@@ -75,6 +79,20 @@ describe("connectRemoteWorldStore", () => {
 		// comment) -- every call still carries this same ready WorldViewModel.
 		await vi.waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(1));
 		for (const viewModel of seen) expect(viewModel).toEqual(ready);
+		store.dispose();
+	});
+
+	it("delivers the commandId alongside the WorldViewModel when a correlated SSE change arrives", async () => {
+		const daemon = createFakeDaemon(EMPTY);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		const seen: WorldChange[] = [];
+		store.onChange((change) => seen.push(change));
+		const ready: WorldViewModel = { state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w1") };
+
+		daemon.pushChange({ viewModel: ready, commandId: commandId("cmd-1") });
+
+		await vi.waitFor(() => expect(seen.some((change) => change.commandId === "cmd-1")).toBe(true));
+		expect(seen.find((change) => change.commandId === "cmd-1")?.viewModel).toEqual(ready);
 		store.dispose();
 	});
 
@@ -200,7 +218,7 @@ describe("connectRemoteWorldStore", () => {
 		const daemon = createFakeDaemon(EMPTY);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
 		const seen: WorldViewModel[] = [];
-		store.onChange((viewModel) => seen.push(viewModel));
+		store.onChange((change) => seen.push(change.viewModel));
 		store.dispose();
 		daemon.push({ state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w1") });
 		await new Promise((resolve) => setTimeout(resolve, 50));

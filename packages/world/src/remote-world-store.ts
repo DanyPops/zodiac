@@ -1,4 +1,4 @@
-import type { CommandId, CommandIntent, Panel, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import type { CommandId, CommandIntent, Panel, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldChange, WorldViewModel } from "@zodiac/protocol";
 import { readSseFrames } from "./net/sse-client.js";
 import type { WorldClient } from "./client.js";
 
@@ -33,6 +33,26 @@ export async function postCommandIntent(baseUrl: string, intent: CommandIntent, 
 	} catch (error) {
 		return { accepted: false, message: error instanceof Error ? error.message : String(error) };
 	}
+}
+
+function parseWorldChangeFrame(data: string): WorldChange | undefined {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(data);
+	} catch {
+		return undefined;
+	}
+	if (!parsed || typeof parsed !== "object") return undefined;
+	const candidate = parsed as { viewModel?: unknown; commandId?: unknown; state?: unknown };
+	if (candidate.viewModel && typeof candidate.viewModel === "object") {
+		if (candidate.commandId !== undefined && typeof candidate.commandId !== "string") return undefined;
+		return { viewModel: candidate.viewModel as WorldViewModel, ...(candidate.commandId !== undefined ? { commandId: candidate.commandId as CommandId } : {}) };
+	}
+	// Bounded rolling-upgrade compatibility: older daemons sent the raw
+	// WorldViewModel as an SSE frame. It cannot acknowledge a command, but it
+	// remains a valid state resync while client and daemon versions overlap.
+	if (candidate.state === "empty" || candidate.state === "ready") return { viewModel: parsed as WorldViewModel };
+	return undefined;
 }
 
 export interface RemoteWorldStoreOptions {
@@ -94,7 +114,7 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 	let latestPanels: readonly Panel[] = []; // assigned below -- fetchPanels' own not-ok/error fallback reads this, so it must exist before the first call
 	latestPanels = await fetchPanels();
 
-	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
+	const changeListeners = new Set<(change: WorldChange) => void>();
 	const streamController = new AbortController();
 
 	/**
@@ -111,12 +131,10 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 			try {
 				const response = await fetcher(`${baseUrl}/api/world/events`, { signal: streamController.signal });
 				await readSseFrames(response, (data) => {
-					try {
-						latest = JSON.parse(data) as WorldViewModel;
-					} catch {
-						return; // malformed frame -- skip, keep the last-known-good state
-					}
-					for (const listener of changeListeners) listener(latest);
+					const change = parseWorldChangeFrame(data);
+					if (!change) return; // malformed frame -- skip, keep the last-known-good state
+					latest = change.viewModel;
+					for (const listener of changeListeners) listener(change);
 					// A panel.move triggers this same broadcast as any other mutation --
 					// piggyback a refresh here instead of a second polling loop. Notifies
 					// listeners a second time once it lands (same viewModel, fresh panels)
@@ -124,7 +142,7 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 					// widening onChange's own callback signature to carry panels itself.
 					void fetchPanels().then((panels) => {
 						latestPanels = panels;
-						for (const listener of changeListeners) listener(latest);
+						for (const listener of changeListeners) listener(change);
 					});
 				});
 			} catch {
@@ -168,7 +186,7 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 				console.error(`connectRemoteWorldStore: apply(${label}) failed:`, error);
 			});
 		},
-		onChange(listener: (viewModel: WorldViewModel) => void): () => void {
+		onChange(listener: (change: WorldChange) => void): () => void {
 			changeListeners.add(listener);
 			return () => changeListeners.delete(listener);
 		},

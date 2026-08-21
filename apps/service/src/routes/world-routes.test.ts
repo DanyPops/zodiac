@@ -215,6 +215,25 @@ describe("createWorldRoutes", () => {
 		controller.abort();
 	});
 
+	it("streamEvents envelopes each snapshot with the commandId whose accepted mutation it reflects", async () => {
+		const world = createWorldStore(worldId("w1"));
+		world.createWorkspace(workspaceId("ws"), "WS");
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => routes.streamEvents(req, res));
+		const controller = new AbortController();
+		const response = await fetch(`${base}/api/world/events`, { signal: controller.signal });
+		const reader = response.body?.getReader();
+		if (!reader) throw new Error("expected a readable body");
+		await reader.read();
+
+		world.apply({ type: "window.next", workspaceId: workspaceId("ws"), commandId: "cmd-sse" as never });
+		const next = await reader.read();
+		const frame = new TextDecoder().decode(next.value);
+		expect(frame).toContain('"commandId":"cmd-sse"');
+		expect(frame).toContain('"viewModel"');
+		controller.abort();
+	});
+
 	it("streamEvents stops broadcasting to a disconnected client (unsubscribes on close)", async () => {
 		const world = createWorldStore(worldId("w1"));
 		const routes = createWorldRoutes(world);

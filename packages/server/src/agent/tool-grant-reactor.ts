@@ -27,7 +27,7 @@ export function watchWorkspaceToolGrants(
 		grantedByWorkspace.set(workspaceId, next);
 	}
 
-	return worldStore.onChange((viewModel) => {
+	return worldStore.onChange(({ viewModel }) => {
 		for (const workspace of viewModel.workspaces) reconcile(workspace.id);
 	});
 }

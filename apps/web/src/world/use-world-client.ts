@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { CommandIntent, Panel, WorldViewModel } from "@zodiac/protocol";
+import type { CommandId, CommandIntent, Panel, WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore, type WorldClient } from "@zodiac/world";
+import { recordCommandAcknowledgement } from "./command-acknowledgements.js";
 
 export interface UseWorldClientOptions {
 	/** Injectable for tests -- defaults to the browser global, same convention as createHttpTerminalClient/createHttpConversationClient. */
@@ -12,6 +13,8 @@ export interface WorldClientState {
 	readonly viewModel: WorldViewModel;
 	/** Global World chrome (see WorldClient.panels' own doc comment); empty before connecting or while disconnected, same fallback policy as viewModel. Refreshed whenever a fresh viewModel arrives -- not a live per-command reconciliation, see WorldClient.panels. */
 	readonly panels: readonly Panel[];
+	/** Accepted commands observed in correlated World broadcasts, retained as a bounded recent window for generic optimistic reconciliation. */
+	readonly acknowledgedCommandIds: readonly CommandId[];
 	/** False before the initial GET /api/world resolves, and permanently false if it never does (a wrong URL, no daemon listening) -- see connectRemoteWorldStore's own doc comment for that same fallback policy. */
 	readonly connected: boolean;
 	/** Dispatches one CommandIntent through the exact daemon endpoint (`POST /api/world/commands`) a human UI action and story 7's agent tool both already use. A harmless no-op while disconnected -- there is nowhere to send it yet. */
@@ -46,6 +49,7 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 	const [viewModel, setViewModel] = useState<WorldViewModel>(DISCONNECTED_VIEW_MODEL);
 	const [panels, setPanels] = useState<readonly Panel[]>(DISCONNECTED_PANELS);
 	const [connected, setConnected] = useState(false);
+	const [acknowledgedCommandIds, setAcknowledgedCommandIds] = useState<readonly CommandId[]>([]);
 	const applyRef = useRef<(intent: CommandIntent) => void>(noopApply);
 
 	useEffect(() => {
@@ -55,6 +59,7 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 		setConnected(false);
 		setViewModel(DISCONNECTED_VIEW_MODEL);
 		setPanels(DISCONNECTED_PANELS);
+		setAcknowledgedCommandIds([]);
 		applyRef.current = noopApply;
 
 		connectRemoteWorldStore({ baseUrl, fetcher })
@@ -71,8 +76,9 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 				// panels() is refreshed in the background by connectRemoteWorldStore
 				// itself (see its own doc comment) -- re-reading it on every onChange
 				// keeps this hook's state in step without a second subscription.
-				connected.onChange((nextViewModel) => {
-					setViewModel(nextViewModel);
+				connected.onChange((change) => {
+					setViewModel(change.viewModel);
+					setAcknowledgedCommandIds((current) => recordCommandAcknowledgement(current, change.commandId));
 					setPanels(connected.panels());
 				});
 			})
@@ -86,5 +92,5 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 		};
 	}, [baseUrl, fetcher]);
 
-	return { viewModel, panels, connected, apply: (intent) => applyRef.current(intent) };
+	return { viewModel, panels, acknowledgedCommandIds, connected, apply: (intent) => applyRef.current(intent) };
 }

@@ -18,7 +18,7 @@ export type { PickerItem, PickerRequest } from "./ui-results.js";
 
 export type { Constraint, TileChild, SurfaceTile } from "./tile.js";
 export { ConstraintSchema, SurfaceTileSchema, MAX_TILE_DEPTH, MAX_CHILDREN_PER_TILE, MAX_SURFACES_PER_TILE } from "./tile.js";
-export type { EmptyWorldViewModel, ReadyWorldViewModel, WorldViewModel, Region, AppletContent } from "./regions.js";
+export type { EmptyWorldViewModel, ReadyWorldViewModel, WorldViewModel, WorldChange, Region, AppletContent } from "./regions.js";
 export { AppletContentSchema } from "./regions.js";
 export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions } from "./regions.js";
 

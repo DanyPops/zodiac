@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { appletId, SurfaceIdSchema } from "./ids.js";
-import type { AppletId, WorkspaceId } from "./ids.js";
+import type { AppletId, CommandId, WorkspaceId } from "./ids.js";
 import { EdgeLocationSchema } from "./panel.js";
 import type { EdgeLocation, Panel } from "./panel.js";
 import type { ParseResult } from "./result.js";
@@ -10,6 +10,12 @@ import { SurfaceTileSchema } from "./tile.js";
 export interface EmptyWorldViewModel { readonly state: "empty"; readonly workspaces: readonly []; readonly activeWorkspaceId: null }
 export interface ReadyWorldViewModel { readonly state: "ready"; readonly workspaces: readonly WorkspaceViewModel[]; readonly activeWorkspaceId: WorkspaceId }
 export type WorldViewModel = EmptyWorldViewModel | ReadyWorldViewModel;
+
+/** One daemon broadcast: a fresh semantic snapshot plus the accepted command whose mutation it reflects, when the change came through CommandIntent dispatch. */
+export interface WorldChange {
+	readonly viewModel: WorldViewModel;
+	readonly commandId?: CommandId;
+}
 
 export const RegionRectSchema = z.object({ x: z.number().int().nonnegative().max(500), y: z.number().int().nonnegative().max(300), width: z.number().int().positive().max(500), height: z.number().int().positive().max(300) });
 const ItemSchema = z.object({ id: z.string().min(1), label: z.string().min(1).max(200), active: z.boolean() });

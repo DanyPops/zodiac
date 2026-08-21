@@ -100,12 +100,12 @@ export function createWorldRoutes(world: WorldStore, options?: { maxSseBufferedB
 			// and gets the current snapshot as its own first frame here so a
 			// late-joining client never has to guess whether it missed anything.
 			res.flushHeaders();
-			if (!writeSseFrame(res, world.worldViewModel(), maxSseBufferedBytes)) return;
-			const unsubscribe = world.onChange((viewModel) => {
+			if (!writeSseFrame(res, { viewModel: world.worldViewModel() }, maxSseBufferedBytes)) return;
+			const unsubscribe = world.onChange((change) => {
 				// Falls behind on the World's own broadcast -- see sse-writer.ts's own doc comment
 				// (grounded in opencode's real 187GB RSS incident). This is a per-connection close,
 				// never a daemon-wide one -- every other attached client keeps receiving updates.
-				if (!writeSseFrame(res, viewModel, maxSseBufferedBytes)) unsubscribe();
+				if (!writeSseFrame(res, change, maxSseBufferedBytes)) unsubscribe();
 			});
 			req.on("close", () => unsubscribe());
 		},

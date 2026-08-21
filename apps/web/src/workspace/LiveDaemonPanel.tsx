@@ -33,7 +33,7 @@ export interface LiveDaemonPanelProps {
 export function LiveDaemonPanel({ baseUrl, emitExtensionEvent }: LiveDaemonPanelProps): React.JSX.Element {
 	const worldClient = useWorldClient(baseUrl);
 	const [expanded, setExpanded] = useState(false);
-	const optimisticDock = useOptimisticDock(baseUrl, worldClient.viewModel);
+	const optimisticDock = useOptimisticDock(baseUrl, worldClient.acknowledgedCommandIds);
 	useWorldExtensionEvents(worldClient.viewModel, emitExtensionEvent ?? noopEmit);
 	const activeWorkspaceId = worldClient.viewModel.state === "ready" ? worldClient.viewModel.activeWorkspaceId : null;
 

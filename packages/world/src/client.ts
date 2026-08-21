@@ -1,4 +1,4 @@
-import type { CommandIntent, Panel, WorkspaceId, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import type { CommandIntent, Panel, WorkspaceId, WorkspaceViewModel, WorldChange, WorldViewModel } from "@zodiac/protocol";
 
 /**
  * The wire-safe subset of zodiacd's real `WorldStore` (`@zodiac/server/world`)
@@ -39,6 +39,6 @@ export interface WorldClient {
 	readonly panels: () => readonly Panel[];
 	/** Applies one typed CommandIntent -- the same path a keybinding, a palette entry, a script/RPC call, or an agent action all go through. */
 	readonly apply: (intent: CommandIntent) => void;
-	/** Subscribes to every state change; called with the fresh worldViewModel. Returns an unsubscribe function. */
-	readonly onChange: (listener: (viewModel: WorldViewModel) => void) => () => void;
+	/** Subscribes to every state change; the envelope carries the fresh view model and the accepted command it acknowledges, when any. Returns an unsubscribe function. */
+	readonly onChange: (listener: (change: WorldChange) => void) => () => void;
 }

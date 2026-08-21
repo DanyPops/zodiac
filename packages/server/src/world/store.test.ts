@@ -113,12 +113,23 @@ describe("WorldStore walking skeleton", () => {
 		it("passes the fresh worldViewModel to every listener, so a subscriber never has to call back into the store", () => {
 			const store = createWorldStore(worldId("w1"));
 			let received: ReturnType<typeof store.worldViewModel> | undefined;
-			store.onChange((viewModel) => {
-				received = viewModel;
+			store.onChange((change) => {
+				received = change.viewModel;
 			});
 
 			store.createWorkspace(workspaceId("ws"), "WS");
 			expect(received).toEqual(store.worldViewModel());
+		});
+
+		it("correlates an apply mutation with its commandId while direct mutations remain uncorrelated", () => {
+			const store = createWorldStore(worldId("w1"));
+			const received: Array<{ commandId?: string }> = [];
+			store.onChange((change) => received.push(change));
+
+			store.createWorkspace(workspaceId("ws"), "WS");
+			store.apply({ type: "window.next", workspaceId: workspaceId("ws"), commandId: commandId("cmd-next") });
+
+			expect(received.map((change) => change.commandId)).toEqual([undefined, "cmd-next"]);
 		});
 
 		it("supports multiple independent listeners, each of which can unsubscribe on its own", () => {
