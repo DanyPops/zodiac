@@ -27,8 +27,31 @@ export type { SurfaceRenderer } from "./renderer.js";
 export type { Location, EdgeLocation, PanelAlignment, FormFactor, LengthMode, VisibilityMode, AppletSlot, AppletDefinition, Panel, PanelThicknessUnit } from "./panel.js";
 export { LocationSchema, EdgeLocationSchema, PanelAlignmentSchema, FormFactorSchema, LengthModeSchema, VisibilityModeSchema, AppletSlotSchema, AppletDefinitionSchema, PanelSchema, PanelThicknessUnitSchema, formFactorForLocation, validatePanelAppletAssignment } from "./panel.js";
 
-export type { ZodiacContribution, ContributionCapability, ContributionCommand, ContributionDescription, ContributionHost, ContributionOutcome, ContributionReadBounds, ContributionResourceProvider, ContributionResourceReference } from "./contributions.js";
-export { ContributionReadBoundsSchema, ContributionResourceReferenceSchema } from "./contributions.js";
+export type {
+  ZodiacContribution,
+  ContributionCapability,
+  ContributionCardinality,
+  ContributionCommand,
+  ContributionDescription,
+  ContributionHost,
+  ContributionOutcome,
+  ContributionPointDefinition,
+  ContributionPointKind,
+  ContributionProvenance,
+  ContributionReadBounds,
+  ContributionResourceProvider,
+  ContributionResourceReference,
+} from "./contributions.js";
+export {
+  APPLET_CONTRIBUTION_POINT,
+  ContributionCardinalitySchema,
+  ContributionPointDefinitionSchema,
+  ContributionPointKindSchema,
+  ContributionProvenanceSchema,
+  ContributionReadBoundsSchema,
+  ContributionResourceReferenceSchema,
+  EDITOR_CONTRIBUTION_POINT,
+} from "./contributions.js";
 // Compatibility alias, not dead weight: the vendored, unpublished
 // @danypops/alignment-lector's own frozen source (repacked upstream, not
 // ours to edit) does `import type { AlignmentContribution } from

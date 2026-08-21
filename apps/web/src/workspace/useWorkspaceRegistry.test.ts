@@ -226,7 +226,7 @@ describe("useWorkspaceRegistry", () => {
 
 		it("emits workspace:removed for any registered extension's on() handler", () => {
 			const handler = vi.fn();
-			const host: ExtensionHost = { registerExtension: () => {}, emit: handler, surfaceTemplates: () => [], commands: () => [] };
+			const host: ExtensionHost = { registerExtension: () => {}, emit: handler, surfaceTemplates: () => [], commands: () => [], integrationRegistrations: () => [] };
 			const { result } = renderHook(() => useWorkspaceRegistry(CATALOG, undefined, host));
 			act(() => result.current.removeWorkspace("bug"));
 

@@ -1,5 +1,30 @@
 import { z } from "zod";
 
+export const ContributionCardinalitySchema = z.enum(["exactly-one", "zero-or-one", "zero-or-many"]);
+export type ContributionCardinality = z.infer<typeof ContributionCardinalitySchema>;
+
+export const ContributionPointKindSchema = z.enum(["applet", "editor"]);
+export type ContributionPointKind = z.infer<typeof ContributionPointKindSchema>;
+
+export const ContributionPointDefinitionSchema = z.object({
+  kind: ContributionPointKindSchema,
+  cardinality: ContributionCardinalitySchema,
+});
+export interface ContributionPointDefinition<TKind extends string = ContributionPointKind> {
+  readonly kind: TKind;
+  readonly cardinality: ContributionCardinality;
+}
+
+export const APPLET_CONTRIBUTION_POINT = { kind: "applet", cardinality: "zero-or-many" } as const satisfies ContributionPointDefinition<"applet">;
+export const EDITOR_CONTRIBUTION_POINT = { kind: "editor", cardinality: "exactly-one" } as const satisfies ContributionPointDefinition<"editor">;
+
+export const ContributionProvenanceSchema = z.object({
+  packageId: z.string().trim().min(1).max(214),
+  version: z.string().trim().min(1).max(100),
+  source: z.string().trim().min(1).max(2_048),
+});
+export type ContributionProvenance = z.infer<typeof ContributionProvenanceSchema>;
+
 export const ContributionResourceReferenceSchema = z.object({
   uri: z.string().trim().min(1).max(2_048),
   kind: z.string().trim().min(1).max(100),
@@ -61,6 +86,8 @@ export interface ContributionDescription {
   readonly version?: string;
   /** Declared capability tags beyond the baseline surface (see ContributionCapability). Optional; absent means "assume baseline only". */
   readonly capabilities?: readonly ContributionCapability[];
+  /** Named platform points supplied by this package. Optional for contributions authored before the applet/editor taxonomy existed. */
+  readonly contributionPoints?: readonly ContributionPointKind[];
 }
 
 export interface ZodiacContribution {

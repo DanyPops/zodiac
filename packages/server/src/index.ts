@@ -3,6 +3,10 @@ export { createCommandDispatcher } from "./command/dispatcher.js";
 
 export type { ContributionApi, Contribution, ContributionRegistry } from "./contribution/registry.js";
 export { createContributionRegistry } from "./contribution/registry.js";
+export type { ContributionPointMap, ContributionPointRegistry, RegisteredContribution } from "./contribution/point-registry.js";
+export { ContributionCardinalityError, createContributionPointRegistry } from "./contribution/point-registry.js";
+export type { ActiveContribution, EditorContributionRegistration, ExecutionStrategy } from "./contribution/execution-strategy.js";
+export { createInProcessExecutionStrategy } from "./contribution/execution-strategy.js";
 
 export type { AppletRegistry } from "./contribution/applet-registry.js";
 export { createAppletRegistry, seedBuiltinApplets } from "./contribution/applet-registry.js";

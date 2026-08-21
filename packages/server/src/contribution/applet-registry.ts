@@ -1,18 +1,24 @@
-import type { AppletDefinition } from "@zodiac/protocol";
-import { appletId } from "@zodiac/protocol";
-import { createContributionRegistry } from "./registry.js";
+import type { AppletDefinition, ContributionProvenance } from "@zodiac/protocol";
+import { APPLET_CONTRIBUTION_POINT, appletId } from "@zodiac/protocol";
+import { createContributionPointRegistry, type RegisteredContribution } from "./point-registry.js";
 
-/** An Applet registry, reusing createContributionRegistry's own generic machinery -- an Applet's `id` slots into the registry's TIntegration type parameter exactly as apps/web/src/extensions/builtin-integrations.ts already does for IntegrationDefinition; TCommand/TEvent go unused. */
+const BUILTIN_PROVENANCE: ContributionProvenance = { packageId: "@zodiac/server", version: "0.0.1", source: "builtin:@zodiac/server" };
+
+type AppletPoints = { applet: AppletDefinition };
+
+/** Applets use the same named-point/cardinality/provenance registry as editor contributions loaded by an ExecutionStrategy. */
 export interface AppletRegistry {
-	registerApplet: (definition: AppletDefinition) => void;
+	registerApplet: (definition: AppletDefinition, provenance?: ContributionProvenance) => void;
 	applets: () => readonly AppletDefinition[];
+	registrations: () => readonly RegisteredContribution<AppletDefinition>[];
 }
 
 export function createAppletRegistry(): AppletRegistry {
-	const registry = createContributionRegistry<AppletDefinition, { id: string }, { type: string }>();
+	const registry = createContributionPointRegistry<AppletPoints>([APPLET_CONTRIBUTION_POINT]);
 	return {
-		registerApplet: (definition) => registry.register({ id: `applet:${definition.id}`, activate: (api) => api.registerIntegration(definition) }),
-		applets: registry.integrations,
+		registerApplet: (definition, provenance = BUILTIN_PROVENANCE) => { registry.register("applet", definition, provenance); },
+		applets: () => registry.entries("applet").map((entry) => entry.value),
+		registrations: () => registry.entries("applet"),
 	};
 }
 

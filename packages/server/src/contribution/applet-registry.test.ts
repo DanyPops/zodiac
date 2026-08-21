@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import { createAppletRegistry, seedBuiltinApplets } from "./applet-registry.js";
 
 describe("createAppletRegistry", () => {
-	it("rejects a duplicate Applet id", () => {
+	it("rejects a duplicate Applet id and records package provenance", () => {
 		const registry = createAppletRegistry();
-		registry.registerApplet({ id: appletId("chat"), title: "Chat", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 });
+		registry.registerApplet(
+			{ id: appletId("chat"), title: "Chat", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 },
+			{ packageId: "@acme/chat", version: "1.0.0", source: "npm:@acme/chat@1.0.0" },
+		);
+		expect(registry.registrations()[0]?.provenance).toEqual({ packageId: "@acme/chat", version: "1.0.0", source: "npm:@acme/chat@1.0.0" });
 		expect(() => registry.registerApplet({ id: appletId("chat"), title: "Chat 2", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 })).toThrow();
 	});
 

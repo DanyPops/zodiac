@@ -1,7 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { ContributionReadBoundsSchema, ContributionResourceReferenceSchema, type ZodiacContribution, type ContributionHost } from "./contributions.js";
+import {
+  APPLET_CONTRIBUTION_POINT,
+  ContributionCardinalitySchema,
+  ContributionPointDefinitionSchema,
+  ContributionProvenanceSchema,
+  ContributionReadBoundsSchema,
+  ContributionResourceReferenceSchema,
+  EDITOR_CONTRIBUTION_POINT,
+  type ZodiacContribution,
+  type ContributionHost,
+} from "./contributions.js";
 
 describe("package contribution contract", () => {
+  it("defines bounded applet/editor points, generic cardinality, and package provenance", () => {
+    expect(APPLET_CONTRIBUTION_POINT).toEqual({ kind: "applet", cardinality: "zero-or-many" });
+    expect(EDITOR_CONTRIBUTION_POINT).toEqual({ kind: "editor", cardinality: "exactly-one" });
+    expect(ContributionCardinalitySchema.options).toEqual(["exactly-one", "zero-or-one", "zero-or-many"]);
+    expect(ContributionPointDefinitionSchema.safeParse(EDITOR_CONTRIBUTION_POINT).success).toBe(true);
+    expect(ContributionPointDefinitionSchema.safeParse({ kind: "unknown", cardinality: "many" }).success).toBe(false);
+    expect(ContributionProvenanceSchema.parse({ packageId: "@danypops/zodiac-lector", version: "1.2.3", source: "npm:@danypops/zodiac-lector@1.2.3" })).toEqual({
+      packageId: "@danypops/zodiac-lector",
+      version: "1.2.3",
+      source: "npm:@danypops/zodiac-lector@1.2.3",
+    });
+    expect(ContributionProvenanceSchema.safeParse({ packageId: "", version: "1", source: "x" }).success).toBe(false);
+  });
+
   it("bounds framework-neutral resource references and reads", () => {
     expect(ContributionResourceReferenceSchema.safeParse({ uri: "lector-workspace://abc/", kind: "workspace", title: "abc", readOnly: true }).success).toBe(true);
     expect(ContributionResourceReferenceSchema.safeParse({ uri: "x".repeat(2_049), kind: "workspace", title: "abc", readOnly: true }).success).toBe(false);
@@ -35,8 +59,9 @@ describe("package contribution contract", () => {
   });
 
   it("a contribution may declare its own version and capability tags", () => {
-    const described: ReturnType<ZodiacContribution["describe"]> = { id: "example", title: "Example", commands: [], resourceSchemes: [], version: "1.2.0", capabilities: ["streaming-resources"] };
+    const described: ReturnType<ZodiacContribution["describe"]> = { id: "example", title: "Example", commands: [], resourceSchemes: [], version: "1.2.0", capabilities: ["streaming-resources"], contributionPoints: ["editor"] };
     expect(described.version).toBe("1.2.0");
+    expect(described.contributionPoints).toEqual(["editor"]);
     expect(described.capabilities).toEqual(["streaming-resources"]);
   });
 });

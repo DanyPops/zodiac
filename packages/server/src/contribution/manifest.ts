@@ -10,10 +10,12 @@
  * as a platform" for discovery/distribution.
  */
 import { readFileSync } from "node:fs";
+import { ContributionPointKindSchema, type ContributionPointKind } from "@zodiac/protocol";
 import { z } from "zod";
 
-export const ZodiacIntegrationKindSchema = z.enum(["applet", "editor"]);
-export type ZodiacIntegrationKind = z.infer<typeof ZodiacIntegrationKindSchema>;
+/** Compatibility name for manifests; the authoritative taxonomy lives in @zodiac/protocol. */
+export const ZodiacIntegrationKindSchema = ContributionPointKindSchema;
+export type ZodiacIntegrationKind = ContributionPointKind;
 
 /** One contribution point a package activates. `entry` is a module path relative to the package root, resolved by the caller -- this module never touches the filesystem beyond reading the manifest itself. */
 export const ZodiacIntegrationEntrySchema = z.object({

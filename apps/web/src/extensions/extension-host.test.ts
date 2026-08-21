@@ -27,7 +27,7 @@ describe("createExtensionHost", () => {
 		const host = createExtensionHost();
 		host.registerExtension(
 			extension("acme", (api) => {
-				api.registerSurfaceTemplate(fakeTemplate("acme-surface"));
+				api.registerIntegration(fakeTemplate("acme-surface"));
 				api.registerCommand(fakeCommand("acme.doThing"));
 			}),
 		);
@@ -44,14 +44,24 @@ describe("createExtensionHost", () => {
 
 	it("rejects a duplicate Surface Template id across extensions", () => {
 		const host = createExtensionHost();
-		host.registerExtension(extension("a", (api) => api.registerSurfaceTemplate(fakeTemplate("dup"))));
-		expect(() => host.registerExtension(extension("b", (api) => api.registerSurfaceTemplate(fakeTemplate("dup"))))).toThrow(/duplicate surface template/i);
+		host.registerExtension(extension("a", (api) => api.registerIntegration(fakeTemplate("dup"))));
+		expect(() => host.registerExtension(extension("b", (api) => api.registerIntegration(fakeTemplate("dup"))))).toThrow(/duplicate.*integration/i);
 	});
 
 	it("rejects a duplicate command id across extensions", () => {
 		const host = createExtensionHost();
 		host.registerExtension(extension("a", (api) => api.registerCommand(fakeCommand("dup"))));
 		expect(() => host.registerExtension(extension("b", (api) => api.registerCommand(fakeCommand("dup"))))).toThrow(/duplicate command/i);
+	});
+
+	it("records Integration package provenance", () => {
+		const host = createExtensionHost();
+		host.registerExtension({
+			id: "acme",
+			provenance: { packageId: "@acme/zodiac", version: "2.0.0", source: "npm:@acme/zodiac@2.0.0" },
+			activate: (api) => api.registerIntegration(fakeTemplate("acme-surface")),
+		});
+		expect(host.integrationRegistrations()[0]?.provenance).toEqual({ packageId: "@acme/zodiac", version: "2.0.0", source: "npm:@acme/zodiac@2.0.0" });
 	});
 
 	it("multiple extensions' contributions all accumulate", () => {

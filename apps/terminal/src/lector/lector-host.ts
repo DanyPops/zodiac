@@ -1,12 +1,19 @@
 import { createLectorZodiacContribution, type LectorOperations } from "@danypops/zodiac-lector";
-import type {
-	ZodiacContribution,
-	ContributionCommand,
-	ContributionOutcome,
-	ContributionReadBounds,
-	ContributionResourceProvider,
-	ContributionResourceReference,
+import {
+	EDITOR_CONTRIBUTION_POINT,
+	type ZodiacContribution,
+	type ContributionCommand,
+	type ContributionOutcome,
+	type ContributionReadBounds,
+	type ContributionResourceProvider,
+	type ContributionResourceReference,
 } from "@zodiac/protocol";
+import {
+	createContributionPointRegistry,
+	createInProcessExecutionStrategy,
+	type ActiveContribution,
+	type EditorContributionRegistration,
+} from "@zodiac/server";
 
 /**
  * Zodiac's own real ContributionHost for `@danypops/zodiac-lector` -- the one production
@@ -25,30 +32,38 @@ export function createLectorHost(options: { operations?: LectorOperations; contr
 	const contribution = options.contribution ?? createLectorZodiacContribution({ operations: options.operations });
 	const commands = new Map<string, ContributionCommand>();
 	let provider: ContributionResourceProvider | undefined;
-	let active = false;
+	let activeContribution: ActiveContribution | undefined;
+	const points = createContributionPointRegistry<{ editor: EditorContributionRegistration }>([EDITOR_CONTRIBUTION_POINT]);
+	const strategy = createInProcessExecutionStrategy(points, {
+		registerCommand(command) {
+			commands.set(command.id, command);
+			return () => commands.delete(command.id);
+		},
+		registerResourceProvider(value) {
+			provider = value;
+			return () => {
+				provider = undefined;
+			};
+		},
+	});
 
 	return {
 		async activate() {
-			if (active) throw new Error("Lector host is already active");
-			await contribution.activate({
-				registerCommand(command) {
-					commands.set(command.id, command);
-					return () => commands.delete(command.id);
-				},
-				registerResourceProvider(value) {
-					provider = value;
-					return () => {
-						provider = undefined;
-					};
-				},
+			if (activeContribution) throw new Error("Lector host is already active");
+			activeContribution = await strategy.activate(contribution, {
+				packageId: "@danypops/zodiac-lector",
+				version: contribution.describe().version ?? "unknown",
+				source: "configured:@danypops/zodiac-lector",
 			});
-			active = true;
 		},
 		async dispose() {
-			await contribution.dispose();
-			commands.clear();
-			provider = undefined;
-			active = false;
+			try {
+				await activeContribution?.dispose();
+			} finally {
+				commands.clear();
+				provider = undefined;
+				activeContribution = undefined;
+			}
 		},
 		async execute(commandId, input) {
 			const command = commands.get(commandId);
