@@ -1,4 +1,4 @@
-import type { ZodiacAgentEvent } from "@zodiac/agent";
+import type { AgentSessionControlOutcome, ZodiacAgentEvent } from "@zodiac/agent";
 import type { ConversationItem } from "../conversation/projector.js";
 import type { PiClient } from "./client.js";
 
@@ -7,12 +7,18 @@ export interface PiChatSnapshot {
 	readonly busy: boolean;
 	readonly error: string | undefined;
 	readonly hasStarted: boolean;
+	readonly activity: "turn" | "compaction" | undefined;
+	readonly sessionName: string | undefined;
 }
 
 export interface PiChatController {
 	getSnapshot: () => PiChatSnapshot;
 	subscribe: (listener: () => void) => () => void;
 	sendMessage: (text: string) => void;
+	setModel: (provider: string, modelId: string) => Promise<AgentSessionControlOutcome>;
+	compact: (customInstructions?: string) => Promise<AgentSessionControlOutcome>;
+	resume: (sessionPath: string) => Promise<AgentSessionControlOutcome>;
+	fork: (entryId: string) => Promise<AgentSessionControlOutcome>;
 	dispose: () => void;
 }
 
@@ -52,6 +58,8 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 	let busy = false;
 	let error: string | undefined;
 	let hasStarted = false;
+	let activity: "turn" | "compaction" | undefined;
+	let sessionName: string | undefined;
 	let sessionPromise: Promise<string> | undefined;
 	let unsubscribeEvents: (() => void) | undefined;
 	// Set once ensureSession()'s own session-creation Promise resolves --
@@ -80,17 +88,58 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 		items = [...items, { kind: "message", role: "assistant", text, timestamp: nextTimestamp }];
 	}
 
-	function handleEvent(event: ZodiacAgentEvent): void {
+	function handleStatusEvent(event: ZodiacAgentEvent): boolean {
 		switch (event.type) {
 			case "agent-start":
 				busy = true;
-				notify();
-				return;
+				break;
 			case "agent-settled":
 				busy = false;
+				activity = undefined;
 				assistantTimestamp = undefined;
-				notify();
-				return;
+				break;
+			case "turn-start":
+				activity = "turn";
+				break;
+			case "turn-end":
+				if (activity === "turn") activity = undefined;
+				break;
+			case "compaction-start":
+				activity = "compaction";
+				busy = true;
+				break;
+			case "compaction-end":
+				if (activity === "compaction") activity = undefined;
+				if (event.errorMessage) error = event.errorMessage;
+				break;
+			case "session-info-changed":
+				sessionName = event.name;
+				break;
+			case "error":
+				error = event.message;
+				busy = false;
+				break;
+			default:
+				return false;
+		}
+		notify();
+		return true;
+	}
+
+	function updateToolCall(toolCallId: string, output: unknown): void {
+		const index = toolCallIndex.get(toolCallId);
+		if (index === undefined) return;
+		const existing = items[index];
+		if (existing?.kind !== "tool-call") return;
+		const next = [...items];
+		next[index] = { ...existing, response: output };
+		items = next;
+		notify();
+	}
+
+	function handleEvent(event: ZodiacAgentEvent): void {
+		if (handleStatusEvent(event)) return;
+		switch (event.type) {
 			case "assistant-message-start":
 				// A fresh assistant message begins -- ensure the next delta/end
 				// starts its own ConversationItem rather than reusing a stale
@@ -115,21 +164,11 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 				notify();
 				return;
 			}
-			case "tool-call-end": {
-				const index = toolCallIndex.get(event.toolCallId);
-				if (index === undefined) return;
-				const existing = items[index];
-				if (existing?.kind !== "tool-call") return;
-				const next = [...items];
-				next[index] = { ...existing, response: event.output };
-				items = next;
-				notify();
+			case "tool-call-update":
+			case "tool-call-end":
+				updateToolCall(event.toolCallId, event.output);
 				return;
-			}
-			case "error":
-				error = event.message;
-				busy = false;
-				notify();
+			default:
 				return;
 		}
 	}
@@ -149,9 +188,11 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 		return sessionPromise;
 	}
 
+	const unsupportedControl = (name: string): AgentSessionControlOutcome => ({ ok: false, reason: "unsupported", message: `The Web Pi client does not support ${name}.` });
+
 	return {
 		getSnapshot() {
-			return { items, busy, error, hasStarted };
+			return { items, busy, error, hasStarted, activity, sessionName };
 		},
 		subscribe(listener) {
 			listeners.add(listener);
@@ -170,6 +211,22 @@ export function createPiChatController(client: PiClient, options: PiChatControll
 					error = describeError(sendError);
 					notify();
 				});
+		},
+		async setModel(provider, modelId) {
+			const sessionId = await ensureSession();
+			return client.setModel?.(sessionId, provider, modelId) ?? unsupportedControl("model switching");
+		},
+		async compact(customInstructions) {
+			const sessionId = await ensureSession();
+			return client.compact?.(sessionId, customInstructions) ?? unsupportedControl("manual compaction");
+		},
+		async resume(sessionPath) {
+			const sessionId = await ensureSession();
+			return client.resume?.(sessionId, sessionPath) ?? unsupportedControl("session resume");
+		},
+		async fork(entryId) {
+			const sessionId = await ensureSession();
+			return client.fork?.(sessionId, entryId) ?? unsupportedControl("session fork");
 		},
 		dispose() {
 			disposed = true;

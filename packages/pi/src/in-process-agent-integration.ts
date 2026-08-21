@@ -1,6 +1,12 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { contentText } from "@earendil-works/pi-ai";
-import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
+import type { AgentIntegrationPort, AgentSessionControlOutcome, ZodiacAgentEvent } from "@zodiac/agent";
+
+export interface InProcessAgentIntegrationOptions {
+	readonly resolveModel?: (provider: string, modelId: string) => Parameters<AgentSession["setModel"]>[0] | undefined;
+	readonly resume?: (sessionPath: string) => Promise<AgentSessionControlOutcome>;
+	readonly fork?: (entryId: string) => Promise<AgentSessionControlOutcome>;
+}
 
 /**
  * The "proper" adapter story 8 asks for: wraps a real, already-constructed
@@ -11,7 +17,7 @@ import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
  * deliberately left to the caller -- this adapter's only job is wrapping an
  * already-live session, not owning its setup policy.
  */
-export function createInProcessAgentIntegration(session: AgentSession): AgentIntegrationPort {
+export function createInProcessAgentIntegration(session: AgentSession, options: InProcessAgentIntegrationOptions = {}): AgentIntegrationPort {
 	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
 	let unsubscribeSession: (() => void) | undefined;
 	/**
@@ -85,18 +91,24 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 					return { type: "error", message: event.message.errorMessage ?? "The agent stopped unexpectedly." };
 				}
 				return { type: "assistant-message-end", text: contentText(event.message.content, "") };
+			case "turn_start":
+				return { type: "turn-start" };
+			case "turn_end":
+				return { type: "turn-end" };
 			case "tool_execution_start":
 				return { type: "tool-call-start", toolCallId: event.toolCallId, toolName: event.toolName, input: event.args };
+			case "tool_execution_update":
+				return { type: "tool-call-update", toolCallId: event.toolCallId, toolName: event.toolName, output: event.partialResult };
 			case "tool_execution_end":
 				return { type: "tool-call-end", toolCallId: event.toolCallId, toolName: event.toolName, output: event.result, isError: event.isError };
-			case "tool_execution_update":
-			case "turn_start":
-			case "turn_end":
-			case "queue_update":
 			case "compaction_start":
+				return { type: "compaction-start", reason: event.reason };
 			case "compaction_end":
-			case "entry_appended":
+				return { type: "compaction-end", reason: event.reason, aborted: event.aborted, ...(event.errorMessage !== undefined ? { errorMessage: event.errorMessage } : {}) };
 			case "session_info_changed":
+				return { type: "session-info-changed", ...(event.name !== undefined ? { name: event.name } : {}) };
+			case "queue_update":
+			case "entry_appended":
 			case "thinking_level_changed":
 			case "auto_retry_start":
 			case "auto_retry_end":
@@ -128,6 +140,32 @@ export function createInProcessAgentIntegration(session: AgentSession): AgentInt
 		},
 		async abort() {
 			await session.abort();
+		},
+		session: {
+			async setModel(provider, modelId) {
+				const model = options.resolveModel?.(provider, modelId);
+				if (!model) return { ok: false, reason: "model-not-found", message: `Model not found: ${provider}/${modelId}` };
+				try {
+					await session.setModel(model);
+					return { ok: true };
+				} catch (error) {
+					return { ok: false, reason: "failed", message: error instanceof Error ? error.message : String(error) };
+				}
+			},
+			async compact(customInstructions) {
+				try {
+					await session.compact(customInstructions);
+					return { ok: true };
+				} catch (error) {
+					return { ok: false, reason: "failed", message: error instanceof Error ? error.message : String(error) };
+				}
+			},
+			async resume(sessionPath) {
+				return options.resume?.(sessionPath) ?? { ok: false, reason: "unsupported", message: "This embedded session was not constructed with a replaceable AgentSessionRuntime." };
+			},
+			async fork(entryId) {
+				return options.fork?.(entryId) ?? { ok: false, reason: "unsupported", message: "This embedded session was not constructed with a replaceable AgentSessionRuntime." };
+			},
 		},
 		onEvent(listener) {
 			eventListeners.add(listener);

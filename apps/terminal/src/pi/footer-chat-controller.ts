@@ -1,4 +1,4 @@
-import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
+import type { AgentIntegrationPort, AgentSessionControlOutcome, ZodiacAgentEvent } from "@zodiac/agent";
 
 /** Bounds how many conversation items this controller retains -- an unbounded history in a long-lived TUI process is exactly the kind of resource the rest of this codebase already refuses to leave unbound (see the walking-skeleton event-bus task's own bounded-subscriber/history conventions). Oldest items are dropped first. */
 const MAX_ITEMS = 200;
@@ -35,11 +35,12 @@ export type FooterChatStatus =
  * return type this way means every live state always carries `items`
  * without every caller re-checking for a variant this type can't produce.
  */
-export type LiveFooterChatStatus =
+export type LiveFooterChatStatus = (
 	| { readonly kind: "composing"; readonly draft: string; readonly items: readonly FooterChatItem[] }
 	| { readonly kind: "busy"; readonly draft: string; readonly items: readonly FooterChatItem[] }
 	| { readonly kind: "idle"; readonly draft: string; readonly items: readonly FooterChatItem[] }
-	| { readonly kind: "error"; readonly draft: string; readonly message: string; readonly items: readonly FooterChatItem[] };
+	| { readonly kind: "error"; readonly draft: string; readonly message: string; readonly items: readonly FooterChatItem[] }
+) & { readonly activity?: "turn" | "compaction"; readonly sessionName?: string };
 
 export interface FooterChatController {
 	snapshot: () => LiveFooterChatStatus;
@@ -49,6 +50,10 @@ export interface FooterChatController {
 	backspace: () => void;
 	/** Sends the current draft as a prompt (steer()-equivalent while already streaming, via the port's own prompt() convenience) and clears it. No-op on an empty/whitespace-only draft. */
 	submit: () => void;
+	setModel: (provider: string, modelId: string) => Promise<AgentSessionControlOutcome>;
+	compact: (customInstructions?: string) => Promise<AgentSessionControlOutcome>;
+	resume: (sessionPath: string) => Promise<AgentSessionControlOutcome>;
+	fork: (entryId: string) => Promise<AgentSessionControlOutcome>;
 	dispose: () => void;
 }
 
@@ -64,6 +69,8 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 	let streamingAssistantIndex: number | undefined;
 	const toolItemIndexByCallId = new Map<string, number>();
 	let busy = false;
+	let activity: "turn" | "compaction" | undefined;
+	let sessionName: string | undefined;
 	let error: string | undefined;
 	const listeners = new Set<() => void>();
 
@@ -98,7 +105,30 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 				return;
 			case "agent-settled":
 				busy = false;
+				activity = undefined;
 				streamingAssistantIndex = undefined;
+				notify();
+				return;
+			case "turn-start":
+				activity = "turn";
+				notify();
+				return;
+			case "turn-end":
+				if (activity === "turn") activity = undefined;
+				notify();
+				return;
+			case "compaction-start":
+				activity = "compaction";
+				busy = true;
+				notify();
+				return;
+			case "compaction-end":
+				if (activity === "compaction") activity = undefined;
+				if (event.errorMessage) error = event.errorMessage;
+				notify();
+				return;
+			case "session-info-changed":
+				sessionName = event.name;
 				notify();
 				return;
 			case "assistant-message-start":
@@ -117,6 +147,12 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 				return;
 			case "tool-call-start":
 				toolItemIndexByCallId.set(event.toolCallId, pushItem({ role: "tool", text: event.toolName, status: "pending" }));
+				notify();
+				return;
+			case "tool-call-update":
+				// The Footer's compact tool row intentionally shows status rather than
+				// potentially huge output, but the update still repaints so expanded
+				// renderers can consume richer item details later without a port change.
 				notify();
 				return;
 			case "tool-call-end": {
@@ -140,12 +176,15 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 		notify();
 	});
 
+	const unsupportedControl = (name: string): AgentSessionControlOutcome => ({ ok: false, reason: "unsupported", message: `This Agent Integration does not support ${name}.` });
+
 	return {
 		snapshot() {
-			if (error) return { kind: "error", draft, message: error, items };
-			if (busy) return { kind: "busy", draft, items };
-			if (items.length > 0) return { kind: "idle", draft, items };
-			return { kind: "composing", draft, items };
+			const metadata = { ...(activity !== undefined ? { activity } : {}), ...(sessionName !== undefined ? { sessionName } : {}) };
+			if (error) return { kind: "error", draft, message: error, items, ...metadata };
+			if (busy) return { kind: "busy", draft, items, ...metadata };
+			if (items.length > 0) return { kind: "idle", draft, items, ...metadata };
+			return { kind: "composing", draft, items, ...metadata };
 		},
 		subscribe(listener) {
 			listeners.add(listener);
@@ -172,6 +211,10 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 			});
 			notify();
 		},
+		setModel: (provider, modelId) => integration.session?.setModel(provider, modelId) ?? Promise.resolve(unsupportedControl("model switching")),
+		compact: (customInstructions) => integration.session?.compact(customInstructions) ?? Promise.resolve(unsupportedControl("manual compaction")),
+		resume: (sessionPath) => integration.session?.resume(sessionPath) ?? Promise.resolve(unsupportedControl("session resume")),
+		fork: (entryId) => integration.session?.fork(entryId) ?? Promise.resolve(unsupportedControl("session fork")),
 		dispose() {
 			unsubscribe();
 			unsubscribeExit();

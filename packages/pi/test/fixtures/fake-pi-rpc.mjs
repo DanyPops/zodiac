@@ -29,15 +29,21 @@ function handleLine(line) {
 		emit({ type: "message_start", message: { role: "user", content: command.message } });
 		emit({ type: "message_end", message: { role: "user", content: command.message } });
 		emit({ type: "agent_start" });
+		emit({ type: "turn_start" });
 		emit({ type: "tool_execution_start", toolCallId: "call_1", toolName: "bash", args: { command: "echo hi" } });
+		emit({ type: "tool_execution_update", toolCallId: "call_1", toolName: "bash", partialResult: { output: "hi" } });
 		emit({ type: "tool_execution_end", toolCallId: "call_1", toolName: "bash", result: { output: "hi\n" }, isError: false });
 		emit({ type: "message_start", message: { role: "assistant", content: [] } });
 		emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", partial: { role: "assistant", content: [{ type: "text", text: "fake " }] } } });
 		emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", partial: { role: "assistant", content: [{ type: "text", text: "fake reply" }] } } });
 		emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "fake reply" }] } });
+		emit({ type: "turn_end", message: { role: "assistant", content: [] }, toolResults: [] });
 		emit({ type: "agent_end" });
 		emit({ type: "agent_settled" });
 	} else if (command.type === "abort") {
 		emit({ type: "response", command: "abort", success: true });
+	} else {
+		emit({ type: "response", id: command.id, command: command.type, success: true });
+		emit({ type: "session_info_changed", name: command.type });
 	}
 }

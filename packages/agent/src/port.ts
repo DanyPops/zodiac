@@ -18,9 +18,27 @@ export type ZodiacAgentEvent =
 	| { readonly type: "assistant-message-delta"; readonly text: string }
 	/** The assistant message's final, complete text. */
 	| { readonly type: "assistant-message-end"; readonly text: string }
+	| { readonly type: "turn-start" }
+	| { readonly type: "turn-end" }
 	| { readonly type: "tool-call-start"; readonly toolCallId: string; readonly toolName: string; readonly input: unknown }
+	/** Accumulated live output for a still-running tool call; consumers replace rather than append. */
+	| { readonly type: "tool-call-update"; readonly toolCallId: string; readonly toolName: string; readonly output: unknown }
 	| { readonly type: "tool-call-end"; readonly toolCallId: string; readonly toolName: string; readonly output: unknown; readonly isError: boolean }
+	| { readonly type: "compaction-start"; readonly reason: "manual" | "threshold" | "overflow" }
+	| { readonly type: "compaction-end"; readonly reason: "manual" | "threshold" | "overflow"; readonly aborted: boolean; readonly errorMessage?: string }
+	| { readonly type: "session-info-changed"; readonly name?: string }
 	| { readonly type: "error"; readonly message: string };
+
+export type AgentSessionControlFailureReason = "unsupported" | "model-not-found" | "cancelled" | "failed";
+export type AgentSessionControlOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: AgentSessionControlFailureReason; readonly message: string };
+
+/** Bounded session operations shared by embedded, subprocess, and HTTP adapters. */
+export interface AgentSessionControlPort {
+	setModel: (provider: string, modelId: string) => Promise<AgentSessionControlOutcome>;
+	compact: (customInstructions?: string) => Promise<AgentSessionControlOutcome>;
+	resume: (sessionPath: string) => Promise<AgentSessionControlOutcome>;
+	fork: (entryId: string) => Promise<AgentSessionControlOutcome>;
+}
 
 /**
  * The driven half of a Pi Agent Integration: what Zodiac needs to send a
@@ -47,6 +65,8 @@ export interface AgentIntegrationPort {
 	followUp: (text: string) => Promise<void>;
 	/** Aborts the current run, if any. */
 	abort: () => Promise<void>;
+	/** Present on every in-tree adapter; optional preserves compatibility for third-party v1 adapters during the additive protocol transition. */
+	readonly session?: AgentSessionControlPort;
 	onEvent: (listener: (event: ZodiacAgentEvent) => void) => () => void;
 	/** Fires once if the underlying integration ends unexpectedly (a subprocess exiting; never fires for the in-process adapter, which has no separate process to exit). */
 	onExit: (listener: (reason: string | undefined) => void) => () => void;
@@ -65,7 +85,7 @@ export function assertNeverZodiacAgentEvent(event: never): never {
  * commands.ts's COMMAND_INTENT_PROTOCOL_VERSION: an existing variant's
  * recorded ZODIAC_AGENT_EVENT_MIN_VERSION entry never changes after release.
  */
-export const ZODIAC_AGENT_EVENT_PROTOCOL_VERSION = 1;
+export const ZODIAC_AGENT_EVENT_PROTOCOL_VERSION = 2;
 
 /**
  * The minimum ZODIAC_AGENT_EVENT_PROTOCOL_VERSION a consumer must declare
@@ -78,8 +98,14 @@ export const ZODIAC_AGENT_EVENT_MIN_VERSION: Readonly<Record<ZodiacAgentEvent["t
 	"assistant-message-start": 1,
 	"assistant-message-delta": 1,
 	"assistant-message-end": 1,
+	"turn-start": 2,
+	"turn-end": 2,
 	"tool-call-start": 1,
+	"tool-call-update": 2,
 	"tool-call-end": 1,
+	"compaction-start": 2,
+	"compaction-end": 2,
+	"session-info-changed": 2,
 	error: 1,
 };
 
@@ -105,6 +131,9 @@ export function isSupportedZodiacAgentEvent(event: ZodiacAgentEvent, supportedVe
  * frame isn't one of these" rule lives in exactly one place, not
  * re-implemented per adapter and left to drift.
  */
+const ZODIAC_AGENT_EVENT_TYPES: ReadonlySet<ZodiacAgentEvent["type"]> = new Set(Object.keys(ZODIAC_AGENT_EVENT_MIN_VERSION) as ZodiacAgentEvent["type"][]);
+
 export function isZodiacAgentEvent(value: unknown): value is ZodiacAgentEvent {
-	return typeof value === "object" && value !== null && "type" in value && value.type !== "session-exited";
+	if (typeof value !== "object" || value === null || !("type" in value) || typeof value.type !== "string") return false;
+	return ZODIAC_AGENT_EVENT_TYPES.has(value.type as ZodiacAgentEvent["type"]);
 }

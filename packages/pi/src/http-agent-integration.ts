@@ -1,4 +1,4 @@
-import { isZodiacAgentEvent, type AgentIntegrationPort, type ZodiacAgentEvent } from "@zodiac/agent";
+import { isZodiacAgentEvent, type AgentIntegrationPort, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
 import { readSseFrames } from "@zodiac/server/net";
 
 export interface HttpAgentIntegrationOptions {
@@ -56,6 +56,21 @@ export function createHttpAgentIntegration(options: HttpAgentIntegrationOptions)
 		if (!response.ok) throw new Error(`http-agent-integration:${action}:${response.status}`);
 	}
 
+	async function postSessionControl(action: "setModel" | "compact" | "resume" | "fork", body: unknown): Promise<AgentSessionControlOutcome> {
+		try {
+			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/${action}`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
+			if (!response.ok) return { ok: false, reason: "failed", message: `http-agent-integration:${action}:${response.status}` };
+			const result = (await response.json().catch(() => ({ ok: true }))) as AgentSessionControlOutcome | { accepted?: boolean };
+			return "ok" in result ? result : { ok: true };
+		} catch (error) {
+			return { ok: false, reason: "failed", message: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
 	async function streamEvents(): Promise<void> {
 		try {
 			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/events`, { signal: streamController.signal });
@@ -101,6 +116,12 @@ export function createHttpAgentIntegration(options: HttpAgentIntegrationOptions)
 		async abort() {
 			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/abort`, { method: "POST" });
 			if (!response.ok) throw new Error(`http-agent-integration:abort:${response.status}`);
+		},
+		session: {
+			setModel: (provider, modelId) => postSessionControl("setModel", { provider, modelId }),
+			compact: (customInstructions) => postSessionControl("compact", { ...(customInstructions !== undefined ? { customInstructions } : {}) }),
+			resume: (sessionPath) => postSessionControl("resume", { sessionPath }),
+			fork: (entryId) => postSessionControl("fork", { entryId }),
 		},
 		onEvent(listener) {
 			eventListeners.add(listener);

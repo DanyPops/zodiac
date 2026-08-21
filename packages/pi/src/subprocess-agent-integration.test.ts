@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ZodiacAgentEvent } from "@zodiac/agent";
 import { createSubprocessAgentIntegration } from "./subprocess-agent-integration.js";
 
@@ -56,24 +56,45 @@ describe("createSubprocessAgentIntegration", () => {
 
 		expect(events.map((event) => event.type)).toEqual([
 			"agent-start",
+			"turn-start",
 			"tool-call-start",
+			"tool-call-update",
 			"tool-call-end",
 			"assistant-message-start",
 			"assistant-message-delta",
 			"assistant-message-delta",
 			"assistant-message-end",
+			"turn-end",
 			"agent-settled",
 		]);
 		expect(events.find((event) => event.type === "tool-call-start")).toMatchObject({ toolName: "bash", input: { command: "echo hi" } });
 		expect(events.find((event) => event.type === "assistant-message-end")).toMatchObject({ text: "fake reply" });
 	});
 
-	it("steer() and followUp() both degrade to sending a plain prompt over the wire -- a known parity gap with the in-process adapter", async () => {
+	it("forwards model, compaction, resume, and fork controls over Pi's real RPC command vocabulary", async () => {
 		integration = createSubprocessAgentIntegration({ command: ["node", FIXTURE], ...isolatedAgentDirs() });
-		const done = collectUntil(integration, (event) => event.type === "agent-settled");
+		const names: string[] = [];
+		integration.onEvent((event) => {
+			if (event.type === "session-info-changed" && event.name) names.push(event.name);
+		});
+
+		await integration.session?.setModel("anthropic", "sonnet");
+		await integration.session?.compact("focus");
+		await integration.session?.resume("/tmp/session.jsonl");
+		await integration.session?.fork("entry-1");
+
+		await vi.waitFor(() => expect(names).toEqual(["set_model", "compact", "switch_session", "fork"]));
+	});
+
+	it("sends distinct steer and follow_up RPC commands instead of degrading both to prompt", async () => {
+		integration = createSubprocessAgentIntegration({ command: ["node", FIXTURE], ...isolatedAgentDirs() });
+		const names: string[] = [];
+		integration.onEvent((event) => {
+			if (event.type === "session-info-changed" && event.name) names.push(event.name);
+		});
 		await integration.steer("steered message");
-		await done;
-		// The fixture only understands "prompt"/"abort" -- reaching agent-settled at all proves steer() was encoded as a prompt command, not silently dropped.
+		await integration.followUp("later");
+		await vi.waitFor(() => expect(names).toEqual(["steer", "follow_up"]));
 	});
 
 	it("notifies onExit with a reason once the process exits abnormally", async () => {

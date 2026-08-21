@@ -150,6 +150,46 @@ export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceTo
 				return;
 			}
 
+			const sessionControl = integration.session;
+			if (action === "setModel" || action === "compact" || action === "resume" || action === "fork") {
+				if (!sessionControl) {
+					writeJson(res, 200, { ok: false, reason: "unsupported", message: "This agent adapter does not expose session controls." });
+					return;
+				}
+				let body: unknown;
+				try {
+					body = await readJsonBody(req);
+				} catch {
+					writeJson(res, 400, { code: "invalid-json", message: "Request body was not valid JSON." });
+					return;
+				}
+				const value = body as Record<string, unknown> | undefined;
+				if (action === "setModel") {
+					if (typeof value?.provider !== "string" || typeof value.modelId !== "string") {
+						writeJson(res, 400, { code: "model-required", message: "provider and modelId are required." });
+						return;
+					}
+					writeJson(res, 200, await sessionControl.setModel(value.provider, value.modelId));
+					return;
+				}
+				if (action === "compact") {
+					if (value?.customInstructions !== undefined && typeof value.customInstructions !== "string") {
+						writeJson(res, 400, { code: "invalid-instructions", message: "customInstructions must be a string." });
+						return;
+					}
+					writeJson(res, 200, await sessionControl.compact(value?.customInstructions as string | undefined));
+					return;
+				}
+				const field = action === "resume" ? "sessionPath" : "entryId";
+				const target = value?.[field];
+				if (typeof target !== "string" || !target.trim()) {
+					writeJson(res, 400, { code: "target-required", message: `${field} is required.` });
+					return;
+				}
+				writeJson(res, 200, action === "resume" ? await sessionControl.resume(target) : await sessionControl.fork(target));
+				return;
+			}
+
 			if (action !== "prompt" && action !== "steer" && action !== "followUp") {
 				writeJson(res, 404, { code: "not-found", message: `Unknown agent-session action "${action}".` });
 				return;

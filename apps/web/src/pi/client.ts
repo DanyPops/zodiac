@@ -1,4 +1,4 @@
-import { isZodiacAgentEvent, type ZodiacAgentEvent } from "@zodiac/agent";
+import { isZodiacAgentEvent, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
 
 /**
  * Driven port: the Chat surface's own view of "a live Pi agent to talk to,"
@@ -18,6 +18,10 @@ export interface PiClient {
 	/** Subscribes to a session's live event stream; returns an unsubscribe function that closes the underlying connection. */
 	streamEvents: (sessionId: string, onEvent: (event: ZodiacAgentEvent) => void, onError?: (error: unknown) => void) => () => void;
 	abort: (sessionId: string, signal?: AbortSignal) => Promise<void>;
+	setModel?: (sessionId: string, provider: string, modelId: string, signal?: AbortSignal) => Promise<AgentSessionControlOutcome>;
+	compact?: (sessionId: string, customInstructions?: string, signal?: AbortSignal) => Promise<AgentSessionControlOutcome>;
+	resume?: (sessionId: string, sessionPath: string, signal?: AbortSignal) => Promise<AgentSessionControlOutcome>;
+	fork?: (sessionId: string, entryId: string, signal?: AbortSignal) => Promise<AgentSessionControlOutcome>;
 	/**
 	 * The Client's own POST-back half of the round trip a tool like
 	 * list_visual_cues depends on (see PendingClientActions on the daemon
@@ -42,6 +46,17 @@ export interface CreatePiClientOptions {
 export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClient {
 	const fetcher = options.fetcher ?? fetch;
 	const baseUrl = options.baseUrl ?? "";
+
+	async function sessionControl(sessionId: string, action: "setModel" | "compact" | "resume" | "fork", body: unknown, signal?: AbortSignal): Promise<AgentSessionControlOutcome> {
+		const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/${action}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+			signal,
+		});
+		if (!response.ok) return { ok: false, reason: "failed", message: `pi-${action}:${response.status}` };
+		return (await response.json()) as AgentSessionControlOutcome;
+	}
 
 	return {
 		async createSession(createOptions, signal) {
@@ -75,6 +90,11 @@ export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClien
 			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/abort`, { method: "POST", signal });
 			if (!response.ok) throw new Error(`pi-abort:${response.status}`);
 		},
+
+		setModel: (sessionId, provider, modelId, signal) => sessionControl(sessionId, "setModel", { provider, modelId }, signal),
+		compact: (sessionId, customInstructions, signal) => sessionControl(sessionId, "compact", { ...(customInstructions !== undefined ? { customInstructions } : {}) }, signal),
+		resume: (sessionId, sessionPath, signal) => sessionControl(sessionId, "resume", { sessionPath }, signal),
+		fork: (sessionId, entryId, signal) => sessionControl(sessionId, "fork", { entryId }, signal),
 
 		async postClientAction(sessionId, toolCallId, result, signal) {
 			const response = await fetcher(`${baseUrl}/api/agent/sessions/${encodeURIComponent(sessionId)}/client-actions/${encodeURIComponent(toolCallId)}`, {

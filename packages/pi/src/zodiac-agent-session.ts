@@ -128,6 +128,6 @@ export async function createZodiacAgentSession(options: CreateZodiacAgentSession
 			});
 		}
 	}
-	const integration = createInProcessAgentIntegration(session);
+	const integration = createInProcessAgentIntegration(session, { resolveModel: (provider, modelId) => modelRuntime.getModel(provider, modelId) });
 	return { session, integration };
 }

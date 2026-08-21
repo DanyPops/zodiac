@@ -62,9 +62,11 @@ describe("createInProcessAgentIntegration", () => {
 		// and at least one delta actually arriving.
 		const types = events.map((event) => event.type);
 		expect(types[0]).toBe("agent-start");
-		expect(types[1]).toBe("assistant-message-start");
+		expect(types).toContain("turn-start");
+		expect(types).toContain("assistant-message-start");
 		expect(types).toContain("assistant-message-delta");
-		expect(types.at(-2)).toBe("assistant-message-end");
+		expect(types).toContain("assistant-message-end");
+		expect(types).toContain("turn-end");
 		expect(types.at(-1)).toBe("agent-settled");
 		const end = events.find((event) => event.type === "assistant-message-end");
 		expect(end).toMatchObject({ text: "hello from faux" });
@@ -146,6 +148,18 @@ describe("createInProcessAgentIntegration", () => {
 		expect(toolStart).toMatchObject({ toolName: "echo", input: { text: "ping" } });
 		const toolEnd = events.find((event) => event.type === "tool-call-end");
 		expect(toolEnd).toMatchObject({ toolName: "echo", isError: false });
+	});
+
+	it("exposes model switch and manual compaction as bounded session controls", async () => {
+		const { session, faux } = await createHermeticSession();
+		const model = faux.getModel();
+		const integration = createInProcessAgentIntegration(session, {
+			resolveModel: (provider, modelId) => (provider === model.provider && modelId === model.id ? session.model : undefined),
+		});
+		disposers.push(integration.dispose);
+
+		expect(await integration.session!.setModel(model.provider, model.id)).toEqual({ ok: true });
+		expect(await integration.session!.setModel("missing", "missing")).toMatchObject({ ok: false, reason: "model-not-found" });
 	});
 
 	it("dispose() unsubscribes from the session and disposes it", async () => {

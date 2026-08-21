@@ -5,12 +5,14 @@ import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import type { Readable, Writable } from "node:stream";
 import { encodeRpcCommand, extractMessageText, parseRpcLine, type PiRpcEvent } from "@danypops/pi-rpc-protocol";
-import type { AgentIntegrationPort, ZodiacAgentEvent } from "@zodiac/agent";
+import type { AgentIntegrationPort, AgentSessionControlOutcome, ZodiacAgentEvent } from "@zodiac/agent";
 
 const DEFAULT_COMMAND = ["pi", "--mode", "rpc", "--no-session"] as const;
 
 /** Bounds how much stderr this adapter retains for diagnostics -- a real crash's error text is useful, an unbounded buffer of a runaway process's output is not. */
 const MAX_STDERR_CHARS = 8_000;
+const MAX_PENDING_SESSION_COMMANDS = 64;
+const SESSION_COMMAND_TIMEOUT_MS = 10_000;
 
 export interface SubprocessAgentIntegrationOptions {
 	/** Defaults to `pi --mode rpc --no-session`. Overridden by tests (a fixture stand-in process) and by callers needing extra CLI flags. */
@@ -41,12 +43,10 @@ export interface SubprocessAgentIntegrationOptions {
  * version additionally translates events to Zodiac's bounded vocabulary
  * instead of leaving that to each caller.
  *
- * Known parity gap: pi's RPC wire protocol only has a "prompt" command --
- * there is no distinct steer/followUp command on the wire. steer() and
- * followUp() both degrade to sending a plain prompt here, unlike
- * InProcessAgentIntegration's real steer()/followUp() calls against
- * AgentSession. A caller that needs faithful steer/followUp semantics over
- * a subprocess would need pi's RPC protocol extended first.
+ * Uses Pi's current distinct prompt/steer/follow_up RPC commands. The
+ * compatibility encoder dependency predates steer/follow_up, so those two
+ * additive commands are encoded locally as the same bounded JSONL records
+ * documented by Pi rather than degraded to plain prompts.
  */
 export function createSubprocessAgentIntegration(options: SubprocessAgentIntegrationOptions = {}): AgentIntegrationPort {
 	const [command = DEFAULT_COMMAND[0], ...args] = options.command ?? DEFAULT_COMMAND;
@@ -60,13 +60,36 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 
 	const eventListeners = new Set<(event: ZodiacAgentEvent) => void>();
 	const exitListeners = new Set<(reason: string | undefined) => void>();
+	const pendingSessionCommands = new Map<string, { resolve: (outcome: AgentSessionControlOutcome) => void; timer: ReturnType<typeof setTimeout> }>();
+	let nextSessionCommandId = 0;
 	let stderr = "";
 
 	function emit(event: ZodiacAgentEvent): void {
 		for (const listener of eventListeners) listener(event);
 	}
 
-	/** Exhaustive over PiRpcEvent's own variants; most map to nothing -- see @zodiac/agent's own port.ts doc comment for why the bounded event type is deliberately smaller. */
+	function translateUnknown(raw: unknown): ZodiacAgentEvent | undefined {
+		if (!raw || typeof raw !== "object") return undefined;
+		const value = raw as Record<string, unknown>;
+		switch (value.type) {
+			case "turn_start":
+				return { type: "turn-start" };
+			case "turn_end":
+				return { type: "turn-end" };
+			case "tool_execution_update":
+				return typeof value.toolCallId === "string" && typeof value.toolName === "string" ? { type: "tool-call-update", toolCallId: value.toolCallId, toolName: value.toolName, output: value.partialResult } : undefined;
+			case "compaction_start":
+				return value.reason === "manual" || value.reason === "threshold" || value.reason === "overflow" ? { type: "compaction-start", reason: value.reason } : undefined;
+			case "compaction_end":
+				return value.reason === "manual" || value.reason === "threshold" || value.reason === "overflow" ? { type: "compaction-end", reason: value.reason, aborted: value.aborted === true, ...(typeof value.errorMessage === "string" ? { errorMessage: value.errorMessage } : {}) } : undefined;
+			case "session_info_changed":
+				return { type: "session-info-changed", ...(typeof value.name === "string" ? { name: value.name } : {}) };
+			default:
+				return undefined;
+		}
+	}
+
+	/** Exhaustive over PiRpcEvent's own variants; unknown valid upstream events are narrowed by translateUnknown so this adapter can bridge protocol additions ahead of the compatibility parser package. */
 	function translate(event: PiRpcEvent): ZodiacAgentEvent | undefined {
 		switch (event.type) {
 			case "agent_start":
@@ -88,8 +111,9 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 			case "response":
 				return event.success ? undefined : { type: "error", message: event.error ?? `pi rejected command "${event.command}"` };
 			case "extension_ui_request":
-			case "unknown-event":
 				return undefined;
+			case "unknown-event":
+				return translateUnknown(event.raw);
 			default:
 				return assertNeverPiRpcEvent(event);
 		}
@@ -105,6 +129,21 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 			buffer = buffer.slice(index + 1);
 			if (line.endsWith("\r")) line = line.slice(0, -1);
 			if (!line) continue;
+			let raw: unknown;
+			try {
+				raw = JSON.parse(line);
+			} catch {
+				raw = undefined;
+			}
+			const response = raw as { type?: unknown; id?: unknown; success?: unknown; error?: unknown } | undefined;
+			if (response?.type === "response" && typeof response.id === "string") {
+				const pending = pendingSessionCommands.get(response.id);
+				if (pending) {
+					clearTimeout(pending.timer);
+					pendingSessionCommands.delete(response.id);
+					pending.resolve(response.success === true ? { ok: true } : { ok: false, reason: "failed", message: typeof response.error === "string" ? response.error : "Pi rejected the session command." });
+				}
+			}
 			const event = parseRpcLine(line);
 			if (event) {
 				const translated = translate(event);
@@ -120,27 +159,66 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 	});
 
 	child.on("exit", (code) => {
-		for (const listener of exitListeners) listener(code === 0 || code === null ? undefined : `pi exited with code ${code}${stderr ? `: ${stderr}` : ""}`);
+		const reason = code === 0 || code === null ? "The Pi subprocess exited before replying." : `pi exited with code ${code}${stderr ? `: ${stderr}` : ""}`;
+		for (const pending of pendingSessionCommands.values()) {
+			clearTimeout(pending.timer);
+			pending.resolve({ ok: false, reason: "failed", message: reason });
+		}
+		pendingSessionCommands.clear();
+		for (const listener of exitListeners) listener(code === 0 || code === null ? undefined : reason);
 	});
 
-	function send(text: string): void {
+	function sendPrompt(type: "prompt" | "steer" | "follow_up", text: string): void {
 		if (child.exitCode !== null) return;
-		child.stdin.write(encodeRpcCommand({ type: "prompt", message: text }));
+		if (type === "prompt") {
+			child.stdin.write(encodeRpcCommand({ type, message: text }));
+			return;
+		}
+		child.stdin.write(`${JSON.stringify({ type, message: text })}\n`);
+	}
+
+	function sendSessionCommand(command: Record<string, unknown>): Promise<AgentSessionControlOutcome> {
+		if (child.exitCode !== null) return Promise.resolve({ ok: false, reason: "failed", message: "The Pi subprocess has exited." });
+		if (pendingSessionCommands.size >= MAX_PENDING_SESSION_COMMANDS) return Promise.resolve({ ok: false, reason: "failed", message: "Too many pending Pi session commands." });
+		nextSessionCommandId += 1;
+		const id = `zodiac-session-${nextSessionCommandId}`;
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => {
+				pendingSessionCommands.delete(id);
+				resolve({ ok: false, reason: "failed", message: `Pi did not answer ${String(command.type)} within ${SESSION_COMMAND_TIMEOUT_MS}ms.` });
+			}, SESSION_COMMAND_TIMEOUT_MS);
+			pendingSessionCommands.set(id, { resolve, timer });
+			child.stdin.write(`${JSON.stringify({ id, ...command })}\n`);
+		});
 	}
 
 	return {
 		async prompt(text) {
-			send(text);
+			sendPrompt("prompt", text);
 		},
 		async steer(text) {
-			send(text);
+			sendPrompt("steer", text);
 		},
 		async followUp(text) {
-			send(text);
+			sendPrompt("follow_up", text);
 		},
 		async abort() {
 			if (child.exitCode !== null) return;
 			child.stdin.write(encodeRpcCommand({ type: "abort" }));
+		},
+		session: {
+			setModel(provider, modelId) {
+				return sendSessionCommand({ type: "set_model", provider, modelId });
+			},
+			compact(customInstructions) {
+				return sendSessionCommand({ type: "compact", ...(customInstructions !== undefined ? { customInstructions } : {}) });
+			},
+			resume(sessionPath) {
+				return sendSessionCommand({ type: "switch_session", sessionPath });
+			},
+			fork(entryId) {
+				return sendSessionCommand({ type: "fork", entryId });
+			},
 		},
 		onEvent(listener) {
 			eventListeners.add(listener);
@@ -152,6 +230,11 @@ export function createSubprocessAgentIntegration(options: SubprocessAgentIntegra
 		},
 		dispose() {
 			eventListeners.clear();
+			for (const pending of pendingSessionCommands.values()) {
+				clearTimeout(pending.timer);
+				pending.resolve({ ok: false, reason: "failed", message: "The Pi subprocess integration was disposed." });
+			}
+			pendingSessionCommands.clear();
 			if (child.exitCode === null) {
 				child.stdin.end();
 				child.kill();

@@ -50,6 +50,7 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 	const [panels, setPanels] = useState<readonly Panel[]>(DISCONNECTED_PANELS);
 	const [connected, setConnected] = useState(false);
 	const [acknowledgedCommandIds, setAcknowledgedCommandIds] = useState<readonly CommandId[]>([]);
+	const acknowledgedCommandIdsRef = useRef<readonly CommandId[]>([]);
 	const applyRef = useRef<(intent: CommandIntent) => void>(noopApply);
 
 	useEffect(() => {
@@ -59,6 +60,7 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 		setConnected(false);
 		setViewModel(DISCONNECTED_VIEW_MODEL);
 		setPanels(DISCONNECTED_PANELS);
+		acknowledgedCommandIdsRef.current = [];
 		setAcknowledgedCommandIds([]);
 		applyRef.current = noopApply;
 
@@ -78,7 +80,8 @@ export function useWorldClient(baseUrl: string, options: UseWorldClientOptions =
 				// keeps this hook's state in step without a second subscription.
 				connected.onChange((change) => {
 					setViewModel(change.viewModel);
-					setAcknowledgedCommandIds((current) => recordCommandAcknowledgement(current, change.commandId));
+					acknowledgedCommandIdsRef.current = recordCommandAcknowledgement(acknowledgedCommandIdsRef.current, change.commandId);
+					setAcknowledgedCommandIds(acknowledgedCommandIdsRef.current);
 					setPanels(connected.panels());
 				});
 			})

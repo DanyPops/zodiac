@@ -69,6 +69,24 @@ describe("createPiChatController", () => {
 		expect(controller.getSnapshot().busy).toBe(false);
 	});
 
+	it("surfaces turn, compaction, and session metadata from the shared event vocabulary", async () => {
+		const client = fakeClient();
+		const controller = createPiChatController(client);
+		controller.sendMessage("hi");
+		await vi.waitFor(() => expect(client.streamEvents).toHaveBeenCalled());
+
+		client.emit({ type: "turn-start" });
+		expect(controller.getSnapshot().activity).toBe("turn");
+		client.emit({ type: "turn-end" });
+		expect(controller.getSnapshot().activity).toBeUndefined();
+		client.emit({ type: "compaction-start", reason: "manual" });
+		expect(controller.getSnapshot()).toMatchObject({ activity: "compaction", busy: true });
+		client.emit({ type: "session-info-changed", name: "Cluster A" });
+		expect(controller.getSnapshot().sessionName).toBe("Cluster A");
+		client.emit({ type: "compaction-end", reason: "manual", aborted: false });
+		expect(controller.getSnapshot().activity).toBeUndefined();
+	});
+
 	it("live-updates a single assistant item across assistant-message-delta events, then finalizes it on assistant-message-end", async () => {
 		const client = fakeClient();
 		const controller = createPiChatController(client);
@@ -93,6 +111,9 @@ describe("createPiChatController", () => {
 
 		client.emit({ type: "tool-call-start", toolCallId: "call_1", toolName: "bash", input: { command: "ls" } });
 		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "tool-call", toolCallId: "call_1", toolName: "bash", response: undefined });
+
+		client.emit({ type: "tool-call-update", toolCallId: "call_1", toolName: "bash", output: { output: "partial" } });
+		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "tool-call", response: { output: "partial" } });
 
 		client.emit({ type: "tool-call-end", toolCallId: "call_1", toolName: "bash", output: { output: "ok" }, isError: false });
 		expect(controller.getSnapshot().items[1]).toMatchObject({ kind: "tool-call", response: { output: "ok" } });
@@ -120,6 +141,15 @@ describe("createPiChatController", () => {
 		client.emit({ type: "error", message: "no model configured" });
 		expect(controller.getSnapshot().error).toBe("no model configured");
 		expect(controller.getSnapshot().busy).toBe(false);
+	});
+
+	it("forwards session controls through the browser-safe PiClient after lazily creating the session", async () => {
+		const client = fakeClient();
+		const setModel = vi.fn(async () => ({ ok: true } as const));
+		Object.assign(client, { setModel });
+		const controller = createPiChatController(client);
+		expect(await controller.setModel("anthropic", "sonnet")).toEqual({ ok: true });
+		expect(setModel).toHaveBeenCalledWith("session-1", "anthropic", "sonnet");
 	});
 
 	it("dispose() unsubscribes from the event stream and stops notifying listeners", async () => {

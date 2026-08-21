@@ -79,6 +79,21 @@ describe("createFooterChatController", () => {
 		expect(controller.snapshot().kind).toBe("composing");
 	});
 
+	it("surfaces turn, compaction, and session metadata from the shared event vocabulary", () => {
+		const integration = fakeIntegration();
+		const controller = createFooterChatController(integration);
+		integration.emit({ type: "turn-start" });
+		expect(controller.snapshot().activity).toBe("turn");
+		integration.emit({ type: "turn-end" });
+		expect(controller.snapshot().activity).toBeUndefined();
+		integration.emit({ type: "compaction-start", reason: "manual" });
+		expect(controller.snapshot()).toMatchObject({ kind: "busy", activity: "compaction" });
+		integration.emit({ type: "session-info-changed", name: "Cluster A" });
+		expect(controller.snapshot().sessionName).toBe("Cluster A");
+		integration.emit({ type: "compaction-end", reason: "manual", aborted: false });
+		expect(controller.snapshot().activity).toBeUndefined();
+	});
+
 	it("live-updates a single streaming assistant item, then finalizes it -- not a new item per delta", () => {
 		const integration = fakeIntegration();
 		const controller = createFooterChatController(integration);
@@ -219,6 +234,22 @@ describe("createFooterChatController", () => {
 		controller.typeChar("h");
 		controller.submit();
 		await vi.waitFor(() => expect(controller.snapshot()).toMatchObject({ kind: "error", message: "spawn failed" }));
+	});
+
+	it("forwards session controls through the same AgentIntegrationPort", async () => {
+		const integration = fakeIntegration();
+		const setModel = vi.fn(async () => ({ ok: true } as const));
+		Object.assign(integration, {
+			session: {
+				setModel,
+				compact: vi.fn(async () => ({ ok: true } as const)),
+				resume: vi.fn(async () => ({ ok: true } as const)),
+				fork: vi.fn(async () => ({ ok: true } as const)),
+			},
+		});
+		const controller = createFooterChatController(integration);
+		expect(await controller.setModel("anthropic", "sonnet")).toEqual({ ok: true });
+		expect(setModel).toHaveBeenCalledWith("anthropic", "sonnet");
 	});
 
 	it("dispose() unsubscribes from both event and exit streams", () => {

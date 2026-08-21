@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	assertNeverZodiacAgentEvent,
 	isSupportedZodiacAgentEvent,
+	isZodiacAgentEvent,
 	ZODIAC_AGENT_EVENT_MIN_VERSION,
 	ZODIAC_AGENT_EVENT_PROTOCOL_VERSION,
 	type ZodiacAgentEvent,
@@ -19,6 +20,14 @@ describe("assertNeverZodiacAgentEvent", () => {
 	});
 });
 
+describe("ZodiacAgentEvent runtime boundary", () => {
+	it("accepts known additive variants and rejects unknown/session-exited discriminants", () => {
+		expect(isZodiacAgentEvent({ type: "turn-start" })).toBe(true);
+		expect(isZodiacAgentEvent({ type: "session-exited" })).toBe(false);
+		expect(isZodiacAgentEvent({ type: "future-unbounded-event" })).toBe(false);
+	});
+});
+
 describe("ZodiacAgentEvent version/capability negotiation", () => {
 	it("every real variant records a minimum version at or below the port's current version", () => {
 		for (const type of Object.keys(ZODIAC_AGENT_EVENT_MIN_VERSION) as (keyof typeof ZODIAC_AGENT_EVENT_MIN_VERSION)[]) {
@@ -29,6 +38,18 @@ describe("ZodiacAgentEvent version/capability negotiation", () => {
 	it("isSupportedZodiacAgentEvent accepts a real event when the consumer declares support for its minimum version", () => {
 		const event: ZodiacAgentEvent = { type: "agent-start" };
 		expect(isSupportedZodiacAgentEvent(event, ZODIAC_AGENT_EVENT_PROTOCOL_VERSION)).toBe(true);
+	});
+
+	it("records the richer turn, tool-progress, compaction, and session-info vocabulary as version 2", () => {
+		expect(ZODIAC_AGENT_EVENT_PROTOCOL_VERSION).toBe(2);
+		expect(ZODIAC_AGENT_EVENT_MIN_VERSION).toMatchObject({
+			"turn-start": 2,
+			"turn-end": 2,
+			"tool-call-update": 2,
+			"compaction-start": 2,
+			"compaction-end": 2,
+			"session-info-changed": 2,
+		});
 	});
 
 	it("isSupportedZodiacAgentEvent fails loud (returns false, doesn't throw or guess) for a real event whose variant requires a newer port version than the consumer declares", () => {

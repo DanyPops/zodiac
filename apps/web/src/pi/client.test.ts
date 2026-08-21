@@ -87,6 +87,24 @@ describe("createHttpPiClient", () => {
 		expect(fetcher).toHaveBeenCalledWith("/api/agent/sessions/s1/abort", { method: "POST", signal: undefined });
 	});
 
+	it("forwards model, compaction, resume, and fork controls to their session routes", async () => {
+		const fetcher = vi.fn(async (input: string | URL | Request) => {
+			void input;
+			return jsonResponse(200, { ok: true });
+		});
+		const client = createHttpPiClient({ fetcher });
+		await client.setModel!("s1", "anthropic", "sonnet");
+		await client.compact!("s1", "focus");
+		await client.resume!("s1", "/tmp/session.jsonl");
+		await client.fork!("s1", "entry-1");
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			"/api/agent/sessions/s1/setModel",
+			"/api/agent/sessions/s1/compact",
+			"/api/agent/sessions/s1/resume",
+			"/api/agent/sessions/s1/fork",
+		]);
+	});
+
 	it("streamEvents connects to the session's own events endpoint, parses each SSE frame into a ZodiacAgentEvent, and forwards it", () => {
 		FakeEventSource.instances = [];
 		const client = createHttpPiClient({ EventSourceCtor: FakeEventSource as unknown as typeof EventSource });

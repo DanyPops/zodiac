@@ -154,6 +154,31 @@ describe("createAgentRoutes", () => {
 		expect(unknown.status).toBe(404);
 	});
 
+	it("forwards model, compaction, resume, and fork controls with validated payloads", async () => {
+		const integration = fakeIntegration();
+		const controls = {
+			setModel: vi.fn(async () => ({ ok: true } as const)),
+			compact: vi.fn(async () => ({ ok: true } as const)),
+			resume: vi.fn(async () => ({ ok: true } as const)),
+			fork: vi.fn(async () => ({ ok: true } as const)),
+		};
+		Object.assign(integration, { session: controls });
+		const registry = createAgentSessionRegistry(() => integration);
+		const routes = createAgentRoutes(registry);
+		const base = await listen((req, res) => void routes.dispatchAction(req, res));
+		const id = await registry.create();
+
+		await fetch(`${base}/api/agent/sessions/${id}/setModel`, { method: "POST", body: JSON.stringify({ provider: "anthropic", modelId: "sonnet" }) });
+		await fetch(`${base}/api/agent/sessions/${id}/compact`, { method: "POST", body: JSON.stringify({ customInstructions: "focus" }) });
+		await fetch(`${base}/api/agent/sessions/${id}/resume`, { method: "POST", body: JSON.stringify({ sessionPath: "/tmp/session.jsonl" }) });
+		await fetch(`${base}/api/agent/sessions/${id}/fork`, { method: "POST", body: JSON.stringify({ entryId: "entry-1" }) });
+
+		expect(controls.setModel).toHaveBeenCalledWith("anthropic", "sonnet");
+		expect(controls.compact).toHaveBeenCalledWith("focus");
+		expect(controls.resume).toHaveBeenCalledWith("/tmp/session.jsonl");
+		expect(controls.fork).toHaveBeenCalledWith("entry-1");
+	});
+
 	it("prompt rejects a missing or empty text", async () => {
 		const registry = createAgentSessionRegistry(() => fakeIntegration());
 		const routes = createAgentRoutes(registry);

@@ -63,6 +63,22 @@ describe("createHttpAgentIntegration", () => {
 		integration.dispose();
 	});
 
+	it("forwards bounded session-management operations to zodiacd", async () => {
+		const daemon = createFakeDaemon();
+		const integration = createHttpAgentIntegration({ baseUrl: "http://fake", sessionId: "sess-1", fetcher: daemon.fetcher });
+		await integration.session!.setModel("anthropic", "sonnet");
+		await integration.session!.compact("focus on changes");
+		await integration.session!.resume("/tmp/session.jsonl");
+		await integration.session!.fork("entry-1");
+		expect(daemon.posts).toEqual([
+			{ action: "setModel", body: { provider: "anthropic", modelId: "sonnet" } },
+			{ action: "compact", body: { customInstructions: "focus on changes" } },
+			{ action: "resume", body: { sessionPath: "/tmp/session.jsonl" } },
+			{ action: "fork", body: { entryId: "entry-1" } },
+		]);
+		integration.dispose();
+	});
+
 	it("abort() POSTs with no body", async () => {
 		const daemon = createFakeDaemon();
 		const integration = createHttpAgentIntegration({ baseUrl: "http://fake", sessionId: "sess-1", fetcher: daemon.fetcher });
