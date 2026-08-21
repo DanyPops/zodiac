@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { IntegrationDefinitionSchema, WorkspaceSchema, WorldSchema } from "./entities.js";
+import { IntegrationDefinitionSchema, SurfaceSchema, WorkspaceSchema, WorldSchema } from "./entities.js";
 
 function validWorkspace() {
 	return {
 		id: "bug-triage",
 		title: "Bug Triage",
-		windows: [{ id: "window-0", title: "Window 0", surfaces: [] }],
+		windows: [{ id: "window-0", title: "Window 0" }],
+		surfaces: [],
 		activeWindowIndex: 0,
 	};
 }
@@ -37,9 +38,34 @@ describe("WorkspaceSchema", () => {
 		expect(WorkspaceSchema.safeParse(undefined).success).toBe(false);
 	});
 
-	it("rejects a Surface with a blank integrationId nested inside a Window", () => {
-		const malformed = { ...validWorkspace(), windows: [{ id: "window-0", title: "Window 0", surfaces: [{ id: "s1", integrationId: "", title: "Bad" }] }] };
+	it("requires every Surface to name its authoritative Window", () => {
+		expect(SurfaceSchema.safeParse({ id: "s1", integrationId: "activity", title: "Activity" }).success).toBe(false);
+		expect(SurfaceSchema.safeParse({ id: "s1", windowId: "window-0", integrationId: "activity", title: "Activity" }).success).toBe(true);
+	});
+
+	it("rejects a Surface whose authoritative windowId is not in the Workspace", () => {
+		const malformed = { ...validWorkspace(), surfaces: [{ id: "s1", windowId: "missing-window", integrationId: "activity", title: "Activity" }] };
 		expect(WorkspaceSchema.safeParse(malformed).success).toBe(false);
+	});
+
+	it("rejects duplicate Surface ids in the Workspace-level registry", () => {
+		const duplicate = { id: "s1", windowId: "window-0", integrationId: "activity", title: "Activity" };
+		expect(WorkspaceSchema.safeParse({ ...validWorkspace(), surfaces: [duplicate, duplicate] }).success).toBe(false);
+	});
+
+	it("migrates a legacy Window-owned Surface collection into the authoritative Workspace registry", () => {
+		const result = WorkspaceSchema.safeParse({
+			id: "bug-triage",
+			title: "Bug Triage",
+			windows: [{ id: "window-0", title: "Window 0", surfaces: [{ id: "s1", integrationId: "activity", title: "Activity" }] }],
+			activeWindowIndex: 0,
+		});
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		expect(result.data).toEqual({
+			...validWorkspace(),
+			surfaces: [{ id: "s1", windowId: "window-0", integrationId: "activity", title: "Activity" }],
+		});
 	});
 });
 
@@ -76,6 +102,23 @@ describe("WorldSchema", () => {
 
 	it("rejects a World whose id is blank", () => {
 		expect(WorldSchema.safeParse({ id: "", workspaces: [] }).success).toBe(false);
+	});
+
+	it("rejects duplicate Window or Surface ids across Workspaces so World-level indexes remain unambiguous", () => {
+		const first = {
+			...validWorkspace(),
+			id: "first",
+			surfaces: [{ id: "shared-surface", windowId: "window-0", integrationId: "activity", title: "Activity" }],
+		};
+		const duplicateWindow = { ...validWorkspace(), id: "second" };
+		const duplicateSurface = {
+			...validWorkspace(),
+			id: "second",
+			windows: [{ id: "window-1", title: "Window 1" }],
+			surfaces: [{ id: "shared-surface", windowId: "window-1", integrationId: "activity", title: "Activity" }],
+		};
+		expect(WorldSchema.safeParse({ id: "w1", workspaces: [first, duplicateWindow] }).success).toBe(false);
+		expect(WorldSchema.safeParse({ id: "w1", workspaces: [first, duplicateSurface] }).success).toBe(false);
 	});
 
 	it("rejects a World carrying more Workspaces than the explicit bound allows", () => {

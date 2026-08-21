@@ -25,7 +25,7 @@ describe("createJsonFileSnapshotPort", () => {
 	it("round-trips a real World through save() then load(), consumable by hydrateWorldStore", async () => {
 		const filePath = join(dir, "world.json");
 		const port = createJsonFileSnapshotPort({ filePath });
-		const world = { id: worldId("w1"), workspaces: [{ id: workspaceId("ws"), title: "WS", windows: [{ id: windowId("window-1"), title: "Window 0", surfaces: [] }], activeWindowIndex: 0 }] };
+		const world = { id: worldId("w1"), workspaces: [{ id: workspaceId("ws"), title: "WS", windows: [{ id: windowId("window-1"), title: "Window 0" }], surfaces: [], activeWindowIndex: 0 }] };
 
 		await port.save(world);
 		const loaded = await port.load();
@@ -46,7 +46,7 @@ describe("createJsonFileSnapshotPort", () => {
 		const filePath = join(dir, "world.json");
 		const port = createJsonFileSnapshotPort({ filePath });
 		await port.save({ id: worldId("w1"), workspaces: [] });
-		await port.save({ id: worldId("w1"), workspaces: [{ id: workspaceId("ws"), title: "WS", windows: [{ id: windowId("window-1"), title: "Window 0", surfaces: [] }], activeWindowIndex: 0 }] });
+		await port.save({ id: worldId("w1"), workspaces: [{ id: workspaceId("ws"), title: "WS", windows: [{ id: windowId("window-1"), title: "Window 0" }], surfaces: [], activeWindowIndex: 0 }] });
 		const loaded = await port.load();
 		expect(loaded).toMatchObject({ workspaces: [{ id: "ws" }] });
 	});

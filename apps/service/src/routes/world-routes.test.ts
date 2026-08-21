@@ -76,7 +76,7 @@ describe("createWorldRoutes", () => {
 		const body = (await response.json()) as { accepted: boolean; commandId?: string; result?: { surfaceId?: string } };
 		expect(body.accepted).toBe(true);
 		expect(body.commandId).toBe("cmd-1");
-		const dockedSurfaceId = world.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id;
+		const dockedSurfaceId = world.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id;
 		expect(body.result).toEqual({ surfaceId: dockedSurfaceId });
 	});
 
@@ -169,7 +169,7 @@ describe("createWorldRoutes", () => {
 			body: JSON.stringify({ intent: { type: "surface.dock", workspaceId: "ws", integrationId: "activity", title: "Activity 2", surfaceId: "dup" } }),
 		});
 		expect(response.status).toBe(400);
-		expect(world.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(1);
+		expect(world.getWorkspace(workspaceId("ws"))?.surfaces).toHaveLength(1);
 	});
 
 	it("postCommand surfaces a real domain error (e.g. docking into an unknown Workspace) as 400, not a 500 crash", async () => {

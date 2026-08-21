@@ -13,13 +13,11 @@ export function deriveWorkspaceToolIds(
 	getContribution: (id: IntegrationId) => ToolContribution | undefined,
 ): ReadonlySet<string> {
 	const toolIds = new Set<string>();
-	for (const window of workspace.windows) {
-		for (const surface of window.surfaces) {
-			const integration = getIntegration(surface.integrationId);
-			if (!integration || !integration.capabilities.hasApi) continue;
-			const contribution = getContribution(surface.integrationId);
-			if (contribution) toolIds.add(contribution.toolId);
-		}
+	for (const surface of workspace.surfaces) {
+		const integration = getIntegration(surface.integrationId);
+		if (!integration || !integration.capabilities.hasApi) continue;
+		const contribution = getContribution(surface.integrationId);
+		if (contribution) toolIds.add(contribution.toolId);
 	}
 	return toolIds;
 }

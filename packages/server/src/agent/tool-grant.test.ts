@@ -12,13 +12,8 @@ function workspaceWithSurfaces(integrationIds: readonly (readonly [string, Retur
 		id: WS,
 		title: "Test",
 		activeWindowIndex: 0,
-		windows: [
-			{
-				id: WIN,
-				title: "Window 0",
-				surfaces: integrationIds.map(([id, integration]) => ({ id: surfaceId(id), integrationId: integration, title: id })),
-			},
-		],
+		windows: [{ id: WIN, title: "Window 0" }],
+		surfaces: integrationIds.map(([id, integration]) => ({ id: surfaceId(id), windowId: WIN, integrationId: integration, title: id })),
 	};
 }
 

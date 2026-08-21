@@ -24,10 +24,11 @@ describe("WorldStore walking skeleton", () => {
 
 		const surface = store.dockSurface(workspaceId("bug-triage"), integrationId("activity"), "Activity");
 		const updated = store.getWorkspace(workspaceId("bug-triage"));
-		expect(updated?.windows[0]?.surfaces).toEqual([surface]);
+		expect(updated?.surfaces).toEqual([surface]);
+		expect(surface.windowId).toBe(workspace.windows[0]?.id);
 
 		store.undockSurface(workspaceId("bug-triage"), surface.id);
-		expect(store.getWorkspace(workspaceId("bug-triage"))?.windows[0]?.surfaces).toEqual([]);
+		expect(store.getWorkspace(workspaceId("bug-triage"))?.surfaces).toEqual([]);
 	});
 
 	it("one typed command changes state through the core dispatcher -- not by calling the store directly", () => {
@@ -48,8 +49,8 @@ describe("WorldStore walking skeleton", () => {
 		expect(dispatcher.execute("surface.dock", "bug-triage", "activity", "Activity")).toBe(true);
 
 		const workspace = store.getWorkspace(workspaceId("bug-triage"));
-		expect(workspace?.windows[0]?.surfaces).toHaveLength(1);
-		expect(workspace?.windows[0]?.surfaces[0]?.title).toBe("Activity");
+		expect(workspace?.surfaces).toHaveLength(1);
+		expect(workspace?.surfaces[0]?.title).toBe("Activity");
 	});
 
 	it("the resulting semantic view model can be consumed without React -- a plain, JSON-round-trippable object", () => {
@@ -195,7 +196,8 @@ describe("WorldStore walking skeleton", () => {
 
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
-			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toEqual([result.value]);
+			expect(store.getWorkspace(workspaceId("ws"))?.surfaces).toEqual([result.value]);
+			expect(result.value.windowId).toBe(windowIdValue);
 		});
 
 		it("returns a typed failure for an unknown Workspace", () => {
@@ -223,7 +225,7 @@ describe("WorldStore walking skeleton", () => {
 
 			store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: windowIdValue });
 
-			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(1);
+			expect(store.getWorkspace(workspaceId("ws"))?.surfaces).toHaveLength(1);
 		});
 
 		it("apply() throws a clear error when a surface.dock intent names a Window that doesn't exist -- preserving apply()'s own throw-on-failure contract", () => {
@@ -231,6 +233,119 @@ describe("WorldStore walking skeleton", () => {
 			store.createWorkspace(workspaceId("ws"), "WS");
 
 			expect(() => store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: windowId("ghost-window") })).toThrow(/window-not-found/);
+		});
+	});
+
+	describe("moveSurfaceToWindow -- Surface.windowId authority with identity/state preservation", () => {
+		function storeWithTwoWindowsAndStatefulSurface() {
+			const hydrated = hydrateWorldStore({
+				id: "w1",
+				workspaces: [
+					{
+						id: "ws",
+						title: "WS",
+						windows: [
+							{ id: "window-a", title: "A" },
+							{ id: "window-b", title: "B" },
+						],
+						surfaces: [
+							{
+								id: "surface-1",
+								windowId: "window-a",
+								integrationId: "terminal",
+								title: "Build shell",
+								resource: { id: "terminal-session-1", kind: "terminal-session", version: 7, status: "ready", provenance: { packageId: "@zodiac/terminal", capability: "shell" } },
+							},
+							{ id: "surface-2", windowId: "window-a", integrationId: "activity", title: "Activity" },
+							{ id: "surface-3", windowId: "window-b", integrationId: "lector", title: "Files" },
+						],
+						activeWindowIndex: 0,
+					},
+				],
+			});
+			expect(hydrated.ok).toBe(true);
+			if (!hydrated.ok) throw new Error("unreachable");
+			return hydrated.value;
+		}
+
+		it("moves the existing Surface atomically, preserving identity and all non-placement state", () => {
+			const store = storeWithTwoWindowsAndStatefulSurface();
+			const before = store.getWorkspace(workspaceId("ws"))?.surfaces.find((surface) => surface.id === surfaceId("surface-1"));
+			const changes: unknown[] = [];
+			store.onChange((change) => changes.push(change));
+
+			const result = store.moveSurfaceToWindow(workspaceId("ws"), surfaceId("surface-1"), windowId("window-b"));
+
+			expect(result).toEqual({ ok: true, moved: true, value: { ...before, windowId: windowId("window-b") } });
+			const after = store.getWorkspace(workspaceId("ws"))?.surfaces.find((surface) => surface.id === surfaceId("surface-1"));
+			expect({ ...after, windowId: before?.windowId }).toEqual(before);
+			expect(store.workspaceViewModel(workspaceId("ws"))?.windows.map((window) => [window.id, window.surfaces.map((surface) => surface.id)])).toEqual([
+				[windowId("window-a"), [surfaceId("surface-2")]],
+				[windowId("window-b"), [surfaceId("surface-1"), surfaceId("surface-3")]],
+			]);
+			expect(store.windowTile(workspaceId("ws"), windowId("window-a"))).toEqual({ kind: "leaf", surfaceId: surfaceId("surface-2") });
+			expect(store.windowTile(workspaceId("ws"), windowId("window-b"))).toEqual({
+				kind: "row",
+				children: [
+					{ tile: { kind: "leaf", surfaceId: surfaceId("surface-3") }, constraint: { kind: "fill", weight: 1 } },
+					{ tile: { kind: "leaf", surfaceId: surfaceId("surface-1") }, constraint: { kind: "fill", weight: 1 } },
+				],
+			});
+			expect(changes).toHaveLength(1);
+		});
+
+		it("treats a move to the current Window as an explicit successful no-op without broadcasting", () => {
+			const store = storeWithTwoWindowsAndStatefulSurface();
+			const before = store.snapshot();
+			const changes: unknown[] = [];
+			store.onChange((change) => changes.push(change));
+
+			const result = store.moveSurfaceToWindow(workspaceId("ws"), surfaceId("surface-1"), windowId("window-a"));
+
+			expect(result).toMatchObject({ ok: true, moved: false, value: { id: surfaceId("surface-1"), windowId: windowId("window-a") } });
+			expect(store.snapshot()).toEqual(before);
+			expect(changes).toEqual([]);
+		});
+
+		it("returns exhaustive typed missing-id failures without mutation or notification", () => {
+			const store = storeWithTwoWindowsAndStatefulSurface();
+			const before = store.snapshot();
+			const changes: unknown[] = [];
+			store.onChange((change) => changes.push(change));
+
+			expect(store.moveSurfaceToWindow(workspaceId("missing"), surfaceId("surface-1"), windowId("window-b"))).toEqual({ ok: false, reason: "workspace-not-found", workspaceId: workspaceId("missing") });
+			expect(store.moveSurfaceToWindow(workspaceId("ws"), surfaceId("missing"), windowId("window-b"))).toEqual({ ok: false, reason: "surface-not-found", workspaceId: workspaceId("ws"), surfaceId: surfaceId("missing") });
+			expect(store.moveSurfaceToWindow(workspaceId("ws"), surfaceId("surface-1"), windowId("missing"))).toEqual({ ok: false, reason: "window-not-found", workspaceId: workspaceId("ws"), windowId: windowId("missing") });
+			expect(store.snapshot()).toEqual(before);
+			expect(changes).toEqual([]);
+		});
+
+		it("returns the target tile bound failure without partially removing the Surface from its source", () => {
+			const targetSurfaces = Array.from({ length: 16 }, (_, index) => ({ id: `target-${index}`, windowId: "window-b", integrationId: "activity", title: `Target ${index}` }));
+			const hydrated = hydrateWorldStore({
+				id: "w1",
+				workspaces: [
+					{
+						id: "ws",
+						title: "WS",
+						windows: [
+							{ id: "window-a", title: "A" },
+							{ id: "window-b", title: "B" },
+						],
+						surfaces: [{ id: "source", windowId: "window-a", integrationId: "terminal", title: "Source" }, ...targetSurfaces],
+						activeWindowIndex: 0,
+					},
+				],
+			});
+			expect(hydrated.ok).toBe(true);
+			if (!hydrated.ok) return;
+			const before = hydrated.value.snapshot();
+
+			const result = hydrated.value.moveSurfaceToWindow(workspaceId("ws"), surfaceId("source"), windowId("window-b"));
+
+			expect(result).toEqual({ ok: false, reason: "too-many-children", limit: 16 });
+			expect(hydrated.value.snapshot()).toEqual(before);
+			expect(hydrated.value.windowTile(workspaceId("ws"), windowId("window-a"))).toEqual({ kind: "leaf", surfaceId: surfaceId("source") });
 		});
 	});
 
@@ -242,7 +357,7 @@ describe("WorldStore walking skeleton", () => {
 			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", commandId: commandId("cmd-1") });
 
 			expect(outcome.commandId).toBe(commandId("cmd-1"));
-			const dockedSurfaceId = store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id;
+			const dockedSurfaceId = store.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id;
 			expect(outcome.surfaceId).toBe(dockedSurfaceId);
 		});
 
@@ -253,7 +368,7 @@ describe("WorldStore walking skeleton", () => {
 			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: workspace.windows[0]!.id });
 
 			expect(outcome.surfaceId).toBeDefined();
-			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id).toBe(outcome.surfaceId);
+			expect(store.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id).toBe(outcome.surfaceId);
 		});
 
 		it("returns just the echoed commandId (no surfaceId) for intents that don't create a Surface", () => {
@@ -310,7 +425,7 @@ describe("WorldStore walking skeleton", () => {
 			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", surfaceId: surfaceId("client-2") });
 
 			expect(outcome.surfaceId).toBe(surfaceId("client-2"));
-			expect(store.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces[0]?.id).toBe(surfaceId("client-2"));
+			expect(store.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id).toBe(surfaceId("client-2"));
 		});
 
 		it("apply() throws a clear surface-id-collision error for a colliding surfaceId, whether or not a windowId is also given", () => {
@@ -338,6 +453,38 @@ describe("WorldStore walking skeleton", () => {
 			expect(result.ok).toBe(false);
 		});
 
+		it("hydrateWorldStore rejects an authoritative Surface that references a Window outside its Workspace", () => {
+			const result = hydrateWorldStore({
+				id: "w1",
+				workspaces: [
+					{
+						id: "ws",
+						title: "WS",
+						windows: [{ id: "window-a", title: "A" }],
+						surfaces: [{ id: "surface-1", windowId: "window-b", integrationId: "activity", title: "Activity" }],
+						activeWindowIndex: 0,
+					},
+				],
+			});
+			expect(result.ok).toBe(false);
+		});
+
+		it("hydrateWorldStore rejects competing canonical and Window-owned Surface membership", () => {
+			const result = hydrateWorldStore({
+				id: "w1",
+				workspaces: [
+					{
+						id: "ws",
+						title: "WS",
+						windows: [{ id: "window-a", title: "A", surfaces: [] }],
+						surfaces: [{ id: "surface-1", windowId: "window-a", integrationId: "activity", title: "Activity" }],
+						activeWindowIndex: 0,
+					},
+				],
+			});
+			expect(result.ok).toBe(false);
+		});
+
 		it("hydrateWorldStore rejects garbage input outright", () => {
 			expect(hydrateWorldStore("not a world").ok).toBe(false);
 			expect(hydrateWorldStore(null).ok).toBe(false);
@@ -355,7 +502,7 @@ describe("WorldStore walking skeleton", () => {
 			const surface = result.value.dockSurface(workspaceId("ws"), integrationId("terminal"), "Terminal");
 			// The id sequence resumed past the rehydrated "surface-7" instead of colliding with it.
 			expect(surface.id).not.toBe("surface-7");
-			expect(result.value.getWorkspace(workspaceId("ws"))?.windows[0]?.surfaces).toHaveLength(2);
+			expect(result.value.getWorkspace(workspaceId("ws"))?.surfaces).toHaveLength(2);
 		});
 
 		it("hydrateWorldStore forwards panelOptions -- a rehydrated store gets the same seeded Panels/getApplet a fresh one would", () => {

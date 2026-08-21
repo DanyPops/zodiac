@@ -54,6 +54,8 @@ export interface WorldStore {
 	 */
 	/** `requestedSurfaceId` (optional): see dockSurface's own doc comment; a collision reports as a typed DockSurfaceIdCollision failure instead of throwing, consistent with this function's own typed-outcome contract. */
 	dockSurfaceInto: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, windowId: WindowId, requestedSurfaceId?: SurfaceId) => DockIntoOutcome;
+	/** Moves one existing Surface by changing its authoritative windowId and both Windows' derived tile geometry in one notification transaction. Identity and every non-placement field are preserved. */
+	moveSurfaceToWindow: (workspaceId: WorkspaceId, surfaceId: SurfaceId, targetWindowId: WindowId) => MoveSurfaceOutcome;
 	/** The current tile tree for one Window (see window/tile.ts) -- undefined if the Workspace or Window doesn't exist, null if the Window has no docked Surfaces yet. Web and the TUI project this through window/geometry.ts's computeTileRects; neither recalculates tiling itself. */
 	windowTile: (workspaceId: WorkspaceId, windowId: WindowId) => SurfaceTile | null | undefined;
 	/**
@@ -119,6 +121,22 @@ export interface DockSurfaceIdCollision {
 export type DockIntoFailure = DockWorkspaceNotFound | DockWindowNotFound | DockSurfaceIdCollision | TileFailure;
 export type DockIntoOutcome = { readonly ok: true; readonly value: Surface } | DockIntoFailure;
 
+export interface MoveSurfaceNotFound {
+	readonly ok: false;
+	readonly reason: "surface-not-found";
+	readonly workspaceId: WorkspaceId;
+	readonly surfaceId: SurfaceId;
+}
+export interface MoveSurfaceSourceTileOutOfSync {
+	readonly ok: false;
+	readonly reason: "source-tile-out-of-sync";
+	readonly workspaceId: WorkspaceId;
+	readonly windowId: WindowId;
+	readonly surfaceId: SurfaceId;
+}
+export type MoveSurfaceFailure = DockWorkspaceNotFound | DockWindowNotFound | MoveSurfaceNotFound | MoveSurfaceSourceTileOutOfSync | TileFailure;
+export type MoveSurfaceOutcome = { readonly ok: true; readonly moved: boolean; readonly value: Surface } | MoveSurfaceFailure;
+
 /** Constructor-time options for Panel state -- see WorldStore.panels' own doc comment for why Panels are global rather than per-Workspace. `getApplet` resolves an AppletId to its real AppletDefinition for panel.move's own supportedFormFactors check; a Panel referencing an id `getApplet` can't resolve is treated as unconstrained (no formFactor to violate), not rejected. */
 export interface WorldStorePanelOptions {
 	readonly panels?: readonly Panel[];
@@ -165,15 +183,15 @@ export interface ApplyOutcome {
 
 function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId, Workspace>, panelOptions: WorldStorePanelOptions = {}): WorldStore {
 	const allWindows = [...initialWorkspaces.values()].flatMap((workspace) => workspace.windows);
+	const allSurfaces = [...initialWorkspaces.values()].flatMap((workspace) => workspace.surfaces);
 	const nextWindowId = createIdSequence("window", highestIdSuffix(allWindows.map((window) => window.id), "window"));
-	const nextSurfaceId = createIdSequence(
-		"surface",
-		highestIdSuffix(
-			allWindows.flatMap((window) => window.surfaces.map((surface) => surface.id)),
-			"surface",
-		),
-	);
+	const nextSurfaceId = createIdSequence("surface", highestIdSuffix(allSurfaces.map((surface) => surface.id), "surface"));
 	const workspaces = new Map(initialWorkspaces);
+	/** Derived O(1) lookup for Surface-centric commands; Workspace.surfaces remains the persisted registry and Surface.windowId remains placement authority. */
+	const surfaceById = new Map<SurfaceId, { readonly workspaceId: WorkspaceId; readonly surface: Surface }>();
+	for (const workspace of initialWorkspaces.values()) {
+		for (const surface of workspace.surfaces) surfaceById.set(surface.id, { workspaceId: workspace.id, surface });
+	}
 	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
 	const panels = new Map((panelOptions.panels ?? []).map((panel) => [panel.id, panel]));
 	const getApplet = panelOptions.getApplet ?? (() => undefined);
@@ -188,19 +206,18 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	}
 
 	/**
-	 * One tile tree per Window, live/derived state kept in lockstep with each
-	 * Window's own `surfaces` array (the persisted wire-schema source of
-	 * truth) -- never itself persisted or schema-validated. Rebuilt from
-	 * `surfaces` below for a rehydrated World; window ids are unique across
-	 * this store's whole lifetime (minted from one shared id sequence), so a
-	 * flat map keyed by WindowId alone is safe without a (workspaceId,
-	 * windowId) composite key.
+	 * One tile tree per Window, live/derived state rebuilt from the Workspace's
+	 * authoritative Surface registry (`Surface.windowId`). It owns geometry and
+	 * order only; it is never a second membership authority or persisted wire
+	 * shape. Window ids are unique across this store's whole lifetime (minted
+	 * from one shared id sequence), so a flat map keyed by WindowId alone is
+	 * safe without a (workspaceId, windowId) composite key.
 	 */
 	const tileByWindow = new Map<WindowId, SurfaceTile | null>();
 	for (const workspace of initialWorkspaces.values()) {
 		for (const window of workspace.windows) {
 			let tile: SurfaceTile | null = null;
-			for (const surface of window.surfaces) {
+			for (const surface of workspace.surfaces.filter((candidate) => candidate.windowId === window.id)) {
 				const inserted = insertTile(tile, surface.id);
 				if (inserted.ok) {
 					tile = inserted.value;
@@ -212,7 +229,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 					// tree's own bounds. Degrade gracefully on rehydration (skip
 					// the surface that doesn't fit, keep the store usable) rather
 					// than crash a whole daemon startup over one oversized Window.
-					console.error(`World "${worldId}": Window "${window.id}" has more docked Surfaces than the tile tree can represent (${inserted.reason}); Surface "${surface.id}" is excluded from its tile tree (still present in the Window's own surfaces list).`);
+					console.error(`World "${worldId}": Window "${window.id}" has more docked Surfaces than the tile tree can represent (${inserted.reason}); Surface "${surface.id}" is excluded from its tile tree (still present in the Workspace Surface registry).`);
 				}
 			}
 			tileByWindow.set(window.id, tile);
@@ -232,21 +249,16 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 
 	function createWorkspace(workspaceId: WorkspaceId, title: string): Workspace {
 		if (workspaces.has(workspaceId)) throw new Error(`World "${worldId}" already has a Workspace "${workspaceId}"`);
-		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: "Window 0", surfaces: [] };
+		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: "Window 0" };
 		tileByWindow.set(window.id, null);
-		const workspace: Workspace = { id: workspaceId, title, windows: [window], activeWindowIndex: 0 };
+		const workspace: Workspace = { id: workspaceId, title, windows: [window], surfaces: [], activeWindowIndex: 0 };
 		workspaces.set(workspaceId, workspace);
 		emitChange();
 		return workspace;
 	}
 
 	function surfaceIdInUse(candidate: SurfaceId): boolean {
-		for (const workspace of workspaces.values()) {
-			for (const window of workspace.windows) {
-				if (window.surfaces.some((surface) => surface.id === candidate)) return true;
-			}
-		}
-		return false;
+		return surfaceById.has(candidate);
 	}
 
 	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId): Surface {
@@ -254,12 +266,11 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		const activeWindow = workspace.windows[workspace.activeWindowIndex];
 		if (!activeWindow) throw new Error(`Workspace "${workspaceId}" has an out-of-bounds activeWindowIndex ${workspace.activeWindowIndex}`);
 		if (requestedSurfaceId !== undefined && surfaceIdInUse(requestedSurfaceId)) throw new Error(`Cannot dock Surface "${requestedSurfaceId}" into World "${worldId}": surface-id-collision`);
-		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), integrationId, title };
+		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), windowId: activeWindow.id, integrationId, title };
 		const inserted = insertTile(tileByWindow.get(activeWindow.id) ?? null, surface.id);
 		if (!inserted.ok) throw new Error(`Cannot dock Surface "${surface.id}" into Window "${activeWindow.id}": ${inserted.reason}`);
-		const updatedWindow: WorkspaceWindow = { ...activeWindow, surfaces: [...activeWindow.surfaces, surface] };
-		const windows = workspace.windows.map((window, index) => (index === workspace.activeWindowIndex ? updatedWindow : window));
-		workspaces.set(workspaceId, { ...workspace, windows });
+		workspaces.set(workspaceId, { ...workspace, surfaces: [...workspace.surfaces, surface] });
+		surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(activeWindow.id, inserted.value);
 		emitChange();
 		return surface;
@@ -273,13 +284,12 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		if (!targetWindow) return { ok: false, reason: "window-not-found", workspaceId, windowId: targetWindowId };
 		if (requestedSurfaceId !== undefined && surfaceIdInUse(requestedSurfaceId)) return { ok: false, reason: "surface-id-collision", surfaceId: requestedSurfaceId };
 
-		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), integrationId, title };
+		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), windowId: targetWindow.id, integrationId, title };
 		const inserted = insertTile(tileByWindow.get(targetWindowId) ?? null, surface.id);
 		if (!inserted.ok) return inserted;
 
-		const updatedWindow: WorkspaceWindow = { ...targetWindow, surfaces: [...targetWindow.surfaces, surface] };
-		const windows = workspace.windows.map((window) => (window.id === targetWindowId ? updatedWindow : window));
-		workspaces.set(workspaceId, { ...workspace, windows });
+		workspaces.set(workspaceId, { ...workspace, surfaces: [...workspace.surfaces, surface] });
+		surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(targetWindowId, inserted.value);
 		emitChange();
 		return { ok: true, value: surface };
@@ -287,14 +297,44 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 
 	function undockSurface(workspaceId: WorkspaceId, surfaceId: SurfaceId): void {
 		const workspace = requireWorkspace(workspaceId);
-		const windows = workspace.windows.map((window) => {
-			if (!window.surfaces.some((surface) => surface.id === surfaceId)) return window;
-			const removed = removeTile(tileByWindow.get(window.id) ?? null, surfaceId);
-			if (removed.ok) tileByWindow.set(window.id, removed.value);
-			return { ...window, surfaces: window.surfaces.filter((surface) => surface.id !== surfaceId) };
-		});
-		workspaces.set(workspaceId, { ...workspace, windows });
+		const indexed = surfaceById.get(surfaceId);
+		const surface = indexed?.workspaceId === workspaceId ? indexed.surface : undefined;
+		if (surface) {
+			const removed = removeTile(tileByWindow.get(surface.windowId) ?? null, surfaceId);
+			if (removed.ok) tileByWindow.set(surface.windowId, removed.value);
+			surfaceById.delete(surfaceId);
+		}
+		workspaces.set(workspaceId, { ...workspace, surfaces: workspace.surfaces.filter((candidate) => candidate.id !== surfaceId) });
 		emitChange();
+	}
+
+	function moveSurfaceToWindow(workspaceId: WorkspaceId, surfaceId: SurfaceId, targetWindowId: WindowId): MoveSurfaceOutcome {
+		const workspace = workspaces.get(workspaceId);
+		if (!workspace) return { ok: false, reason: "workspace-not-found", workspaceId };
+		const indexed = surfaceById.get(surfaceId);
+		if (!indexed || indexed.workspaceId !== workspaceId) return { ok: false, reason: "surface-not-found", workspaceId, surfaceId };
+		const targetWindow = workspace.windows.find((window) => window.id === targetWindowId);
+		if (!targetWindow) return { ok: false, reason: "window-not-found", workspaceId, windowId: targetWindowId };
+		const surface = indexed.surface;
+		if (surface.windowId === targetWindowId) return { ok: true, moved: false, value: surface };
+
+		// Both tile operations are pure. Compute both results before changing
+		// any registry/index/tile state so every typed failure is atomic.
+		const inserted = insertTile(tileByWindow.get(targetWindowId) ?? null, surfaceId);
+		if (!inserted.ok) return inserted;
+		const removed = removeTile(tileByWindow.get(surface.windowId) ?? null, surfaceId);
+		if (!removed.ok) return { ok: false, reason: "source-tile-out-of-sync", workspaceId, windowId: surface.windowId, surfaceId };
+
+		const movedSurface: Surface = { ...surface, windowId: targetWindowId };
+		workspaces.set(workspaceId, {
+			...workspace,
+			surfaces: workspace.surfaces.map((candidate) => (candidate.id === surfaceId ? movedSurface : candidate)),
+		});
+		surfaceById.set(surfaceId, { workspaceId, surface: movedSurface });
+		tileByWindow.set(surface.windowId, removed.value);
+		tileByWindow.set(targetWindowId, inserted.value);
+		emitChange();
+		return { ok: true, moved: true, value: movedSurface };
 	}
 
 	function windowTile(workspaceId: WorkspaceId, targetWindowId: WindowId): SurfaceTile | null | undefined {
@@ -383,18 +423,16 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 			id: window.id,
 			title: window.title,
 			active: window.id === activeWindow?.id,
-			surfaces: window.surfaces.map(
-				(surface): SurfaceViewModel => ({ id: surface.id, integrationId: surface.integrationId, title: surface.title, status: surface.resource?.status ?? "idle", selected: false }),
-			),
+			surfaces: workspace.surfaces
+				.filter((surface) => surface.windowId === window.id)
+				.map((surface): SurfaceViewModel => ({ id: surface.id, integrationId: surface.integrationId, title: surface.title, status: surface.resource?.status ?? "idle", selected: false })),
 			tile: tileByWindow.get(window.id) ?? null,
 		}));
 		const firstWindow = windows[0];
 		if (!firstWindow) return undefined; // a Workspace always has >=1 Window (enforced by WorkspaceSchema); guards the noUncheckedIndexedAccess narrowing below.
 		const activeIntegrationIds: IntegrationId[] = [];
-		for (const window of workspace.windows) {
-			for (const surface of window.surfaces) {
-				if (!activeIntegrationIds.includes(surface.integrationId)) activeIntegrationIds.push(surface.integrationId);
-			}
+		for (const surface of workspace.surfaces) {
+			if (!activeIntegrationIds.includes(surface.integrationId)) activeIntegrationIds.push(surface.integrationId);
 		}
 		return { id: workspace.id, title: workspace.title, activeWindowId: activeWindow?.id ?? firstWindow.id, windows, activeIntegrationIds };
 	}
@@ -413,6 +451,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		dockSurface,
 		undockSurface,
 		dockSurfaceInto,
+		moveSurfaceToWindow,
 		windowTile,
 		apply,
 		registerIntegrationInvokeHandler,
