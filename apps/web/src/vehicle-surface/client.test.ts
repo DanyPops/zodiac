@@ -37,9 +37,9 @@ describe("HttpVehicleSurfaceClient", () => {
 		const subscription = client.subscribe("papyrus", listener);
 		const source = FakeEventSource.instances[0];
 		expect(source?.url).toBe("http://127.0.0.1:4390/api/vehicle-surfaces/papyrus/events");
-		source?.emit("vehicle-surface", { type: "state", surfaceId: "papyrus", state: "live" });
+		source?.emit("message", { type: "state", surfaceId: "papyrus", state: "live" });
 		expect(listener).toHaveBeenCalledWith({ type: "state", surfaceId: "papyrus", state: "live" });
-		source?.emit("vehicle-surface", { type: "state", surfaceId: "papyrus", state: "not-real" });
+		source?.emit("message", { type: "state", surfaceId: "papyrus", state: "not-real" });
 		expect(listener).toHaveBeenCalledTimes(1);
 		subscription.close();
 		expect(source?.closed).toBe(true);

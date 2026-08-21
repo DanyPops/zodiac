@@ -78,15 +78,16 @@ export function createVehicleSurfaceRoutes(gateway: VehicleSurfaceGateway) {
 			res.flushHeaders();
 			try {
 				subscription = await gateway.subscribe(surfaceId, (event) => {
-					if (!closed) writeSseFrame(res, { event: "vehicle-surface", data: event });
+					if (!closed) writeSseFrame(res, event);
 				});
 			} catch (error) {
-				writeSseFrame(res, { event: "vehicle-surface-error", data: { code: "vehicle-surface-unavailable", message: error instanceof Error ? error.message : "Vehicle Surface unavailable" } });
+				writeSseFrame(res, { type: "error", code: "vehicle-surface-unavailable", message: error instanceof Error ? error.message : "Vehicle Surface unavailable" });
 				res.end();
 				return;
 			}
 			const close = (): void => { if (closed) return; closed = true; subscription?.close(); };
-			req.on("close", close);
+			// IncomingMessage "close" can fire once the request body is complete even while the
+			// response stream is still live; the ServerResponse owns the SSE connection lifetime.
 			res.on("close", close);
 		},
 	};

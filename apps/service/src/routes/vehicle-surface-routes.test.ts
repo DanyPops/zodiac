@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentIntegrationPort } from "@zodiac/agent";
-import { worldId } from "@zodiac/protocol";
+import { worldId, type VehicleSurfaceEvent } from "@zodiac/protocol";
 import type { VehicleSurfaceGateway } from "@zodiac/server/vehicle";
 import { createWorldStore } from "@zodiac/server/world";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,17 +35,20 @@ async function start(gateway: VehicleSurfaceGateway): Promise<string> {
 	return service.baseUrl;
 }
 
-function gateway(): VehicleSurfaceGateway & { invoke: ReturnType<typeof vi.fn>; manifest: ReturnType<typeof vi.fn> } {
+function gateway(): VehicleSurfaceGateway & { invoke: ReturnType<typeof vi.fn>; manifest: ReturnType<typeof vi.fn>; emit: (event: VehicleSurfaceEvent) => void } {
 	const manifest = vi.fn(async () => projectedManifest);
 	const invoke = vi.fn(async () => ({ ok: true as const, output: [{ id: "task-1" }] }));
+	let listener: ((event: VehicleSurfaceEvent) => void) | undefined;
 	return {
 		list: () => [{ id: "papyrus", title: "Papyrus" }],
 		manifest,
 		invoke,
 		subscribe: async (surfaceId, emit) => {
+			listener = emit;
 			emit({ type: "state", surfaceId, state: "live" });
-			return { close() {} };
+			return { close() { listener = undefined; } };
 		},
+		emit: (event) => listener?.(event),
 	};
 }
 
@@ -75,14 +78,18 @@ describe("Vehicle Surface routes", () => {
 		expect(fake.manifest).not.toHaveBeenCalled();
 	});
 
-	it("streams live invalidation state over same-origin SSE", async () => {
-		const baseUrl = await start(gateway());
+	it("streams live invalidations after the GET request itself has completed", async () => {
+		const fake = gateway();
+		const baseUrl = await start(fake);
 		const response = await fetch(`${baseUrl}/api/vehicle-surfaces/papyrus/events`, { headers: { Origin: "http://localhost:5173" } });
 		expect(response.status).toBe(200);
 		const reader = response.body?.getReader();
 		if (!reader) throw new Error("expected SSE body");
 		const first = await reader.read();
-		await reader.cancel();
 		expect(new TextDecoder().decode(first.value)).toContain('"state":"live"');
+		fake.emit({ type: "event", surfaceId: "papyrus", topic: "tasks", payload: { operation: "tasks.create" } });
+		const second = await reader.read();
+		await reader.cancel();
+		expect(new TextDecoder().decode(second.value)).toContain('"topic":"tasks"');
 	});
 });

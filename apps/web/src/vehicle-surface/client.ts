@@ -48,7 +48,7 @@ export function createHttpVehicleSurfaceClient(options: HttpVehicleSurfaceClient
 		},
 		subscribe(surfaceId, listener) {
 			const source = new EventSourceCtor(route(options.baseUrl, surfaceId, "events"));
-			source.addEventListener("vehicle-surface", (raw) => {
+			source.addEventListener("message", (raw) => {
 				if (!("data" in raw) || typeof raw.data !== "string") return;
 				try {
 					const parsed = VehicleSurfaceEventSchema.safeParse(JSON.parse(raw.data));
