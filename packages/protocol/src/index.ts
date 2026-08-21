@@ -1,5 +1,5 @@
-export type { Brand, WorldId, WorkspaceId, WindowId, SurfaceId, IntegrationId, CommandId, ResourceId, PanelId, AppletId } from "./ids.js";
-export { WorldIdSchema, WorkspaceIdSchema, WindowIdSchema, SurfaceIdSchema, IntegrationIdSchema, CommandIdSchema, ResourceIdSchema, PanelIdSchema, AppletIdSchema, worldId, workspaceId, windowId, surfaceId, integrationId, commandId, resourceId, panelId, appletId } from "./ids.js";
+export type { Brand, WorldId, WorkspaceId, WindowId, SurfaceId, IntegrationId, VerticalId, CommandId, ResourceId, PanelId, AppletId } from "./ids.js";
+export { WorldIdSchema, WorkspaceIdSchema, WindowIdSchema, SurfaceIdSchema, IntegrationIdSchema, VerticalIdSchema, CommandIdSchema, ResourceIdSchema, PanelIdSchema, AppletIdSchema, worldId, workspaceId, windowId, surfaceId, integrationId, verticalId, commandId, resourceId, panelId, appletId } from "./ids.js";
 
 export type { ParseResult } from "./result.js";
 export { parseWithSchema } from "./result.js";
@@ -7,8 +7,8 @@ export { parseWithSchema } from "./result.js";
 export type { ResourceStatus, Provenance, SelectionState, FocusState } from "./status.js";
 export { ResourceStatusSchema, ProvenanceSchema, SelectionStateSchema, FocusStateSchema } from "./status.js";
 
-export type { Resource, Surface, WorkspaceWindow, Workspace, World, IntegrationCapabilities, IntegrationDefinition } from "./entities.js";
-export { ResourceSchema, SurfaceSchema, WorkspaceWindowSchema, WorkspaceSchema, WorldSchema, IntegrationCapabilitiesSchema, IntegrationDefinitionSchema } from "./entities.js";
+export type { Resource, Surface, WorkspaceWindow, Workspace, World, IntegrationCapabilities, IntegrationDefinition, Vertical } from "./entities.js";
+export { ResourceSchema, SurfaceSchema, WorkspaceWindowSchema, WorkspaceSchema, WorldSchema, IntegrationCapabilitiesSchema, IntegrationDefinitionSchema, VerticalSchema, MAX_INTEGRATIONS_PER_VERTICAL } from "./entities.js";
 
 export type { CommandIntent } from "./commands.js";
 export { CommandIntentSchema, COMMAND_INTENT_PROTOCOL_VERSION, COMMAND_INTENT_MIN_VERSION, isSupportedCommandIntent } from "./commands.js";

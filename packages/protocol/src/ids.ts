@@ -57,6 +57,12 @@ export function integrationId(value: string): IntegrationId {
 	return IntegrationIdSchema.parse(value);
 }
 
+export const VerticalIdSchema = brandedIdSchema("VerticalId");
+export type VerticalId = z.infer<typeof VerticalIdSchema>;
+export function verticalId(value: string): VerticalId {
+	return VerticalIdSchema.parse(value);
+}
+
 export const CommandIdSchema = brandedIdSchema("CommandId");
 export type CommandId = z.infer<typeof CommandIdSchema>;
 export function commandId(value: string): CommandId {

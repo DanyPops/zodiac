@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IntegrationDefinitionSchema, SurfaceSchema, WorkspaceSchema, WorldSchema } from "./entities.js";
+import { IntegrationDefinitionSchema, MAX_INTEGRATIONS_PER_VERTICAL, SurfaceSchema, VerticalSchema, WorkspaceSchema, WorldSchema } from "./entities.js";
 
 function validWorkspace() {
 	return {
@@ -66,6 +66,19 @@ describe("WorkspaceSchema", () => {
 			...validWorkspace(),
 			surfaces: [{ id: "s1", windowId: "window-0", integrationId: "activity", title: "Activity" }],
 		});
+	});
+});
+
+describe("VerticalSchema", () => {
+	it("accepts a bounded Integration bundle", () => {
+		expect(VerticalSchema.safeParse({ id: "delivery", name: "Delivery", integrationIds: ["activity", "terminal"] }).success).toBe(true);
+	});
+
+	it("rejects empty, duplicate, and oversized Integration bundles", () => {
+		expect(VerticalSchema.safeParse({ id: "delivery", name: "Delivery", integrationIds: [] }).success).toBe(false);
+		expect(VerticalSchema.safeParse({ id: "delivery", name: "Delivery", integrationIds: ["activity", "activity"] }).success).toBe(false);
+		const oversized = Array.from({ length: MAX_INTEGRATIONS_PER_VERTICAL + 1 }, (_, index) => `integration-${index}`);
+		expect(VerticalSchema.safeParse({ id: "delivery", name: "Delivery", integrationIds: oversized }).success).toBe(false);
 	});
 });
 

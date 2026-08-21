@@ -4,6 +4,7 @@ import {
 	type CommandId,
 	type CommandIntent,
 	type ContributionOutcome,
+	type IntegrationDefinition,
 	type IntegrationId,
 	type Panel,
 	type PanelId,
@@ -11,6 +12,7 @@ import {
 	type Surface,
 	type SurfaceId,
 	type SurfaceViewModel,
+	type Vertical,
 	type WindowId,
 	type WindowViewModel,
 	type WorkspaceWindow,
@@ -41,6 +43,8 @@ export interface WorldStore {
 	readonly id: WorldId;
 	snapshot: () => World;
 	createWorkspace: (workspaceId: WorkspaceId, title: string) => Workspace;
+	/** Opens a bounded Vertical atomically as one new Workspace with one Surface per renderable Integration. */
+	openVertical: (workspaceId: WorkspaceId, vertical: Vertical) => OpenVerticalOutcome;
 	getWorkspace: (workspaceId: WorkspaceId) => Workspace | undefined;
 	/** `requestedSurfaceId` (optional) is a caller-supplied id -- see CommandIntent's own surface.dock.surfaceId. Throws if it collides with a Surface that already exists anywhere in this World, the same throw-on-failure contract as an unknown Workspace. */
 	dockSurface: (workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId) => Surface;
@@ -137,10 +141,30 @@ export interface MoveSurfaceSourceTileOutOfSync {
 export type MoveSurfaceFailure = DockWorkspaceNotFound | DockWindowNotFound | MoveSurfaceNotFound | MoveSurfaceSourceTileOutOfSync | TileFailure;
 export type MoveSurfaceOutcome = { readonly ok: true; readonly moved: boolean; readonly value: Surface } | MoveSurfaceFailure;
 
-/** Constructor-time options for Panel state -- see WorldStore.panels' own doc comment for why Panels are global rather than per-Workspace. `getApplet` resolves an AppletId to its real AppletDefinition for panel.move's own supportedFormFactors check; a Panel referencing an id `getApplet` can't resolve is treated as unconstrained (no formFactor to violate), not rejected. */
+export interface OpenVerticalWorkspaceIdCollision {
+	readonly ok: false;
+	readonly reason: "workspace-id-collision";
+	readonly workspaceId: WorkspaceId;
+}
+export interface OpenVerticalIntegrationNotFound {
+	readonly ok: false;
+	readonly reason: "integration-not-found";
+	readonly integrationId: IntegrationId;
+}
+export interface OpenVerticalIntegrationNotRenderable {
+	readonly ok: false;
+	readonly reason: "integration-not-renderable";
+	readonly integrationId: IntegrationId;
+}
+export type OpenVerticalFailure = OpenVerticalWorkspaceIdCollision | OpenVerticalIntegrationNotFound | OpenVerticalIntegrationNotRenderable | TileFailure;
+export type OpenVerticalOutcome = { readonly ok: true; readonly value: Workspace } | OpenVerticalFailure;
+
+/** Constructor-time domain resolvers plus Panel state. Panels remain global rather than per-Workspace; `getApplet` validates panel placement, while `getIntegration` validates Vertical bundles before any Workspace mutation. */
 export interface WorldStorePanelOptions {
 	readonly panels?: readonly Panel[];
 	readonly getApplet?: (id: AppletId) => AppletDefinition | undefined;
+	/** Resolves the domain definition a Vertical must validate before creating its Surface bundle. */
+	readonly getIntegration?: (id: IntegrationId) => IntegrationDefinition | undefined;
 }
 
 /**
@@ -195,6 +219,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	const changeListeners = new Set<(viewModel: WorldViewModel) => void>();
 	const panels = new Map((panelOptions.panels ?? []).map((panel) => [panel.id, panel]));
 	const getApplet = panelOptions.getApplet ?? (() => undefined);
+	const getIntegration = panelOptions.getIntegration ?? (() => undefined);
 	const integrationInvokeHandlers = new Map<IntegrationId, IntegrationInvokeHandler>();
 
 	function registerIntegrationInvokeHandler(targetIntegrationId: IntegrationId, handler: IntegrationInvokeHandler): () => void {
@@ -259,6 +284,39 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 
 	function surfaceIdInUse(candidate: SurfaceId): boolean {
 		return surfaceById.has(candidate);
+	}
+
+	function openVertical(workspaceId: WorkspaceId, vertical: Vertical): OpenVerticalOutcome {
+		if (workspaces.has(workspaceId)) return { ok: false, reason: "workspace-id-collision", workspaceId };
+
+		const definitions: IntegrationDefinition[] = [];
+		for (const integrationId of vertical.integrationIds) {
+			const definition = getIntegration(integrationId);
+			if (!definition) return { ok: false, reason: "integration-not-found", integrationId };
+			if (!definition.capabilities.renderable) return { ok: false, reason: "integration-not-renderable", integrationId };
+			definitions.push(definition);
+		}
+
+		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: "Window 0" };
+		const surfaces: Surface[] = definitions.map((definition) => ({
+			id: makeSurfaceId(nextSurfaceId()),
+			windowId: window.id,
+			integrationId: definition.id,
+			title: definition.title,
+		}));
+		let tile: SurfaceTile | null = null;
+		for (const surface of surfaces) {
+			const inserted = insertTile(tile, surface.id);
+			if (!inserted.ok) return inserted;
+			tile = inserted.value;
+		}
+
+		const workspace: Workspace = { id: workspaceId, title: vertical.name, windows: [window], surfaces, activeWindowIndex: 0 };
+		workspaces.set(workspaceId, workspace);
+		for (const surface of surfaces) surfaceById.set(surface.id, { workspaceId, surface });
+		tileByWindow.set(window.id, tile);
+		emitChange();
+		return { ok: true, value: workspace };
 	}
 
 	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId): Surface {
@@ -447,6 +505,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		id: worldId,
 		snapshot: () => ({ id: worldId, workspaces: [...workspaces.values()] }),
 		createWorkspace,
+		openVertical,
 		getWorkspace: (workspaceId) => workspaces.get(workspaceId),
 		dockSurface,
 		undockSurface,

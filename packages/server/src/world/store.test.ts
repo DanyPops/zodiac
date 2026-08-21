@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appletId, commandId, integrationId, panelId, surfaceId, windowId, workspaceId, worldId, type AppletDefinition, type ContributionOutcome, type Panel } from "@zodiac/protocol";
+import { appletId, commandId, integrationId, panelId, surfaceId, verticalId, windowId, workspaceId, worldId, type AppletDefinition, type ContributionOutcome, type IntegrationDefinition, type Panel } from "@zodiac/protocol";
 import { authorizeAgentCommand } from "../agent/authorize-command.js";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
 import { createWorldStore, hydrateWorldStore } from "./store.js";
@@ -233,6 +233,80 @@ describe("WorldStore walking skeleton", () => {
 			store.createWorkspace(workspaceId("ws"), "WS");
 
 			expect(() => store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: windowId("ghost-window") })).toThrow(/window-not-found/);
+		});
+	});
+
+	describe("openVertical -- a bounded Integration bundle opened atomically as a new Workspace", () => {
+		const ACTIVITY: IntegrationDefinition = { id: integrationId("activity"), title: "Activity", capabilities: { renderable: true, hasApi: false } };
+		const TERMINAL: IntegrationDefinition = { id: integrationId("terminal"), title: "Terminal", capabilities: { renderable: true, hasApi: true } };
+		const API_ONLY: IntegrationDefinition = { id: integrationId("api-only"), title: "API only", capabilities: { renderable: false, hasApi: true } };
+		const definitions = new Map([ACTIVITY, TERMINAL, API_ONLY].map((definition) => [definition.id, definition]));
+
+		it("creates one Workspace and exactly one Surface per listed Integration in one notification", () => {
+			const store = createWorldStore(worldId("w1"), { getIntegration: (id) => definitions.get(id) });
+			const changes: unknown[] = [];
+			store.onChange((change) => changes.push(change));
+
+			const result = store.openVertical(workspaceId("delivery"), {
+				id: verticalId("delivery"),
+				name: "Delivery",
+				integrationIds: [ACTIVITY.id, TERMINAL.id],
+			});
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+			expect(result.value).toEqual(store.getWorkspace(workspaceId("delivery")));
+			expect(result.value.title).toBe("Delivery");
+			expect(result.value.windows).toHaveLength(1);
+			const targetWindowId = result.value.windows[0]!.id;
+			expect(result.value.surfaces).toEqual([
+				{ id: expect.any(String), windowId: targetWindowId, integrationId: ACTIVITY.id, title: ACTIVITY.title },
+				{ id: expect.any(String), windowId: targetWindowId, integrationId: TERMINAL.id, title: TERMINAL.title },
+			]);
+			expect(store.windowTile(workspaceId("delivery"), targetWindowId)).toEqual({
+				kind: "row",
+				children: result.value.surfaces.map((surface) => ({ tile: { kind: "leaf", surfaceId: surface.id }, constraint: { kind: "fill", weight: 1 } })),
+			});
+			expect(changes).toHaveLength(1);
+		});
+
+		it("fails closed on an unknown Integration without creating a partial Workspace", () => {
+			const store = createWorldStore(worldId("w1"), { getIntegration: (id) => definitions.get(id) });
+			const changes: unknown[] = [];
+			store.onChange((change) => changes.push(change));
+
+			const result = store.openVertical(workspaceId("delivery"), {
+				id: verticalId("delivery"),
+				name: "Delivery",
+				integrationIds: [ACTIVITY.id, integrationId("missing")],
+			});
+
+			expect(result).toEqual({ ok: false, reason: "integration-not-found", integrationId: integrationId("missing") });
+			expect(store.getWorkspace(workspaceId("delivery"))).toBeUndefined();
+			expect(changes).toEqual([]);
+		});
+
+		it("fails closed when an Integration has no renderable Surface capability", () => {
+			const store = createWorldStore(worldId("w1"), { getIntegration: (id) => definitions.get(id) });
+			expect(store.openVertical(workspaceId("delivery"), { id: verticalId("delivery"), name: "Delivery", integrationIds: [API_ONLY.id] })).toEqual({
+				ok: false,
+				reason: "integration-not-renderable",
+				integrationId: API_ONLY.id,
+			});
+			expect(store.getWorkspace(workspaceId("delivery"))).toBeUndefined();
+		});
+
+		it("returns a typed collision instead of overwriting an existing Workspace", () => {
+			const store = createWorldStore(worldId("w1"), { getIntegration: (id) => definitions.get(id) });
+			store.createWorkspace(workspaceId("delivery"), "Existing");
+			const before = store.snapshot();
+
+			expect(store.openVertical(workspaceId("delivery"), { id: verticalId("delivery"), name: "Delivery", integrationIds: [ACTIVITY.id] })).toEqual({
+				ok: false,
+				reason: "workspace-id-collision",
+				workspaceId: workspaceId("delivery"),
+			});
+			expect(store.snapshot()).toEqual(before);
 		});
 	});
 

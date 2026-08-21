@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { IntegrationIdSchema, ResourceIdSchema, SurfaceIdSchema, WindowIdSchema, WorkspaceIdSchema, WorldIdSchema, type WindowId } from "./ids.js";
+import { IntegrationIdSchema, ResourceIdSchema, SurfaceIdSchema, VerticalIdSchema, WindowIdSchema, WorkspaceIdSchema, WorldIdSchema, type WindowId } from "./ids.js";
 import { ProvenanceSchema, ResourceStatusSchema } from "./status.js";
+import { MAX_CHILDREN_PER_TILE } from "./tile.js";
 
 /**
  * Every bound below is explicit and small on purpose: a World is a live,
@@ -49,6 +50,26 @@ export const IntegrationDefinitionSchema = z.object({
 	capabilities: IntegrationCapabilitiesSchema,
 });
 export type IntegrationDefinition = z.infer<typeof IntegrationDefinitionSchema>;
+
+/** A Vertical must fit the deterministic flat tile row created when opening its Integration bundle into a fresh Window. */
+export const MAX_INTEGRATIONS_PER_VERTICAL = MAX_CHILDREN_PER_TILE;
+
+/** A reusable, bounded bundle of distinct Integrations that opens as one new Workspace with one Surface per Integration. */
+export const VerticalSchema = z
+	.object({
+		id: VerticalIdSchema,
+		name: z.string().trim().min(1).max(200),
+		integrationIds: z.array(IntegrationIdSchema).min(1).max(MAX_INTEGRATIONS_PER_VERTICAL),
+	})
+	.strict()
+	.superRefine((vertical, context) => {
+		const seen = new Set<string>();
+		for (const [index, integrationId] of vertical.integrationIds.entries()) {
+			if (seen.has(integrationId)) context.addIssue({ code: "custom", path: ["integrationIds", index], message: `duplicate Integration id "${integrationId}"` });
+			seen.add(integrationId);
+		}
+	});
+export type Vertical = z.infer<typeof VerticalSchema>;
 
 /** One Workspace's numbered arrangement slot. It owns per-Window layout, not Surface membership; membership is derived from each Surface's authoritative `windowId`. */
 export const WorkspaceWindowSchema = z
