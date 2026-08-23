@@ -29,7 +29,15 @@ export default defineConfig({
 	// so a prior run's Workspaces/World never leak into this one.
 	webServer: [
 		{
-			command: `rm -rf ${ZODIACD_STATE_DIR} && cd ../.. && npm run build --workspace=@zodiac/service && node apps/service/dist/cli.js --port ${ZODIACD_PORT} --host 127.0.0.1 --fixture-mode --state-dir apps/web/${ZODIACD_STATE_DIR}`,
+			// zodiacd's own origin-allowlist defaults to apps/web's *dev-server*
+			// port (5173, parse-args.ts's DEFAULT_ALLOWED_ORIGINS) -- this suite
+			// serves Web on WEB_PORT instead, so every live browser->zodiacd
+			// call (SSE, conversation fetch) would otherwise get a real 403
+			// origin-not-allowed rejection. Confirmed root cause of 5 apparently
+			// unrelated system-test failures (a "Failed to fetch" Chat error, a
+			// live-tile that never renders, and 3 visual-snapshot diffs -- all
+			// really the same rejected-origin bug, not font/timing flakiness).
+			command: `rm -rf ${ZODIACD_STATE_DIR} && cd ../.. && npm run build --workspace=@zodiac/service && node apps/service/dist/cli.js --port ${ZODIACD_PORT} --host 127.0.0.1 --fixture-mode --state-dir apps/web/${ZODIACD_STATE_DIR} --allowed-origin http://127.0.0.1:${WEB_PORT}`,
 			url: `http://127.0.0.1:${ZODIACD_PORT}/healthz`,
 			reuseExistingServer: false,
 			timeout: 30_000,

@@ -246,14 +246,17 @@ export default tseslint.config(
 		},
 	},
 
-	// commands/react.tsx is a deliberate Context + Provider + hook module
-	// (CommandEnvironmentContext, CommandProvider, useCommandEnvironment,
-	// CommandButton, useCommandShortcut) -- the canonical case teams scope
-	// this rule away from, since a hook and the component that provides its
+	// commands/react.tsx and runtime-client-bundle-context.tsx are each a
+	// deliberate Context + Provider + hook module (CommandEnvironmentContext,
+	// CommandProvider, useCommandEnvironment, CommandButton,
+	// useCommandShortcut; RuntimeClientBundleContext,
+	// RuntimeClientBundleProvider, useRuntimeClientBundle,
+	// useOptionalRuntimeClientBundle) -- the canonical case teams scope this
+	// rule away from, since a hook and the component that provides its
 	// context are meant to live together, not be split across files just to
 	// satisfy Fast Refresh.
 	{
-		files: ["src/commands/react.tsx"],
+		files: ["src/commands/react.tsx", "src/platform/runtime-client-bundle-context.tsx"],
 		rules: {
 			"react-refresh/only-export-components": "off",
 		},

@@ -94,9 +94,10 @@ export function App(): React.JSX.Element {
 	const catalog = useMemo(() => userWorkspaces.entries, [userWorkspaces.entries]);
 	const workspace = useWorkspaceRegistry(catalog, (id, title) => createWorkspace({ id, title }), extensionHost);
 	// The one production LLM-naming adapter: a short-lived Pi session used
-	// purely to answer the naming prompt (see workspace-title.ts). Stable
-	// across renders -- piClient itself is a module-level singleton.
-	const titleFromPrompt = useMemo(() => createLlmWorkspaceTitleGenerator(createPiWorkspaceTitleComplete(piClient)), []);
+	// purely to answer the naming prompt (see workspace-title.ts). piClient
+	// comes from the injected runtime bundle (useRuntimeClientBundle above),
+	// not a module-level singleton -- re-derived if it ever changes.
+	const titleFromPrompt = useMemo(() => createLlmWorkspaceTitleGenerator(createPiWorkspaceTitleComplete(piClient)), [piClient]);
 	// Chat is Pi-first: once the user sends a live message, the live Pi
 	// conversation for the *active* Workspace replaces the browsed
 	// (Alef-sourced, historical) one as what's displayed -- see
