@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { connect } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorldStore } from "@zodiac/server/world";
 import { worldId, workspaceId, integrationId, surfaceId, panelId } from "@zodiac/protocol";
 import { createWorldRoutes } from "./world-routes.js";
@@ -184,6 +184,30 @@ describe("createWorldRoutes", () => {
 			body: JSON.stringify({ intent: { type: "surface.dock", workspaceId: "ghost", integrationId: "activity", title: "Activity" } }),
 		});
 		expect(response.status).toBe(400);
+	});
+
+	// Regression for a real, confirmed observability gap: a thrown apply()
+	// error was silently converted to a 400 with no server-side log trail --
+	// the daemon's own console never recorded *why* a validated intent still
+	// failed. Found while chasing the "sendMessage's auto-create flow
+	// intermittently 400s" bug, which had no server-side signal to diagnose
+	// from at all.
+	it("postCommand logs a real apply() failure server-side, naming both the intent type and the underlying reason", async () => {
+		const world = createWorldStore(worldId("w1"));
+		const routes = createWorldRoutes(world);
+		const base = await listen((req, res) => {
+			void routes.postCommand(req, res);
+		});
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await fetch(`${base}/api/world/commands`, {
+			method: "POST",
+			body: JSON.stringify({ intent: { type: "surface.dock", workspaceId: "ghost", integrationId: "activity", title: "Activity" } }),
+		});
+
+		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("surface.dock"));
+		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("ghost"));
+		errorSpy.mockRestore();
 	});
 
 	it("streamEvents sends the current snapshot immediately, then broadcasts subsequent changes", async () => {

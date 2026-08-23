@@ -151,6 +151,28 @@ describe("connectRemoteWorldStore", () => {
 		store.dispose();
 	});
 
+	// Regression: the daemon's own postCommand always includes a real {
+	// message } explaining *why* a validated intent still failed (an unknown
+	// Workspace id, most often) -- this used to be discarded, leaving only a
+	// bare "rejected (400)" with no way to diagnose the real cause without
+	// separately inspecting network traffic by hand.
+	it("apply() surfaces the daemon's own rejection message in its diagnostic log, not just the bare status", async () => {
+		const rejectingFetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+			const url = String(input);
+			if (url.endsWith("/api/world") && (!init || init.method === undefined)) return new Response(JSON.stringify(EMPTY), { status: 200 });
+			if (url.endsWith("/api/world/events")) return new Response(new ReadableStream(), { status: 200 });
+			if (url.endsWith("/api/world/commands")) return new Response(JSON.stringify({ code: "command-failed", message: 'World "w1" has no Workspace "ghost"' }), { status: 400 });
+			throw new Error(`unhandled request ${url}`);
+		});
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: rejectingFetcher as unknown as typeof fetch });
+		store.apply({ type: "window.next", workspaceId: workspaceId("ghost") });
+		await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+		expect(errorSpy.mock.calls[0]?.[0]).toContain('World "w1" has no Workspace "ghost"');
+		errorSpy.mockRestore();
+		store.dispose();
+	});
+
 	it("workspaceViewModel() looks up a workspace from the last-known snapshot", async () => {
 		const withWorkspace: WorldViewModel = {
 			state: "ready",

@@ -192,8 +192,16 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ intent }),
-			}).then((response) => {
-				if (!response.ok) console.error(`connectRemoteWorldStore: apply(${label}) rejected by the daemon (${response.status})`);
+			}).then(async (response) => {
+				if (response.ok) return;
+				// Reads the daemon's own { code, message } body (world-routes.ts's
+				// postCommand always sends one on a non-2xx) rather than just the bare
+				// status -- a bare "rejected (400)" gave no way to tell a real domain
+				// error (e.g. an unknown Workspace id) apart from a malformed intent
+				// without separately inspecting network traffic by hand.
+				const body: unknown = await response.json().catch(() => undefined);
+				const detail = body && typeof body === "object" && "message" in body ? String((body as { message: unknown }).message) : undefined;
+				console.error(`connectRemoteWorldStore: apply(${label}) rejected by the daemon (${response.status})${detail ? `: ${detail}` : ""}`);
 			}, (error: unknown) => {
 				console.error(`connectRemoteWorldStore: apply(${label}) failed:`, error);
 			});

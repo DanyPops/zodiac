@@ -69,7 +69,16 @@ export function createWorldRoutes(world: WorldStore, options?: { maxSseBufferedB
 			try {
 				outcome = world.apply(parsed.value);
 			} catch (error) {
-				writeJson(res, 400, { code: "command-failed", message: error instanceof Error ? error.message : String(error) });
+				const message = error instanceof Error ? error.message : String(error);
+				// Every other 400 branch above is a caller-input problem (malformed JSON,
+				// an unrecognized intent shape) that's self-explanatory from the response
+				// alone. A thrown apply() error is different -- it means a *validated*
+				// intent still failed against the World's own current state (an unknown
+				// Workspace/Window/Surface id, most often), which is exactly the kind of
+				// thing worth a server-side log trail for: the caller's own console only
+				// sees a bare HTTP status without reading the response body itself.
+				console.error(`[zodiacd] command rejected: ${parsed.value.type} -- ${message}`);
+				writeJson(res, 400, { code: "command-failed", message });
 				return;
 			}
 			// commandId/result round-trip the request/response correlation a
