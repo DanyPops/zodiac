@@ -1,4 +1,4 @@
-import { isZodiacAgentEvent, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
+import { AgentSessionControlOutcomeSchema, ZodiacAgentEventSchema, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
 
 /**
  * Driven port: the Chat surface's own view of "a live Pi agent to talk to,"
@@ -55,7 +55,8 @@ export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClien
 			signal,
 		});
 		if (!response.ok) return { ok: false, reason: "failed", message: `pi-${action}:${response.status}` };
-		return (await response.json()) as AgentSessionControlOutcome;
+		const parsed = AgentSessionControlOutcomeSchema.safeParse(await response.json().catch(() => undefined));
+		return parsed.success ? parsed.data : { ok: false, reason: "failed", message: `pi-${action}:malformed-response` };
 	}
 
 	return {
@@ -123,8 +124,12 @@ export function createHttpPiClient(options: CreatePiClientOptions = {}): PiClien
 				// zodiacd's own SSE stream also carries a "session-exited" frame
 				// (the underlying agent process/session ending on its own) -- not
 				// part of ZodiacAgentEvent's own bounded vocabulary, so it's
-				// filtered here rather than forwarded as one.
-				if (isZodiacAgentEvent(parsed)) onEvent(parsed);
+				// filtered here rather than forwarded as one. Full schema parse,
+				// not just a recognized `type` string: a malformed payload for a
+				// real type (e.g. "tool-call-start" missing toolCallId) is skipped
+				// too, never forwarded half-shaped.
+				const result = ZodiacAgentEventSchema.safeParse(parsed);
+				if (result.success) onEvent(result.data);
 			};
 			source.onerror = (event) => {
 				onError?.(event);

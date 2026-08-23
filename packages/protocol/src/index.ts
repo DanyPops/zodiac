@@ -14,12 +14,13 @@ export type { CommandIntent } from "./commands.js";
 export { CommandIntentSchema, COMMAND_INTENT_PROTOCOL_VERSION, COMMAND_INTENT_MIN_VERSION, isSupportedCommandIntent } from "./commands.js";
 
 export type { SurfaceViewModel, WindowViewModel, WorkspaceViewModel } from "./view-models.js";
+export { SurfaceViewModelSchema, WindowViewModelSchema, WorkspaceViewModelSchema } from "./view-models.js";
 export type { PickerItem, PickerRequest } from "./ui-results.js";
 
 export type { Constraint, TileChild, SurfaceTile } from "./tile.js";
 export { ConstraintSchema, SurfaceTileSchema, MAX_TILE_DEPTH, MAX_CHILDREN_PER_TILE, MAX_SURFACES_PER_TILE } from "./tile.js";
 export type { EmptyWorldViewModel, ReadyWorldViewModel, WorldViewModel, WorldChange, Region, AppletContent } from "./regions.js";
-export { AppletContentSchema } from "./regions.js";
+export { AppletContentSchema, WorldViewModelSchema, WorldChangeSchema } from "./regions.js";
 export { MIN_FOOTER_HEIGHT, RegionRectSchema, RegionSchema, layoutWorldRegions } from "./regions.js";
 
 export type { SurfaceRenderer } from "./renderer.js";

@@ -1,6 +1,7 @@
-import type { ResourceStatus } from "./status.js";
-import type { IntegrationId, SurfaceId, WindowId, WorkspaceId } from "./ids.js";
-import type { SurfaceTile } from "./tile.js";
+import { z } from "zod";
+import { ResourceStatusSchema, type ResourceStatus } from "./status.js";
+import { IntegrationIdSchema, SurfaceIdSchema, WindowIdSchema, WorkspaceIdSchema, type IntegrationId, type SurfaceId, type WindowId, type WorkspaceId } from "./ids.js";
+import { SurfaceTileSchema, type SurfaceTile } from "./tile.js";
 
 /**
  * Runtime-validated entities (entities.ts) describe what a World *stores*.
@@ -41,3 +42,35 @@ export interface WorkspaceViewModel {
 	 */
 	readonly activeIntegrationIds: readonly IntegrationId[];
 }
+
+/**
+ * Runtime validators mirroring the three interfaces above -- for the wire
+ * boundary only (parsing a daemon HTTP/SSE payload into a trusted
+ * WorldViewModel), not a replacement for the hand-written interfaces
+ * themselves, which every existing in-process caller keeps using unchanged.
+ * Bounded array lengths throughout: this is untrusted network data, not an
+ * already-validated in-process value.
+ */
+export const SurfaceViewModelSchema = z.object({
+	id: SurfaceIdSchema,
+	integrationId: IntegrationIdSchema,
+	title: z.string().max(500),
+	status: ResourceStatusSchema,
+	selected: z.boolean(),
+});
+
+export const WindowViewModelSchema = z.object({
+	id: WindowIdSchema,
+	title: z.string().max(500),
+	active: z.boolean(),
+	surfaces: z.array(SurfaceViewModelSchema).max(256),
+	tile: SurfaceTileSchema.nullable(),
+});
+
+export const WorkspaceViewModelSchema = z.object({
+	id: WorkspaceIdSchema,
+	title: z.string().max(500),
+	activeWindowId: WindowIdSchema,
+	windows: z.array(WindowViewModelSchema).max(256),
+	activeIntegrationIds: z.array(IntegrationIdSchema).max(256),
+});

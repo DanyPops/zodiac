@@ -124,4 +124,37 @@ describe("connectRemoteNotifications", () => {
 		await flush();
 		expect(seen).toEqual([]);
 	});
+
+	it("skips a frame with an unrecognized type instead of trusting it", async () => {
+		const daemon = createFakeDaemon([]);
+		const client = connectRemoteNotifications({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		await flush();
+
+		daemon.push({ type: "vehicle.approval.granted-by-magic", payload: makeRequest() });
+		await flush();
+		expect(client.pending()).toEqual([]);
+		client.dispose();
+	});
+
+	it("skips a vehicle.approval.requested frame whose payload is missing required fields -- never executed as a real approval", async () => {
+		const daemon = createFakeDaemon([]);
+		const client = connectRemoteNotifications({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		await flush();
+
+		daemon.push({ type: "vehicle.approval.requested", payload: { requestId: "REQ-BAD" } });
+		await flush();
+		expect(client.pending()).toEqual([]);
+		client.dispose();
+	});
+
+	it("skips a snapshot frame whose effect field is not one of the real Vehicle effects", async () => {
+		const daemon = createFakeDaemon([]);
+		const client = connectRemoteNotifications({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		await flush();
+
+		daemon.push({ type: "notifications.snapshot", pending: [makeRequest({ effect: "delete-everything" as never })] });
+		await flush();
+		expect(client.pending()).toEqual([]);
+		client.dispose();
+	});
 });

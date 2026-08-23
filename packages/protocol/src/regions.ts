@@ -3,8 +3,9 @@ import { appletId, SurfaceIdSchema } from "./ids.js";
 import type { AppletId, CommandId, WorkspaceId } from "./ids.js";
 import { EdgeLocationSchema } from "./panel.js";
 import type { EdgeLocation, Panel } from "./panel.js";
+import { CommandIdSchema, WorkspaceIdSchema } from "./ids.js";
 import type { ParseResult } from "./result.js";
-import type { WorkspaceViewModel } from "./view-models.js";
+import { WorkspaceViewModelSchema, type WorkspaceViewModel } from "./view-models.js";
 import { SurfaceTileSchema } from "./tile.js";
 
 export interface EmptyWorldViewModel { readonly state: "empty"; readonly workspaces: readonly []; readonly activeWorkspaceId: null }
@@ -16,6 +17,28 @@ export interface WorldChange {
 	readonly viewModel: WorldViewModel;
 	readonly commandId?: CommandId;
 }
+
+/**
+ * The runtime boundary for every client that receives a WorldViewModel over
+ * HTTP/SSE (`@zodiac/world`'s `connectRemoteWorldStore`, and any future
+ * Electron/desktop client reusing it) -- replaces a bare `as WorldViewModel`
+ * cast on daemon JSON with a real parse. `workspaces` is bounded, not
+ * capped at one: `WorldStore.worldViewModel()` (packages/server/src/world/
+ * store.ts) genuinely projects every current Workspace, matching Web's own
+ * multi-Workspace catalog (`useUserWorkspaces`'s own `MAX_USER_WORKSPACES`
+ * bound of 50) -- this schema's own bound is deliberately looser than that
+ * UI-level cap, since the wire protocol itself shouldn't silently assume a
+ * client-side preference limit.
+ */
+export const WorldViewModelSchema = z.discriminatedUnion("state", [
+	z.object({ state: z.literal("empty"), workspaces: z.tuple([]), activeWorkspaceId: z.null() }),
+	z.object({ state: z.literal("ready"), workspaces: z.array(WorkspaceViewModelSchema).max(256), activeWorkspaceId: WorkspaceIdSchema }),
+]);
+
+export const WorldChangeSchema = z.object({
+	viewModel: WorldViewModelSchema,
+	commandId: CommandIdSchema.optional(),
+});
 
 export const RegionRectSchema = z.object({ x: z.number().int().nonnegative().max(500), y: z.number().int().nonnegative().max(300), width: z.number().int().positive().max(500), height: z.number().int().positive().max(300) });
 const ItemSchema = z.object({ id: z.string().min(1), label: z.string().min(1).max(200), active: z.boolean() });

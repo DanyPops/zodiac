@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { commandId, panelId, workspaceId } from "@zodiac/protocol";
+import { commandId, panelId, windowId, workspaceId } from "@zodiac/protocol";
 import type { Panel, WorldChange, WorldViewModel } from "@zodiac/protocol";
 import { connectRemoteWorldStore, postCommandIntent } from "./remote-world-store.js";
 
@@ -155,7 +155,7 @@ describe("connectRemoteWorldStore", () => {
 		const withWorkspace: WorldViewModel = {
 			state: "ready",
 			activeWorkspaceId: workspaceId("w1"),
-			workspaces: [{ id: workspaceId("w1"), title: "Bug Triage", windows: [], activeWindowIndex: 0 }] as unknown as WorldViewModel["workspaces"],
+			workspaces: [{ id: workspaceId("w1"), title: "Bug Triage", activeWindowId: windowId("win-1"), windows: [], activeIntegrationIds: [] }],
 		};
 		const daemon = createFakeDaemon(withWorkspace);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
@@ -223,5 +223,50 @@ describe("connectRemoteWorldStore", () => {
 		daemon.push({ state: "ready", workspaces: [], activeWorkspaceId: workspaceId("w1") });
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(seen).toEqual([]);
+	});
+
+	it("rejects connect outright when the initial GET /api/world payload does not match WorldViewModel -- no last-known-good state exists yet to degrade to", async () => {
+		const fetcher = vi.fn(async (input: string | URL | Request) => {
+			if (String(input).endsWith("/api/world")) return new Response(JSON.stringify({ state: "ready" }), { status: 200 });
+			return new Response(new ReadableStream(), { status: 200 });
+		});
+		await expect(connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: fetcher as unknown as typeof fetch })).rejects.toThrow(/WorldViewModel/);
+	});
+
+	it("skips a malformed SSE frame and keeps the last-known-good WorldViewModel, never executing a bogus payload", async () => {
+		const daemon = createFakeDaemon(EMPTY);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		const seen: WorldViewModel[] = [];
+		store.onChange((change) => seen.push(change.viewModel));
+
+		// Not JSON at all, then a real object missing required fields.
+		daemon.push("not-json" as unknown as WorldViewModel);
+		daemon.pushChange({ viewModel: { state: "ready" } as unknown as WorldViewModel });
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(seen).toEqual([]);
+		expect(store.worldViewModel()).toEqual(EMPTY);
+		store.dispose();
+	});
+
+	it("skips an SSE frame whose Panel array exceeds the bounded length instead of adopting it", async () => {
+		const oversized: Panel[] = Array.from({ length: 65 }, (_, index) => ({
+			id: panelId(`p${index}`),
+			location: "left" as const,
+			alignment: "start" as const,
+			offset: 0,
+			thickness: 1,
+			thicknessUnit: "terminal-cells" as const,
+			lengthMode: "fill" as const,
+			visibilityMode: "normal" as const,
+			startCap: null,
+			endCap: null,
+			body: [],
+		}));
+		const daemon = createFakeDaemon(EMPTY, []);
+		daemon.setPanels(oversized);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		expect(store.panels()).toEqual([]);
+		store.dispose();
 	});
 });

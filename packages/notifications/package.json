@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@danypops/vehicle-core": "^0.18.0"
+    "@danypops/vehicle-core": "^0.18.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

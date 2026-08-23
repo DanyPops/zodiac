@@ -1,6 +1,10 @@
-import type { CommandId, CommandIntent, Panel, SurfaceId, WorkspaceId, WorkspaceViewModel, WorldChange, WorldViewModel } from "@zodiac/protocol";
+import { PanelSchema, WorldChangeSchema, WorldViewModelSchema, type CommandId, type CommandIntent, type Panel, type SurfaceId, type WorkspaceId, type WorkspaceViewModel, type WorldChange, type WorldViewModel } from "@zodiac/protocol";
+import { z } from "zod";
 import { readSseFrames } from "./net/sse-client.js";
 import type { WorldClient } from "./client.js";
+
+const PanelsResponseSchema = z.object({ panels: z.array(PanelSchema).max(64) });
+const PostCommandResponseSchema = z.object({ commandId: z.string().max(200).optional(), result: z.object({ surfaceId: z.string().max(200).optional() }).optional(), message: z.string().max(2000).optional() });
 
 /** postCommandIntent's own outcome -- the real, synchronous accept/reject answer WorldClient.apply() deliberately never gives a caller. */
 export interface PostCommandOutcome {
@@ -27,7 +31,9 @@ export async function postCommandIntent(baseUrl: string, intent: CommandIntent, 
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ intent }),
 		});
-		const body = (await response.json().catch(() => ({}))) as { commandId?: string; result?: { surfaceId?: string }; message?: string };
+		const rawBody: unknown = await response.json().catch(() => ({}));
+		const parsedBody = PostCommandResponseSchema.safeParse(rawBody);
+		const body = parsedBody.success ? parsedBody.data : {};
 		if (!response.ok) return { accepted: false, message: body.message ?? `daemon rejected the command (${response.status})` };
 		return { accepted: true, commandId: body.commandId as CommandId | undefined, surfaceId: body.result?.surfaceId as SurfaceId | undefined };
 	} catch (error) {
@@ -40,18 +46,18 @@ function parseWorldChangeFrame(data: string): WorldChange | undefined {
 	try {
 		parsed = JSON.parse(data);
 	} catch {
-		return undefined;
+		return undefined; // malformed JSON -- skip, keep the last-known-good state
 	}
-	if (!parsed || typeof parsed !== "object") return undefined;
-	const candidate = parsed as { viewModel?: unknown; commandId?: unknown; state?: unknown };
-	if (candidate.viewModel && typeof candidate.viewModel === "object") {
-		if (candidate.commandId !== undefined && typeof candidate.commandId !== "string") return undefined;
-		return { viewModel: candidate.viewModel as WorldViewModel, ...(candidate.commandId !== undefined ? { commandId: candidate.commandId as CommandId } : {}) };
-	}
+	const asChange = WorldChangeSchema.safeParse(parsed);
+	if (asChange.success) return asChange.data;
 	// Bounded rolling-upgrade compatibility: older daemons sent the raw
 	// WorldViewModel as an SSE frame. It cannot acknowledge a command, but it
 	// remains a valid state resync while client and daemon versions overlap.
-	if (candidate.state === "empty" || candidate.state === "ready") return { viewModel: parsed as WorldViewModel };
+	const asRawViewModel = WorldViewModelSchema.safeParse(parsed);
+	if (asRawViewModel.success) return { viewModel: asRawViewModel.data };
+	// Neither shape parsed -- a genuinely malformed or incompatible-version
+	// frame. Skipped, not executed: the caller keeps its last-known-good
+	// WorldViewModel exactly as before this frame arrived.
 	return undefined;
 }
 
@@ -99,14 +105,20 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 
 	const initial = await fetcher(`${baseUrl}/api/world`, { signal: AbortSignal.timeout(options.connectTimeoutMs ?? 2_000) });
 	if (!initial.ok) throw new Error(`connectRemoteWorldStore: GET /api/world returned ${initial.status}`);
-	let latest = (await initial.json()) as WorldViewModel;
+	const initialParsed = WorldViewModelSchema.safeParse(await initial.json());
+	// No last-known-good state exists yet at connect time -- a malformed
+	// initial payload is a hard connection failure, not something to degrade
+	// gracefully from, unlike every later SSE frame (parseWorldChangeFrame).
+	if (!initialParsed.success) throw new Error(`connectRemoteWorldStore: GET /api/world returned a payload that does not match WorldViewModel: ${initialParsed.error.message}`);
+	let latest: WorldViewModel = initialParsed.data;
 
-	/** Best-effort: keeps the last-known-good Panel list on a failed fetch, the same degrade-gracefully policy the SSE loop below applies to a malformed WorldViewModel frame. */
+	/** Best-effort: keeps the last-known-good Panel list on a failed fetch or a malformed response, the same degrade-gracefully policy the SSE loop below applies to a malformed WorldViewModel frame. */
 	async function fetchPanels(): Promise<readonly Panel[]> {
 		try {
 			const response = await fetcher(`${baseUrl}/api/world/panels`);
 			if (!response.ok) return latestPanels;
-			return ((await response.json()) as { panels: readonly Panel[] }).panels;
+			const parsed = PanelsResponseSchema.safeParse(await response.json());
+			return parsed.success ? parsed.data.panels : latestPanels;
 		} catch {
 			return latestPanels;
 		}

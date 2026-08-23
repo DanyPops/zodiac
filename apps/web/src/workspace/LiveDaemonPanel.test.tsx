@@ -13,7 +13,7 @@ afterEach(() => {
 const READY: WorldViewModel = {
 	state: "ready",
 	activeWorkspaceId: workspaceId("ws"),
-	workspaces: [{ id: workspaceId("ws"), title: "Bug Triage", activeWindowId: "window-1", windows: [{ id: "window-1", title: "Window 0", active: true, surfaces: [], tile: null }] }],
+	workspaces: [{ id: workspaceId("ws"), title: "Bug Triage", activeWindowId: "window-1", windows: [{ id: "window-1", title: "Window 0", active: true, surfaces: [], tile: null }], activeIntegrationIds: [] }],
 } as unknown as WorldViewModel;
 
 function stubFetch(dockResponse: { status: number; body: unknown }): ReturnType<typeof vi.fn> {

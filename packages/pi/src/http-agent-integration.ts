@@ -1,5 +1,8 @@
-import { isZodiacAgentEvent, type AgentIntegrationPort, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
+import { AgentSessionControlOutcomeSchema, ZodiacAgentEventSchema, type AgentIntegrationPort, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
 import { readSseFrames } from "@zodiac/server/net";
+import { z } from "zod";
+
+const LegacyAcceptedResponseSchema = z.object({ accepted: z.boolean().optional() });
 
 export interface HttpAgentIntegrationOptions {
 	/** Base URL of a running zodiacd instance, e.g. http://127.0.0.1:4390. */
@@ -64,8 +67,15 @@ export function createHttpAgentIntegration(options: HttpAgentIntegrationOptions)
 				body: JSON.stringify(body),
 			});
 			if (!response.ok) return { ok: false, reason: "failed", message: `http-agent-integration:${action}:${response.status}` };
-			const result = (await response.json().catch(() => ({ ok: true }))) as AgentSessionControlOutcome | { accepted?: boolean };
-			return "ok" in result ? result : { ok: true };
+			const rawBody: unknown = await response.json().catch(() => ({ ok: true }));
+			const asOutcome = AgentSessionControlOutcomeSchema.safeParse(rawBody);
+			if (asOutcome.success) return asOutcome.data;
+			// Bounded rolling-upgrade compatibility: an older daemon answered with
+			// the pre-AgentSessionControlOutcome {accepted} shape -- still a valid
+			// success/failure signal while client and daemon versions overlap.
+			const asLegacy = LegacyAcceptedResponseSchema.safeParse(rawBody);
+			if (asLegacy.success) return asLegacy.data.accepted === false ? { ok: false, reason: "failed", message: `http-agent-integration:${action}:rejected` } : { ok: true };
+			return { ok: false, reason: "failed", message: `http-agent-integration:${action}:malformed-response` };
 		} catch (error) {
 			return { ok: false, reason: "failed", message: error instanceof Error ? error.message : String(error) };
 		}
@@ -85,8 +95,9 @@ export function createHttpAgentIntegration(options: HttpAgentIntegrationOptions)
 				} catch {
 					return; // malformed frame -- skip
 				}
-				if (isZodiacAgentEvent(parsed)) {
-					for (const listener of eventListeners) listener(parsed);
+				const asEvent = ZodiacAgentEventSchema.safeParse(parsed);
+				if (asEvent.success) {
+					for (const listener of eventListeners) listener(asEvent.data);
 					return;
 				}
 				const reason = (parsed as { reason?: unknown } | null)?.reason;

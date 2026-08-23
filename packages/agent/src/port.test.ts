@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	AgentSessionControlOutcomeSchema,
 	assertNeverZodiacAgentEvent,
 	isSupportedZodiacAgentEvent,
 	isZodiacAgentEvent,
+	ZodiacAgentEventSchema,
 	ZODIAC_AGENT_EVENT_MIN_VERSION,
 	ZODIAC_AGENT_EVENT_PROTOCOL_VERSION,
 	type ZodiacAgentEvent,
@@ -58,5 +60,49 @@ describe("ZodiacAgentEvent version/capability negotiation", () => {
 		// real variant's own recorded minimum -- must skip/degrade this event
 		// rather than project it into a UI it wasn't built to render.
 		expect(isSupportedZodiacAgentEvent(event, 0)).toBe(false);
+	});
+});
+
+describe("ZodiacAgentEventSchema", () => {
+	it("accepts every real variant, matching isZodiacAgentEvent's own recognized set", () => {
+		const samples: ZodiacAgentEvent[] = [
+			{ type: "agent-start" },
+			{ type: "agent-settled" },
+			{ type: "assistant-message-delta", text: "hi" },
+			{ type: "tool-call-start", toolCallId: "t1", toolName: "read", input: { path: "a.ts" } },
+			{ type: "tool-call-end", toolCallId: "t1", toolName: "read", output: "contents", isError: false },
+			{ type: "compaction-end", reason: "threshold", aborted: false },
+			{ type: "session-info-changed", name: "My Session" },
+			{ type: "error", message: "boom" },
+		];
+		for (const sample of samples) expect(ZodiacAgentEventSchema.safeParse(sample).success).toBe(true);
+	});
+
+	it("rejects a recognized type with a missing required field -- the real gap isZodiacAgentEvent's own type-only check leaves open", () => {
+		expect(ZodiacAgentEventSchema.safeParse({ type: "tool-call-start", toolCallId: "t1" }).success).toBe(false);
+		expect(ZodiacAgentEventSchema.safeParse({ type: "assistant-message-delta" }).success).toBe(false);
+	});
+
+	it("rejects an unrecognized type", () => {
+		expect(ZodiacAgentEventSchema.safeParse({ type: "session-exited" }).success).toBe(false);
+	});
+});
+
+describe("AgentSessionControlOutcomeSchema", () => {
+	it("accepts a success outcome with no other fields", () => {
+		expect(AgentSessionControlOutcomeSchema.safeParse({ ok: true }).success).toBe(true);
+	});
+
+	it("accepts a real failure outcome", () => {
+		expect(AgentSessionControlOutcomeSchema.safeParse({ ok: false, reason: "model-not-found", message: "gpt-9 does not exist" }).success).toBe(true);
+	});
+
+	it("rejects a failure outcome with an unrecognized reason", () => {
+		expect(AgentSessionControlOutcomeSchema.safeParse({ ok: false, reason: "made-up-reason", message: "x" }).success).toBe(false);
+	});
+
+	it("rejects a completely malformed payload", () => {
+		expect(AgentSessionControlOutcomeSchema.safeParse("not-an-object").success).toBe(false);
+		expect(AgentSessionControlOutcomeSchema.safeParse(null).success).toBe(false);
 	});
 });

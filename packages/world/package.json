@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zodiac/protocol": "*"
+    "@zodiac/protocol": "*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

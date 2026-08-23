@@ -43,8 +43,13 @@ export function createHttpConversationClient(options: CreateHttpConversationClie
 	};
 }
 
+/** Bounded, not because a real deployment is expected to hit it, but because an unvalidated array length from a network response is an unbounded-memory-allocation risk regardless of how well-typed each individual element is. */
+const MAX_CONVERSATIONS = 10_000;
+const MAX_EVENTS = 10_000;
+
 function parseConversationList(value: unknown): ConversationSummary[] {
 	if (!isRecord(value) || !Array.isArray(value.conversations)) throw new Error("invalid-conversation-list");
+	if (value.conversations.length > MAX_CONVERSATIONS) throw new Error(`invalid-conversation-list:exceeds-max-${MAX_CONVERSATIONS}`);
 	return value.conversations.map((item, index) => parseConversation(item, index));
 }
 
@@ -66,6 +71,7 @@ function parseConversation(value: unknown, index: number): ConversationSummary {
 
 function parseEvents(value: unknown): NormalizedEvent[] {
 	if (!isRecord(value) || !Array.isArray(value.events)) throw new Error("invalid-conversation-events");
+	if (value.events.length > MAX_EVENTS) throw new Error(`invalid-conversation-events:exceeds-max-${MAX_EVENTS}`);
 	return value.events.map((event, index) => {
 		if (!isRecord(event)) throw new Error(`invalid-event:${index}`);
 		for (const key of ["sourceId", "sessionId", "bus", "type", "correlationId"] as const) {

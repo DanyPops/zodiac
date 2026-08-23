@@ -20,7 +20,8 @@
     "@danypops/pi-rpc-protocol": "^0.0.1",
     "@danypops/vehicle-client-pi": "^0.44.0",
     "@danypops/vehicle-core": "^0.18.0",
-    "@earendil-works/pi-coding-agent": "^0.84.1"
+    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@danypops/pi-process-harness": "^0.1.3",

@@ -1,15 +1,6 @@
 import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { readSseFrames } from "./net/sse-client.js";
-
-/** One frame shape notification-routes.ts's own SSE stream ever produces. */
-type NotificationFrame =
-	| { readonly type: "notifications.snapshot"; readonly pending: readonly VehicleApprovalRequest[] }
-	| { readonly type: "vehicle.approval.requested"; readonly payload: VehicleApprovalRequest }
-	| { readonly type: "vehicle.approval.resolved"; readonly payload: { readonly requestId: string } };
-
-function isNotificationFrame(value: unknown): value is NotificationFrame {
-	return typeof value === "object" && value !== null && typeof (value as { type?: unknown }).type === "string";
-}
+import { NotificationFrameSchema, type NotificationFrame } from "./notification-frame-schema.js";
 
 export interface NotificationsClientPort {
 	/** The current pending list -- empty before the initial SSE snapshot frame arrives. */
@@ -74,7 +65,13 @@ export function connectRemoteNotifications(options: RemoteNotificationsOptions):
 					} catch {
 						return; // malformed frame -- skip, keep the last-known-good state
 					}
-					if (isNotificationFrame(parsed)) applyFrame(parsed);
+					const result = NotificationFrameSchema.safeParse(parsed);
+					if (result.success) applyFrame(result.data);
+					// An invalid frame (unrecognized type, oversized/malformed approval
+					// payload) is skipped, keeping the last-known-good pending list --
+					// the same degrade-gracefully policy connectRemoteWorldStore's own
+					// SSE loop applies to a malformed WorldViewModel frame. Never
+					// executed as a real approval/denial regardless of shape.
 				});
 			} catch {
 				if (streamController.signal.aborted) return;

@@ -10,6 +10,8 @@
  * (@zodiac/pi) translate down to this same, smaller type so a caller never
  * has to know which adapter is live behind the port.
  */
+import { z } from "zod";
+
 export type ZodiacAgentEvent =
 	| { readonly type: "agent-start" }
 	| { readonly type: "agent-settled" }
@@ -29,8 +31,40 @@ export type ZodiacAgentEvent =
 	| { readonly type: "session-info-changed"; readonly name?: string }
 	| { readonly type: "error"; readonly message: string };
 
+/**
+ * The real runtime boundary `isZodiacAgentEvent` alone doesn't provide --
+ * that function narrows on `type` being a recognized string only, not
+ * per-variant field shapes (e.g. a "tool-call-start" frame missing
+ * `toolCallId`/`toolName` still passes it). This schema validates the full
+ * shape of every variant, matching the union above field-for-field.
+ * `input`/`output` stay `z.unknown()` deliberately -- a tool call's own
+ * payload is genuinely caller-defined, not something this port constrains.
+ */
+export const ZodiacAgentEventSchema: z.ZodType<ZodiacAgentEvent> = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("agent-start") }),
+	z.object({ type: z.literal("agent-settled") }),
+	z.object({ type: z.literal("assistant-message-start") }),
+	z.object({ type: z.literal("assistant-message-delta"), text: z.string() }),
+	z.object({ type: z.literal("assistant-message-end"), text: z.string() }),
+	z.object({ type: z.literal("turn-start") }),
+	z.object({ type: z.literal("turn-end") }),
+	z.object({ type: z.literal("tool-call-start"), toolCallId: z.string().min(1).max(200), toolName: z.string().min(1).max(200), input: z.unknown() }),
+	z.object({ type: z.literal("tool-call-update"), toolCallId: z.string().min(1).max(200), toolName: z.string().min(1).max(200), output: z.unknown() }),
+	z.object({ type: z.literal("tool-call-end"), toolCallId: z.string().min(1).max(200), toolName: z.string().min(1).max(200), output: z.unknown(), isError: z.boolean() }),
+	z.object({ type: z.literal("compaction-start"), reason: z.enum(["manual", "threshold", "overflow"]) }),
+	z.object({ type: z.literal("compaction-end"), reason: z.enum(["manual", "threshold", "overflow"]), aborted: z.boolean(), errorMessage: z.string().max(2000).optional() }),
+	z.object({ type: z.literal("session-info-changed"), name: z.string().max(500).optional() }),
+	z.object({ type: z.literal("error"), message: z.string().max(2000) }),
+]);
+
 export type AgentSessionControlFailureReason = "unsupported" | "model-not-found" | "cancelled" | "failed";
 export type AgentSessionControlOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: AgentSessionControlFailureReason; readonly message: string };
+
+/** The wire-boundary validator for AgentSessionControlOutcome -- replaces a bare `as AgentSessionControlOutcome` cast on daemon JSON (apps/web's PiClient.setModel/compact/resume/fork). */
+export const AgentSessionControlOutcomeSchema: z.ZodType<AgentSessionControlOutcome> = z.discriminatedUnion("ok", [
+	z.object({ ok: z.literal(true) }),
+	z.object({ ok: z.literal(false), reason: z.enum(["unsupported", "model-not-found", "cancelled", "failed"]), message: z.string().max(2000) }),
+]);
 
 /** Bounded session operations shared by embedded, subprocess, and HTTP adapters. */
 export interface AgentSessionControlPort {
