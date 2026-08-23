@@ -21,6 +21,7 @@ import { CanvasWell } from "../workspace/CanvasWell.js";
 import { Composer } from "../conversation/ConversationSurface.js";
 import { latestToolCallName } from "../conversation/projector.js";
 import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, type DockedSurfaceInstance } from "../workspace/model.js";
+import { pruneAcknowledgedRename, type PendingRename } from "./pending-rename.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -38,8 +39,8 @@ import type { PendingDock } from "../workspace/WindowDockview.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID, resolveWorkspaceGlyph, type WorkspaceCatalogEntry } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 import { WorldShell } from "../workspace/WorldShell.js";
-import type { CommandIntent, Panel, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
-import { integrationId, surfaceId, workspaceId } from "@zodiac/protocol";
+import type { CommandId, CommandIntent, Panel, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import { commandId, integrationId, surfaceId, workspaceId } from "@zodiac/protocol";
 import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
@@ -79,15 +80,17 @@ function freshSurfaceId(): ReturnType<typeof surfaceId> {
 	return surfaceId(`surface-${crypto.randomUUID()}`);
 }
 
+/** Same reasoning again -- a client-minted CommandId (workspace.rename's own optional commandId field) so pendingRenames' pruning below can key off "the daemon confirmed my exact dispatch" rather than "the viewModel now shows the value I guessed" -- see pruneAcknowledgedRename's own doc comment for why that distinction is the real fix, not a stylistic one. */
+function freshCommandId(): ReturnType<typeof commandId> {
+	return commandId(`cmd-${crypto.randomUUID()}`);
+}
+
 /** True once the daemon's own live view model lists this WorkspaceId -- the confirmed half of the pending/confirmed reconciliation catalog and pendingWorkspaces' own pruning effect share. */
 function isConfirmedInViewModel(viewModel: WorldViewModel, id: string): boolean {
 	return viewModel.workspaces.some((entry) => entry.id === id);
 }
 
-/** True once the daemon's own live view model reports this exact id+title pair -- the confirmed half of pendingRenames' own optimistic-then-reconciled overlay. */
-function isRenameConfirmedInViewModel(viewModel: WorldViewModel, id: string, title: string): boolean {
-	return viewModel.workspaces.some((entry) => entry.id === id && entry.title === title);
-}
+
 
 /** One Window's real (daemon-confirmed) docked Surfaces, mapped from SurfaceViewModel's shape into DockedSurfaceInstance's -- WindowDockview's own established prop shape, unchanged by this cutover. */
 function daemonDockedSurfacesForWindow(window: WorkspaceViewModel["windows"][number] | undefined): DockedSurfaceInstance[] {
@@ -164,28 +167,21 @@ export function App(): React.JSX.Element {
 	// round trip, a real, observed source of Playwright timing flake in
 	// workspace-catalog-lifecycle.spec.ts (the create/select/remove paths
 	// already had their own optimistic reflection; rename was the one gap).
-	const [pendingRenames, setPendingRenames] = useState<Readonly<Record<string, string>>>({});
+	const [pendingRenames, setPendingRenames] = useState<Readonly<Record<string, PendingRename>>>({});
 	// Zodiac starts with zero Workspaces -- WORKSPACE_CATALOG's fixed demo
 	// entries (Bug/Metrics/Chat/PRs) are no longer merged in by default; only
 	// real Workspaces the daemon's own World holds populate the catalog. The
 	// first one is created automatically the moment the user sends a first
 	// prompt with none active -- see sendMessage() below.
 	const catalog: readonly WorkspaceCatalogEntry[] = useMemo(() => {
-		const confirmed = liveWorldViewModel.workspaces.map((entry) => ({ id: entry.id, title: pendingRenames[entry.id] ?? entry.title, icon: resolveWorkspaceGlyph(workspaceGlyphs[entry.id] ?? DEFAULT_WORKSPACE_GLYPH_ID) }));
+		const confirmed = liveWorldViewModel.workspaces.map((entry) => ({ id: entry.id, title: pendingRenames[entry.id]?.title ?? entry.title, icon: resolveWorkspaceGlyph(workspaceGlyphs[entry.id] ?? DEFAULT_WORKSPACE_GLYPH_ID) }));
 		const stillPending = pendingWorkspaces.filter((pending) => !isConfirmedInViewModel(liveWorldViewModel, pending.id));
 		return [...confirmed, ...stillPending];
 	}, [liveWorldViewModel, workspaceGlyphs, pendingWorkspaces, pendingRenames]);
-	// Once the daemon's own confirmed title matches what was optimistically
-	// set, drop the override -- same not-just-filtered-at-render-time
-	// reasoning as pendingWorkspaces' own pruning effect below (a stale
-	// override, left in state forever, would keep masking a real further
-	// rename by someone else).
-	useEffect(() => {
-		setPendingRenames((current) => {
-			const next = Object.fromEntries(Object.entries(current).filter(([id, title]) => !isRenameConfirmedInViewModel(liveWorldViewModel, id, title)));
-			return Object.keys(next).length === Object.keys(current).length ? current : next;
-		});
-	}, [liveWorldViewModel]);
+	/** Wired to LiveWorldPanels' own onCommandAcknowledged below -- fires once per acknowledged commandId, for both this client's own dispatches and, harmlessly, any other client's (pruneAcknowledgedRename only ever matches an id this client itself minted). */
+	function handleCommandAcknowledged(acknowledgedCommandId: CommandId): void {
+		setPendingRenames((current) => pruneAcknowledgedRename(current, acknowledgedCommandId));
+	}
 	// Once the daemon's own round trip confirms a pending id, drop it from
 	// state outright -- not just filtered at render time above. Leaving a
 	// confirmed entry sitting in `pendingWorkspaces` forever would zombie it
@@ -250,8 +246,9 @@ export function App(): React.JSX.Element {
 	const applyRef = useRef<(intent: CommandIntent) => void>(() => {});
 	/** Dispatches workspace.rename to the daemon -- the sole authority for a Workspace's title once this cutover lands; no more local-registry mirror to keep in sync. Optimistically reflects the new title immediately (see pendingRenames above) rather than waiting on the daemon's own round trip. */
 	function renameWorkspace(id: string, title: string): void {
-		applyRef.current({ type: "workspace.rename", workspaceId: workspaceId(id), title });
-		setPendingRenames((current) => ({ ...current, [id]: title }));
+		const commandIdForRename = freshCommandId();
+		applyRef.current({ type: "workspace.rename", workspaceId: workspaceId(id), title, commandId: commandIdForRename });
+		setPendingRenames((current) => ({ ...current, [id]: { title, commandId: commandIdForRename } }));
 	}
 	/** Dispatches workspace.remove to the daemon. The local useWorkspaceRegistry's own Window/Surface mock state for this id is cleaned up separately once liveWorldViewModel.workspaces no longer lists it (that reconciliation is the Window-carousel/Surface-dock sibling tasks' own job) -- calling both here would race the daemon's own authoritative removal. */
 	function removeWorkspace(id: string): void {
@@ -544,7 +541,7 @@ export function App(): React.JSX.Element {
 			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
 				<div className="min-w-0 flex-1">
 				<Suspense fallback={null}>
-					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} onWorldViewModel={setLiveWorldViewModel} />
+					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} onWorldViewModel={setLiveWorldViewModel} onCommandAcknowledged={handleCommandAcknowledged} />
 					<LiveNotifications baseUrl={zodiacdBaseUrl} onPending={setLivePendingApprovals} onActions={(actions) => { notificationActionsRef.current = actions; }} />
 				</Suspense>
 				<WorldShell panels={livePanels} left={leftAppletId && appletRenderers[leftAppletId]?.()} right={rightAppletId && appletRenderers[rightAppletId]?.()}>
