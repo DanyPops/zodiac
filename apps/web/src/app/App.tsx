@@ -5,12 +5,10 @@ import { createZodiacCommandRegistry } from "../commands/defaults.js";
 import { CommandProvider } from "../commands/react.js";
 import { useCommandContextStack } from "../commands/useCommandContextStack.js";
 import { useKeybindingOverrides } from "../commands/useKeybindingOverrides.js";
-import { createHttpConversationClient } from "../conversation/client.js";
 import { useConversationWorkspace } from "../conversation/useConversationWorkspace.js";
-import { createHttpPiClient } from "../pi/client.js";
-import { resolveZodiacdBaseUrl } from "../platform/zodiacd-config.js";
 import { usePiChatSessions } from "../pi/usePiChatSessions.js";
 import { createVisualCueClientActionHandler } from "../pi/visual-cue-client-action.js";
+import { useRuntimeClientBundle } from "../platform/runtime-client-bundle-context.js";
 import { createPreferences } from "../platform/preferences.js";
 import { cn } from "../platform/cn.js";
 import { PAGE_BG } from "@zodiac/ui";
@@ -46,16 +44,6 @@ import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
 
-const zodiacdBaseUrl = resolveZodiacdBaseUrl();
-const conversationClient = createHttpConversationClient({ baseUrl: zodiacdBaseUrl });
-const piClient = createHttpPiClient({ baseUrl: zodiacdBaseUrl });
-// The browser-side half of list_visual_cues' own Client-initiated round trip
-// (see the "apps/web: real client-action listener" Papyrus Task) -- watches
-// every real tool-call-start event any chat session observes (via
-// PiChatControllerOptions.onToolCall below) and posts this Client's own real
-// listCues() result back once it sees this exact tool named.
-const visualCueClientAction = createVisualCueClientActionHandler((sessionId, toolCallId, result) => piClient.postClientAction(sessionId, toolCallId, result));
-
 // The docking engine (dockview-react + its CSS theme) is a real ~80kB gzip
 // dependency -- split into its own chunk so the core shell (Workspace
 // Selection, Window Carousel, Chat, command palette) becomes interactive
@@ -69,6 +57,14 @@ const LiveWorldPanels = lazy(() => import("../workspace/LiveWorldPanels.js").the
 const LiveNotifications = lazy(() => import("../workspace/LiveNotifications.js").then((module) => ({ default: module.LiveNotifications })));
 
 export function App(): React.JSX.Element {
+	const { zodiacdBaseUrl, conversationClient, piClient } = useRuntimeClientBundle();
+	// The browser-side half of list_visual_cues' own Client-initiated round
+	// trip (see the "apps/web: real client-action listener" Papyrus Task) --
+	// watches every real tool-call-start event any chat session observes (via
+	// PiChatControllerOptions.onToolCall below) and posts this Client's own
+	// real listCues() result back once it sees this exact tool named. Built
+	// from the injected bundle's piClient, not a module-level singleton.
+	const visualCueClientAction = useMemo(() => createVisualCueClientActionHandler((sessionId, toolCallId, result) => piClient.postClientAction(sessionId, toolCallId, result)), [piClient]);
 	const preferences = useMemo(() => createPreferences(window.localStorage), []);
 	// One host for the whole app's lifetime: extensions register once at
 	// startup (no live discovery/reloading yet -- see the Native Extension

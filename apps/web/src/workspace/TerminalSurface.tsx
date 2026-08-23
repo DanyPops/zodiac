@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { resolveZodiacdBaseUrl } from "../platform/zodiacd-config.js";
-import { createHttpTerminalClient, type TerminalClient, type TerminalConnection } from "../terminal/terminal-client.js";
+import { useOptionalRuntimeClientBundle } from "../platform/runtime-client-bundle-context.js";
+import type { TerminalClient, TerminalConnection } from "../terminal/terminal-client.js";
 import { createXtermUi, type TerminalUiPort } from "../terminal/terminal-ui-port.js";
 
-/** Constructed once, same convention App.tsx's own module-level piClient/conversationClient already establish -- surface-templates.tsx's render() is a zero-arg factory, so there's no per-render prop-injection path from App.tsx for this one. */
-const defaultTerminalClient = createHttpTerminalClient({ baseUrl: resolveZodiacdBaseUrl() });
-
 export interface TerminalSurfaceContentProps {
-	/** Overridable for tests; production always uses the module-level zodiacd-backed singleton above. */
+	/** Overridable for tests; production defaults to the injected RuntimeClientBundle's terminalClient (see runtime-client-bundle.ts) -- surface-templates.tsx's render() is a zero-arg factory, so context, not a prop threaded from App.tsx, is what reaches this default. */
 	readonly client?: TerminalClient;
 	/** Overridable for tests -- production always mounts real xterm.js (createXtermUi). */
 	readonly createUi?: () => TerminalUiPort;
@@ -24,7 +21,10 @@ type TerminalStatus = "connecting" | "live" | "exited" | "error";
  * (--enable-terminal), not this browser: node-pty can't run here, so every
  * byte in and out crosses the one WebSocket TerminalClient owns.
  */
-export function TerminalSurfaceContent({ client = defaultTerminalClient, createUi = createXtermUi, sessionId }: TerminalSurfaceContentProps): React.JSX.Element {
+export function TerminalSurfaceContent({ client: clientOverride, createUi = createXtermUi, sessionId }: TerminalSurfaceContentProps): React.JSX.Element {
+	const bundle = useOptionalRuntimeClientBundle();
+	const client = clientOverride ?? bundle?.terminalClient;
+	if (!client) throw new Error("TerminalSurfaceContent requires either a client prop or a RuntimeClientBundleProvider ancestor");
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [status, setStatus] = useState<TerminalStatus>("connecting");
 	const [exitCode, setExitCode] = useState<number | undefined>(undefined);
