@@ -5,18 +5,13 @@ import { clampShapeSettings, DEFAULT_SHAPE_SETTINGS, isShapeSettings, type Shape
 const WORKSPACE_SELECTION_KEY = "zodiac.workspace-selection-collapsed";
 const KEYBINDINGS_KEY = "zodiac.keybindings";
 const SAVED_SURFACE_TEMPLATES_KEY = "zodiac.saved-surface-templates";
-const USER_WORKSPACES_KEY = "zodiac.user-workspaces";
 const SHAPE_KEY = "zodiac.shape";
 const CHAT_PLACEMENT_KEY = "zodiac.chat-placement";
 // A Workspace's glyph is a genuinely per-client rendering preference, not
-// domain identity -- the daemon's own WorkspaceViewModel has no glyph
-// concept at all (confirmed: packages/protocol/src/view-models.ts). Two
-// clients may legitimately show the same daemon Workspace with different
-// glyphs; this key is deliberately separate from USER_WORKSPACES_KEY (whose
-// own id+title catalog role the daemon-authoritative cutover retires).
+// domain identity -- the daemon's own WorkspaceViewModel has no glyph concept
+// at all (confirmed: packages/protocol/src/view-models.ts).
 const WORKSPACE_GLYPHS_KEY = "zodiac.workspace-glyphs";
 const MAX_WORKSPACE_GLYPHS = 200;
-const MAX_USER_WORKSPACES = 50;
 // A real, no-longer-current localStorage namespace (agent-deck, the product's
 // prior name) an existing user's browser may still hold.
 const LEGACY_SIDEBAR_KEY = "agent-deck-sidebar-collapsed";
@@ -34,13 +29,6 @@ export interface SavedSurfaceTemplate {
 	templateId: string;
 }
 
-/** A user-created Workspace catalog entry. `glyphId` names one of WORKSPACE_GLYPH_OPTIONS (workspace-catalog.tsx) -- a component reference itself can't round-trip through storage. */
-export interface SavedWorkspace {
-	id: string;
-	title: string;
-	glyphId: string;
-}
-
 /**
  * Driven port: durable per-user settings the application layer reads/writes
  * without knowing they live in `localStorage`. `createPreferences(storage)`
@@ -53,8 +41,6 @@ export interface Preferences {
 	setKeybindingOverrides: (bindings: readonly KeybindingDefinition[]) => void;
 	savedSurfaceTemplates: () => SavedSurfaceTemplate[];
 	setSavedSurfaceTemplates: (templates: readonly SavedSurfaceTemplate[]) => void;
-	userWorkspaces: () => SavedWorkspace[];
-	setUserWorkspaces: (workspaces: readonly SavedWorkspace[]) => void;
 	shapeSettings: () => ShapeSettings;
 	setShapeSettings: (value: ShapeSettings) => void;
 	chatPlacement: () => ChatPlacement;
@@ -123,21 +109,6 @@ export function createPreferences(storage: Storage): Preferences {
 				// The active in-memory saved templates remain usable when storage is unavailable.
 			}
 		},
-		userWorkspaces() {
-			try {
-				const value: unknown = JSON.parse(storage.getItem(USER_WORKSPACES_KEY) ?? "[]");
-				return Array.isArray(value) ? value.slice(0, MAX_USER_WORKSPACES).filter(isSavedWorkspace) : [];
-			} catch {
-				return [];
-			}
-		},
-		setUserWorkspaces(workspaces) {
-			try {
-				storage.setItem(USER_WORKSPACES_KEY, JSON.stringify(workspaces.slice(0, MAX_USER_WORKSPACES)));
-			} catch {
-				// The active in-memory user Workspaces remain usable when storage is unavailable.
-			}
-		},
 		shapeSettings() {
 			try {
 				const value: unknown = JSON.parse(storage.getItem(SHAPE_KEY) ?? "null");
@@ -200,12 +171,6 @@ function isSavedSurfaceTemplate(value: unknown): value is SavedSurfaceTemplate {
 	if (typeof value !== "object" || value === null) return false;
 	const template = value as Record<string, unknown>;
 	return typeof template.id === "string" && template.id.length > 0 && typeof template.title === "string" && template.title.length > 0 && typeof template.templateId === "string" && template.templateId.length > 0;
-}
-
-function isSavedWorkspace(value: unknown): value is SavedWorkspace {
-	if (typeof value !== "object" || value === null) return false;
-	const workspace = value as Record<string, unknown>;
-	return typeof workspace.id === "string" && workspace.id.length > 0 && typeof workspace.title === "string" && workspace.title.length > 0 && typeof workspace.glyphId === "string" && workspace.glyphId.length > 0;
 }
 
 const COMMAND_CONTEXTS: readonly CommandContext[] = ["global", "workspace-selection", "canvas", "surface", "text-input", "dialog"];

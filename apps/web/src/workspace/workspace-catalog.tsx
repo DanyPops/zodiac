@@ -1,7 +1,5 @@
 import { Bug, Flag, GitPullRequest, LineChart, Megaphone, MessageCircle, Rocket, Terminal } from "lucide-react";
 import type { ComponentType } from "react";
-import { addWindow, createWorkspace, selectWindow, type Workspace } from "./model.js";
-
 interface WorkspaceGlyphIconProps {
 	"aria-hidden"?: boolean | "true" | "false";
 	size?: number;
@@ -50,19 +48,3 @@ export const WORKSPACE_CATALOG: readonly WorkspaceCatalogEntry[] = [
 	{ id: "chat", title: "Chat", icon: MessageCircle },
 	{ id: "prs", title: "PRs", icon: GitPullRequest },
 ];
-
-/**
- * How many empty Windows to seed each mock Workspace with, and where to
- * start -- mock demo data only, so the Window Carousel's centered/fading
- * layout (see window-carousel-fade.ts) is visible without first having to
- * open several Windows by hand. A real Workspace registry would start each
- * new Workspace with exactly one Window, as `createWorkspace` itself does.
- */
-const MOCK_DEMO_WINDOW_COUNT = 7;
-
-/** Builds one catalog entry's initial Workspace, pre-seeded with MOCK_DEMO_WINDOW_COUNT empty Windows centered on the middle one -- demo scaffolding, not a real persisted Workspace's actual starting state. */
-export function createDemoWorkspace(id: string, title: string): Workspace {
-	let workspace = createWorkspace({ id, title });
-	for (let count = 1; count < MOCK_DEMO_WINDOW_COUNT; count += 1) workspace = addWindow(workspace);
-	return selectWindow(workspace, Math.floor(MOCK_DEMO_WINDOW_COUNT / 2));
-}
