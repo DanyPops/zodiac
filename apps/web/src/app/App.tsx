@@ -22,6 +22,7 @@ import { Composer } from "../conversation/ConversationSurface.js";
 import { latestToolCallName } from "../conversation/projector.js";
 import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, type DockedSurfaceInstance } from "../workspace/model.js";
 import { pruneAcknowledgedRename, type PendingRename } from "./pending-rename.js";
+import { pruneAcknowledgedItem, type Acknowledgeable } from "./pending-overlay.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -160,7 +161,7 @@ export function App(): React.JSX.Element {
 	// unknown-id guard would throw -- confirmed live (Uncaught Error:
 	// useWorkspaceRegistry: no Workspace registered for id ...) before this
 	// was added.
-	const [pendingWorkspaces, setPendingWorkspaces] = useState<readonly WorkspaceCatalogEntry[]>([]);
+	const [pendingWorkspaces, setPendingWorkspaces] = useState<readonly (WorkspaceCatalogEntry & Acknowledgeable)[]>([]);
 	// A just-dispatched workspace.rename's own optimistic title override, kept
 	// only until the daemon's own round trip confirms the same title --
 	// otherwise a renamed row keeps showing its old title for the full SSE
@@ -178,9 +179,11 @@ export function App(): React.JSX.Element {
 		const stillPending = pendingWorkspaces.filter((pending) => !isConfirmedInViewModel(liveWorldViewModel, pending.id));
 		return [...confirmed, ...stillPending];
 	}, [liveWorldViewModel, workspaceGlyphs, pendingWorkspaces, pendingRenames]);
-	/** Wired to LiveWorldPanels' own onCommandAcknowledged below -- fires once per acknowledged commandId, for both this client's own dispatches and, harmlessly, any other client's (pruneAcknowledgedRename only ever matches an id this client itself minted). */
+	/** Wired to LiveWorldPanels' own onCommandAcknowledged below -- fires once per acknowledged commandId, for both this client's own dispatches and, harmlessly, any other client's (each overlay's own pruning only ever matches a commandId this client itself minted). Prunes all three optimistic overlays -- not just pendingRenames -- since the same "my own dispatch was applied, regardless of what the confirmed state now shows" fix applies to pendingWorkspaces/pendingDockedSurfaces too (see pending-overlay.ts's own doc comment for the create-then-removed-before-observed race this closes). */
 	function handleCommandAcknowledged(acknowledgedCommandId: CommandId): void {
 		setPendingRenames((current) => pruneAcknowledgedRename(current, acknowledgedCommandId));
+		setPendingWorkspaces((current) => pruneAcknowledgedItem(current, acknowledgedCommandId));
+		setPendingDockedSurfaces((current) => pruneAcknowledgedItem(current, acknowledgedCommandId));
 	}
 	// Once the daemon's own round trip confirms a pending id, drop it from
 	// state outright -- not just filtered at render time above. Leaving a
@@ -257,9 +260,10 @@ export function App(): React.JSX.Element {
 	/** Creates a Workspace via daemon dispatch and optimistically selects it locally (useWorkspaceRegistry's own documented fallback already covers the transient window before liveWorldViewModel catches up -- see its own doc comment). Persists the chosen glyph locally (cosmetic only, see preferences.ts). Returns the fresh id so a caller can act on it immediately (name it from an LLM prompt, start a Chat session), matching the synchronous feel the pre-cutover local-only creation had. */
 	function createWorkspaceViaDaemon(title: string, glyphId: string): string {
 		const id = freshWorkspaceId();
-		applyRef.current({ type: "workspace.create", workspaceId: id, title });
+		const commandIdForCreate = freshCommandId();
+		applyRef.current({ type: "workspace.create", workspaceId: id, title, commandId: commandIdForCreate });
 		preferences.setWorkspaceGlyph(id, glyphId);
-		setPendingWorkspaces((current) => [...current, { id, title, icon: resolveWorkspaceGlyph(glyphId) }]);
+		setPendingWorkspaces((current) => [...current, { id, title, icon: resolveWorkspaceGlyph(glyphId), commandId: commandIdForCreate }]);
 		workspace.selectWorkspace(id);
 		return id;
 	}
@@ -272,7 +276,7 @@ export function App(): React.JSX.Element {
 	// pending/confirmed shape pendingWorkspaces already established for
 	// Workspace creation. Chat itself is never dispatched this way (see
 	// dockTemplate's own doc comment) so it never appears here.
-	const [pendingDockedSurfaces, setPendingDockedSurfaces] = useState<readonly DockedSurfaceInstance[]>([]);
+	const [pendingDockedSurfaces, setPendingDockedSurfaces] = useState<readonly (DockedSurfaceInstance & Acknowledgeable)[]>([]);
 	// The Dock Ruler frame's own visibility (the whole drag's duration, driven
 	// by the Surface Templates pillar's own dragstart/dragend -- not tied to
 	// hovering a specific drop target), its live highlighted mark (from
@@ -350,8 +354,9 @@ export function App(): React.JSX.Element {
 	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string, newGroupSizeRatio?: number): void {
 		if (!workspace.workspace) return;
 		const id = freshSurfaceId();
-		applyRef.current({ type: "surface.dock", workspaceId: workspaceId(workspace.workspace.id), integrationId: integrationId(templateId), title, surfaceId: id });
-		setPendingDockedSurfaces((current) => [...current, { id, templateId, title }]);
+		const commandIdForDock = freshCommandId();
+		applyRef.current({ type: "surface.dock", workspaceId: workspaceId(workspace.workspace.id), integrationId: integrationId(templateId), title, surfaceId: id, commandId: commandIdForDock });
+		setPendingDockedSurfaces((current) => [...current, { id, templateId, title, commandId: commandIdForDock }]);
 		setPendingDock({ instanceId: id, position, referenceGroupId, newGroupSizeRatio });
 	}
 
