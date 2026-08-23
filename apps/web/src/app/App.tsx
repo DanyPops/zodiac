@@ -19,8 +19,8 @@ import { useTheme } from "../theme-hooks.js";
 import { useShapeSettings } from "../shape-settings-hooks.js";
 import { CanvasWell } from "../workspace/CanvasWell.js";
 import { Composer } from "../conversation/ConversationSurface.js";
-import { latestToolCallName } from "../conversation/projector.js";
-import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, type DockedSurfaceInstance } from "../workspace/model.js";
+import { type DockedSurfaceInstance } from "../workspace/model.js";
+import { chatDockedSurfaceFor } from "./chat-docking.js";
 import { pruneAcknowledgedRename, type PendingRename } from "./pending-rename.js";
 import { pruneAcknowledgedItem, type Acknowledgeable } from "./pending-overlay.js";
 import { resolveActiveWindowId } from "./active-window-id.js";
@@ -30,7 +30,6 @@ import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
 import { SurfaceTemplatesGallery } from "../workspace/SurfaceTemplatesGallery.js";
 import { useSurfaceTemplates } from "../workspace/useSurfaceTemplates.js";
 import { useWorkspaceListNavigation } from "../workspace/useWorkspaceListNavigation.js";
-import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
 import { DockRulerFrame } from "../workspace/DockRulerFrame.js";
@@ -154,14 +153,8 @@ export function App(): React.JSX.Element {
 	// would show yesterday's glyph until something else re-rendered this tree.
 	const workspaceGlyphs = preferences.workspaceGlyphs();
 	// A just-dispatched workspace.create's own optimistic catalog entry, kept
-	// only until the daemon's own round trip confirms it (liveWorldViewModel
-	// actually lists the id) -- the same optimistic-then-reconciled shape
-	// dockTemplate's own pendingDock already established. Without this, a
-	// freshly created Workspace's id would be selected locally before the
-	// catalog contains it, and useWorkspaceRegistry's own deliberate
-	// unknown-id guard would throw -- confirmed live (Uncaught Error:
-	// useWorkspaceRegistry: no Workspace registered for id ...) before this
-	// was added.
+	// until the daemon's own round trip confirms it -- otherwise a freshly
+	// created Workspace briefly has no catalog entry to select.
 	const [pendingWorkspaces, setPendingWorkspaces] = useState<readonly (WorkspaceCatalogEntry & Acknowledgeable)[]>([]);
 	// A just-dispatched workspace.rename's own optimistic title override, kept
 	// only until the daemon's own round trip confirms the same title --
@@ -199,21 +192,26 @@ export function App(): React.JSX.Element {
 			return next.length === current.length ? current : next;
 		});
 	}, [liveWorldViewModel]);
-	const workspace = useWorkspaceRegistry(catalog, (id, title) => createWorkspace({ id, title }), extensionHost);
-	// Keeps useWorkspaceRegistry's own local activeWorkspaceId (which still
-	// drives which Workspace's local Window/Surface mock state renders --
-	// that cutover is the Window-carousel/Surface-dock sibling tasks' own job,
-	// not this one) in step with the daemon's real selection, including a
-	// remote client's own workspace.select landing here. Optimistic local
-	// selectWorkspace calls (sendMessage's auto-create, CreateWorkspaceDialog,
-	// the selectWorkspace command below) already update this immediately;
-	// this effect is what reconciles a *remote* change or confirms this
-	// client's own once the daemon's broadcast round-trips.
+	// The sole source of truth for which Workspace is active. selectWorkspaceLocally
+	// sets this optimistically; the effect below reconciles a remote selection.
+	// Note: workspace.create doesn't change the daemon's own active id for a
+	// second-or-later Workspace (see store.ts), so that effect's dependency
+	// never changes after such a create -- the optimistic selection just sticks.
+	const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | undefined>(undefined);
+	function selectWorkspaceLocally(id: string): void {
+		setActiveWorkspaceId(id);
+		extensionHost.emit({ type: "workspace:selected", workspaceId: id });
+	}
 	useEffect(() => {
 		const daemonActiveId = liveWorldViewModel.activeWorkspaceId;
-		if (daemonActiveId && daemonActiveId !== workspace.activeWorkspaceId) workspace.selectWorkspace(daemonActiveId);
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- workspace.selectWorkspace is a fresh closure every render (useWorkspaceRegistry never memoizes it); depending on it would re-run this effect every render regardless of whether the daemon's own activeWorkspaceId actually changed.
+		if (daemonActiveId && daemonActiveId !== activeWorkspaceId) selectWorkspaceLocally(daemonActiveId);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- selectWorkspaceLocally closes over activeWorkspaceId itself; depending on it would re-run this effect every render regardless of whether the daemon's own activeWorkspaceId actually changed.
 	}, [liveWorldViewModel.activeWorkspaceId]);
+	// Chat is a client-local concept (never migrated to the daemon's real
+	// Window.surfaces, see chat-docking.ts) -- this tracks which Windows had
+	// it explicitly closed. Keyed by the real daemon WindowId (activeWindowId,
+	// computed below), so it survives a Window switch correctly.
+	const [closedChatWindowIds, setClosedChatWindowIds] = useState<ReadonlySet<string>>(new Set());
 
 
 	// The one production LLM-naming adapter: a short-lived Pi session used
@@ -228,7 +226,7 @@ export function App(): React.JSX.Element {
 	// data sources rather than one merged one. Undefined exactly when there is
 	// no active Workspace yet (the empty-state landing renders instead of
 	// anything that would read this).
-	const piChat = workspace.workspace ? piChatSessions.chatFor(workspace.workspace.id, { onToolCall: visualCueClientAction }) : undefined;
+	const piChat = activeWorkspaceId ? piChatSessions.chatFor(activeWorkspaceId, { onToolCall: visualCueClientAction }) : undefined;
 	const activeConversationItems = piChat?.hasStarted ? piChat.items : conversationWorkspace.conversationItems;
 	const activeConversationLoading = piChat?.hasStarted ? piChat.busy : conversationWorkspace.conversationLoading;
 	const activeConversationError = piChat?.hasStarted ? piChat.error : conversationWorkspace.conversationError;
@@ -254,18 +252,18 @@ export function App(): React.JSX.Element {
 		applyRef.current({ type: "workspace.rename", workspaceId: workspaceId(id), title, commandId: commandIdForRename });
 		setPendingRenames((current) => ({ ...current, [id]: { title, commandId: commandIdForRename } }));
 	}
-	/** Dispatches workspace.remove to the daemon. The local useWorkspaceRegistry's own Window/Surface mock state for this id is cleaned up separately once liveWorldViewModel.workspaces no longer lists it (that reconciliation is the Window-carousel/Surface-dock sibling tasks' own job) -- calling both here would race the daemon's own authoritative removal. */
+	/** Dispatches workspace.remove to the daemon. */
 	function removeWorkspace(id: string): void {
 		applyRef.current({ type: "workspace.remove", workspaceId: workspaceId(id) });
 	}
-	/** Creates a Workspace via daemon dispatch and optimistically selects it locally (useWorkspaceRegistry's own documented fallback already covers the transient window before liveWorldViewModel catches up -- see its own doc comment). Persists the chosen glyph locally (cosmetic only, see preferences.ts). Returns the fresh id so a caller can act on it immediately (name it from an LLM prompt, start a Chat session), matching the synchronous feel the pre-cutover local-only creation had. */
+	/** Creates a Workspace via daemon dispatch and optimistically selects it locally. Persists the chosen glyph locally (cosmetic only, see preferences.ts). Returns the fresh id so a caller can act on it immediately (name it from an LLM prompt, start a Chat session). */
 	function createWorkspaceViaDaemon(title: string, glyphId: string): string {
 		const id = freshWorkspaceId();
 		const commandIdForCreate = freshCommandId();
 		applyRef.current({ type: "workspace.create", workspaceId: id, title, commandId: commandIdForCreate });
 		preferences.setWorkspaceGlyph(id, glyphId);
 		setPendingWorkspaces((current) => [...current, { id, title, icon: resolveWorkspaceGlyph(glyphId), commandId: commandIdForCreate }]);
-		workspace.selectWorkspace(id);
+		selectWorkspaceLocally(id);
 		return id;
 	}
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
@@ -289,8 +287,11 @@ export function App(): React.JSX.Element {
 	const [dockRulerMark, setDockRulerMark] = useState<DockRulerFrameMark | undefined>(undefined);
 	const [dockCanvasBox, setDockCanvasBox] = useState<Rect | undefined>(undefined);
 
-	const latestToolName = latestToolCallName(activeConversationItems);
-	const toolCallWorkspaceId = latestToolName ? findWorkspaceIdForToolName(workspace.workspaces, latestToolName) : undefined;
+	// toolCallWorkspaceId (a tool call's own docked-Surface-binding
+	// correlation) has no real data source since the Surface-dock cutover:
+	// SurfaceViewModel carries no binding metadata, so this can no longer be
+	// computed -- disclosed gap, tracked separately, not silently dropped.
+	const toolCallWorkspaceId: string | undefined = undefined;
 
 	const selectedButtonRef = useRef<HTMLButtonElement>(null);
 	const selectionRef = useRef<HTMLElement>(null);
@@ -320,17 +321,18 @@ export function App(): React.JSX.Element {
 	// The daemon's own WorkspaceViewModel for the active Workspace -- the real
 	// read side for the Window Carousel and docked-Surface rendering now
 	// (windowCount/activeIndex/title, and dockedSurfacesForActiveWindow below),
-	// once a Workspace's id is confirmed there (see createWorkspaceViaDaemon /
-	// the catalog reconciliation above). Undefined during the same transient
-	// window pendingWorkspaces already covers -- callers fall back to the
-	// local useWorkspaceRegistry model below rather than rendering nothing.
-	const daemonWorkspace = workspace.workspace ? liveWorldViewModel.workspaces.find((entry) => entry.id === workspace.workspace!.id) : undefined;
+	// once a Workspace's id is confirmed there. Undefined during the same
+	// transient window pendingWorkspaces already covers.
+	const daemonWorkspace = activeWorkspaceId ? liveWorldViewModel.workspaces.find((entry) => entry.id === activeWorkspaceId) : undefined;
 	const daemonActiveWindowIndex = daemonWorkspace ? daemonWorkspace.windows.findIndex((candidate) => candidate.id === daemonWorkspace.activeWindowId) : -1;
-	const windowCount = daemonWorkspace ? daemonWorkspace.windows.length : (workspace.workspace?.windows.length ?? 0);
-	const activeWindowIndex = daemonWorkspace && daemonActiveWindowIndex >= 0 ? daemonActiveWindowIndex : (workspace.workspace?.activeWindowIndex ?? 0);
-	const activeWindowTitle = daemonWorkspace ? (daemonWorkspace.windows[activeWindowIndex]?.title ?? "") : (workspace.activeWindow?.title ?? "");
-	// The real WindowId WindowDockview must key on -- see resolveActiveWindowId's own doc comment.
-	const activeWindowId = resolveActiveWindowId(daemonWorkspace, activeWindowIndex, workspace.activeWindow?.id);
+	// Fallbacks (1 window, index 0, "Window 0") match exactly what a fresh
+	// daemon Workspace always starts with (see store.ts's own createWorkspace)
+	// -- only used for the brief pre-confirmation window before daemonWorkspace resolves.
+	const windowCount = daemonWorkspace ? daemonWorkspace.windows.length : 1;
+	const activeWindowIndex = daemonWorkspace && daemonActiveWindowIndex >= 0 ? daemonActiveWindowIndex : 0;
+	const activeWindowTitle = daemonWorkspace ? (daemonWorkspace.windows[activeWindowIndex]?.title ?? "") : "Window 0";
+	// The real WindowId WindowDockview must key on -- see resolveActiveWindowId's own doc comment. Falls back to a stable per-Workspace placeholder pre-confirmation (never real docking activity can happen yet -- dockTemplate/etc. all guard on activeWorkspaceId).
+	const activeWindowId = resolveActiveWindowId(daemonWorkspace, activeWindowIndex, activeWorkspaceId ? `${activeWorkspaceId}-window-0` : undefined);
 	// The active Window's real docked Surfaces (Activity/Lector/Papyrus/
 	// Terminal/...), mapped from SurfaceViewModel's shape into
 	// DockedSurfaceInstance's (WindowDockview's own established prop shape,
@@ -340,7 +342,7 @@ export function App(): React.JSX.Element {
 	// domain model's Window.surfaces and this task doesn't migrate it.
 	const daemonDockedSurfaces = daemonDockedSurfacesForWindow(daemonWorkspace?.windows[activeWindowIndex]);
 	const stillPendingDockedSurfaces = pendingDockedSurfaces.filter((pending) => !isDockConfirmed(daemonDockedSurfaces, pending.id));
-	const chatDockedSurface = workspace.activeWindow?.dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+	const chatDockedSurface = chatDockedSurfaceFor(activeWindowId, closedChatWindowIds);
 	const dockedSurfacesForActiveWindow = dockedSurfacesForWindow(chatDockedSurface, daemonDockedSurfaces, stillPendingDockedSurfaces);
 	// Once the daemon's own round trip confirms a pending dock, drop it from
 	// state outright -- same not-just-filtered-at-render-time reasoning as
@@ -355,10 +357,10 @@ export function App(): React.JSX.Element {
 
 	/** `newGroupSizeRatio` -- the fraction of the reference group's current size (along whichever axis `position` implies) the newly-docked Surface should occupy, chosen via the Dock Ruler. Undefined for the plain click-to-dock/tab-insert paths, which have no drag geometry to derive a fraction from. Only reachable once a Workspace exists -- the empty-state landing renders no Surface Templates pillar to trigger this from. Dispatches surface.dock to the daemon with a client-minted SurfaceId (freshSurfaceId, mirroring freshWorkspaceId's own precedent) so pendingDock's own placement bookkeeping below has a synchronous id to key off, exactly as before -- only the authority (daemon, not the local registry) has moved. */
 	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string, newGroupSizeRatio?: number): void {
-		if (!workspace.workspace) return;
+		if (!activeWorkspaceId) return;
 		const id = freshSurfaceId();
 		const commandIdForDock = freshCommandId();
-		applyRef.current({ type: "surface.dock", workspaceId: workspaceId(workspace.workspace.id), integrationId: integrationId(templateId), title, surfaceId: id, commandId: commandIdForDock });
+		applyRef.current({ type: "surface.dock", workspaceId: workspaceId(activeWorkspaceId), integrationId: integrationId(templateId), title, surfaceId: id, commandId: commandIdForDock });
 		setPendingDockedSurfaces((current) => [...current, { id, templateId, title, commandId: commandIdForDock }]);
 		setPendingDock({ instanceId: id, position, referenceGroupId, newGroupSizeRatio });
 	}
@@ -366,33 +368,33 @@ export function App(): React.JSX.Element {
 	/** Chat's own close is never a real domain-model removal (see dockTemplate's own doc comment -- Chat stays a client-local concept, out of this cutover's scope); every other docked Surface's close dispatches surface.undock to the daemon. */
 	function handlePanelClosed(instanceId: string): void {
 		if (chatDockedSurface?.id === instanceId) {
-			workspace.undockSurface(instanceId);
+			if (activeWindowId) setClosedChatWindowIds((current) => new Set(current).add(activeWindowId));
 			return;
 		}
-		if (!workspace.workspace) return;
-		applyRef.current({ type: "surface.undock", workspaceId: workspaceId(workspace.workspace.id), surfaceId: surfaceId(instanceId) });
+		if (!activeWorkspaceId) return;
+		applyRef.current({ type: "surface.undock", workspaceId: workspaceId(activeWorkspaceId), surfaceId: surfaceId(instanceId) });
 	}
 
 	/** Dispatches window.select to the daemon, translating the Carousel's own index prop into the real WindowId at that position -- window.select's own CommandIntent shape, not the Carousel's. A no-op if the daemon Workspace/index isn't resolved yet (same transient window every other Workspace-scoped dispatch here tolerates). */
 	function selectWindowViaDaemon(index: number): void {
-		if (!workspace.workspace || !daemonWorkspace) return;
+		if (!activeWorkspaceId || !daemonWorkspace) return;
 		const target = daemonWorkspace.windows[index];
 		if (!target) return;
-		applyRef.current({ type: "window.select", workspaceId: workspaceId(workspace.workspace.id), windowId: target.id });
+		applyRef.current({ type: "window.select", workspaceId: workspaceId(activeWorkspaceId), windowId: target.id });
 	}
 
 	/** Dispatches window.scroll to the daemon -- the same plain wrap-around ring as window.next/window.previous (see the CommandIntent schema's own doc comment); the Carousel's own ephemeral-Window-at-the-edge behavior isn't ported yet (see the "Port scrollWindow's ephemeral-Window creation/pruning" follow-on task). */
 	function scrollWindowViaDaemon(direction: 1 | -1): void {
-		if (!workspace.workspace) return;
-		applyRef.current({ type: "window.scroll", workspaceId: workspaceId(workspace.workspace.id), direction });
+		if (!activeWorkspaceId) return;
+		applyRef.current({ type: "window.scroll", workspaceId: workspaceId(activeWorkspaceId), direction });
 	}
 
 	/** Dispatches window.rename for the active Window to the daemon. */
 	function renameActiveWindowViaDaemon(title: string): void {
-		if (!workspace.workspace || !daemonWorkspace) return;
+		if (!activeWorkspaceId || !daemonWorkspace) return;
 		const active = daemonWorkspace.windows[activeWindowIndex];
 		if (!active) return;
-		applyRef.current({ type: "window.rename", workspaceId: workspaceId(workspace.workspace.id), windowId: active.id, title });
+		applyRef.current({ type: "window.rename", workspaceId: workspaceId(activeWorkspaceId), windowId: active.id, title });
 	}
 
 	// Only World-level chrome placement (which edge WorkspaceSelection/
@@ -435,8 +437,8 @@ export function App(): React.JSX.Element {
 		"workspace-nav": () => (
 			<WorkspaceSelection
 				collapsed={selection.collapsed}
-				catalog={workspace.catalog}
-				activeWorkspaceId={workspace.activeWorkspaceId}
+				catalog={catalog}
+				activeWorkspaceId={activeWorkspaceId}
 				selectionRef={selectionRef}
 				selectedButtonRef={selectedButtonRef}
 				onWorkspaceFocus={() => contexts.enterWorkspaceSelection()}
@@ -482,7 +484,7 @@ export function App(): React.JSX.Element {
 			selectLastWorkspace: workspaceNavigation.focusLast,
 			selectWorkspace(id) {
 				if (typeof id !== "string") return;
-				workspace.selectWorkspace(id);
+				selectWorkspaceLocally(id);
 				applyRef.current({ type: "workspace.select", workspaceId: workspaceId(id) });
 			},
 			cycleTheme: theme.cycleTheme,
@@ -519,16 +521,16 @@ export function App(): React.JSX.Element {
 			},
 			canSendMessage: () => draft.trim().length > 0,
 			nextWindow() {
-				if (!workspace.workspace) return;
-				applyRef.current({ type: "window.next", workspaceId: workspaceId(workspace.workspace.id) });
+				if (!activeWorkspaceId) return;
+				applyRef.current({ type: "window.next", workspaceId: workspaceId(activeWorkspaceId) });
 			},
 			previousWindow() {
-				if (!workspace.workspace) return;
-				applyRef.current({ type: "window.previous", workspaceId: workspaceId(workspace.workspace.id) });
+				if (!activeWorkspaceId) return;
+				applyRef.current({ type: "window.previous", workspaceId: workspaceId(activeWorkspaceId) });
 			},
 			newWindow() {
-				if (!workspace.workspace) return;
-				applyRef.current({ type: "window.add", workspaceId: workspaceId(workspace.workspace.id) });
+				if (!activeWorkspaceId) return;
+				applyRef.current({ type: "window.add", workspaceId: workspaceId(activeWorkspaceId) });
 			},
 			openTemplatesPicker: () => contexts.openDialog("templates"),
 			openTemplatesGallery: () => contexts.openDialog("templatesGallery"),
@@ -546,7 +548,7 @@ export function App(): React.JSX.Element {
 	return (
 		<CommandProvider registry={registry} activeContexts={contexts.effectiveContexts}>
 			{/* data-template-dragging: the authoritative "is a Surface Template drag active" signal, consumed by styles.css to force-hide dockview's own root-level drop-target overlay once a drag ends -- see the CSS rule's own doc comment for why dockview's own cleanup can't be trusted to do this itself. */}
-			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
+			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={activeWorkspaceId} data-template-dragging={templateDragging}>
 				<div className="min-w-0 flex-1">
 				<Suspense fallback={null}>
 					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} onWorldViewModel={setLiveWorldViewModel} onCommandAcknowledged={handleCommandAcknowledged} />
@@ -559,7 +561,7 @@ export function App(): React.JSX.Element {
 						onApproveRequest={(requestId) => notificationActionsRef.current.approve(requestId)}
 						onDenyRequest={(requestId) => notificationActionsRef.current.deny(requestId)}
 						center={
-							workspace.workspace && workspace.activeWindow ? (
+							activeWorkspaceId ? (
 								<WindowCarousel
 									windowCount={windowCount}
 									activeIndex={activeWindowIndex}
@@ -571,7 +573,7 @@ export function App(): React.JSX.Element {
 							) : undefined
 						}
 					>
-						{workspace.workspace && workspace.activeWindow ? (
+						{activeWorkspaceId ? (
 							<section
 								ref={canvasRef}
 								tabIndex={-1}
@@ -583,7 +585,7 @@ export function App(): React.JSX.Element {
 							>
 								<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 									<WindowDockview
-										windowId={activeWindowId ?? workspace.activeWindow.id}
+										windowId={activeWindowId ?? activeWorkspaceId}
 										dockedSurfaces={dockedSurfacesForActiveWindow}
 										pendingDock={pendingDock}
 										onPendingDockConsumed={() => setPendingDock(undefined)}
