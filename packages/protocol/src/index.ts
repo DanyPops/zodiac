@@ -72,3 +72,6 @@ export {
 // structurally typed, so this costs nothing beyond the export line
 // itself -- both names describe the exact same type.
 export type { ZodiacContribution as AlignmentContribution } from "./contributions.js";
+
+export type { DesktopHostPort, DesktopIpcFailureReason, DesktopIpcRequest, DesktopIpcResult, HostCapabilityClassification, HostCapabilityInventoryEntry } from "./host-port.js";
+export { DESKTOP_RESOLVE_ZODIACD_BASE_URL_CHANNEL, DesktopIpcFailureReasonSchema, DesktopIpcRequestSchema, DesktopIpcResultSchema, HOST_CAPABILITY_INVENTORY } from "./host-port.js";
