@@ -188,10 +188,17 @@ export async function connectRemoteWorldStore(options: RemoteWorldStoreOptions):
 			// diagnostic so a failure among several concurrent callers' commands
 			// is still attributable to the one that actually failed.
 			const label = intent.commandId ? `${intent.type} commandId=${intent.commandId}` : intent.type;
+			// keepalive: true (task 8facba42's own real root cause) -- without it,
+			// a page navigation that happens while this fetch is still in flight
+			// aborts it before the daemon ever receives it, silently dropping the
+			// command (confirmed via apply-survives-navigation.spec.ts). The
+			// intent body is a tiny JSON object, well under the spec's 64KB
+			// keepalive payload cap.
 			void fetcher(`${baseUrl}/api/world/commands`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ intent }),
+				keepalive: true,
 			}).then(async (response) => {
 				if (response.ok) return;
 				// Reads the daemon's own { code, message } body (world-routes.ts's

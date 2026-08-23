@@ -23,6 +23,7 @@ import { type DockedSurfaceInstance } from "../workspace/model.js";
 import { chatDockedSurfaceFor } from "./chat-docking.js";
 import { pruneAcknowledgedRename, type PendingRename } from "./pending-rename.js";
 import { pruneAcknowledgedItem, type Acknowledgeable } from "./pending-overlay.js";
+import { shouldApplyLlmRename } from "./llm-rename-guard.js";
 import { resolveActiveWindowId } from "./active-window-id.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
@@ -173,6 +174,12 @@ export function App(): React.JSX.Element {
 		const stillPending = pendingWorkspaces.filter((pending) => !isConfirmedInViewModel(liveWorldViewModel, pending.id));
 		return [...confirmed, ...stillPending];
 	}, [liveWorldViewModel, workspaceGlyphs, pendingWorkspaces, pendingRenames]);
+	// Read fresh (not captured stale) inside sendMessage()'s own async
+	// LLM-rename callback below, which can resolve long after the render that
+	// created it -- a plain closure over `catalog` would see whatever catalog
+	// looked like at that render, not what's true when the callback actually runs.
+	const catalogRef = useRef(catalog);
+	catalogRef.current = catalog;
 	/** Wired to LiveWorldPanels' own onCommandAcknowledged below -- fires once per acknowledged commandId, for both this client's own dispatches and, harmlessly, any other client's (each overlay's own pruning only ever matches a commandId this client itself minted). Prunes all three optimistic overlays -- not just pendingRenames -- since the same "my own dispatch was applied, regardless of what the confirmed state now shows" fix applies to pendingWorkspaces/pendingDockedSurfaces too (see pending-overlay.ts's own doc comment for the create-then-removed-before-observed race this closes). */
 	function handleCommandAcknowledged(acknowledgedCommandId: CommandId): void {
 		setPendingRenames((current) => pruneAcknowledgedRename(current, acknowledgedCommandId));
@@ -510,7 +517,7 @@ export function App(): React.JSX.Element {
 				piChatSessions.chatFor(id, { onToolCall: visualCueClientAction }).sendMessage(text);
 				setDraft("");
 				void titleFromPrompt(text).then((llmTitle) => {
-					if (llmTitle) renameWorkspace(id, llmTitle);
+					if (llmTitle && shouldApplyLlmRename(catalogRef.current, id)) renameWorkspace(id, llmTitle);
 				});
 			},
 			openPalette: () => contexts.openDialog("palette"),

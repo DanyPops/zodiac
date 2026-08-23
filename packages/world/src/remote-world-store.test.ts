@@ -125,6 +125,21 @@ describe("connectRemoteWorldStore", () => {
 		store.dispose();
 	});
 
+	// Regression for task 8facba42: without keepalive, a page navigation that
+	// happens while this fetch is still in flight silently drops the command
+	// before the daemon ever receives it (confirmed live via
+	// apply-survives-navigation.spec.ts) -- a real user closing/navigating a
+	// tab right after their very first message hits this exact race.
+	it("apply() marks its fetch keepalive so an in-flight command survives a page navigation", async () => {
+		const daemon = createFakeDaemon(EMPTY);
+		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
+		store.apply({ type: "workspace.create", workspaceId: workspaceId("w1"), title: "Bug Triage" });
+		await vi.waitFor(() => expect(daemon.posted).toHaveLength(1));
+		const commandCall = daemon.fetcher.mock.calls.find(([input]) => String(input).endsWith("/api/world/commands"));
+		expect(commandCall?.[1]?.keepalive).toBe(true);
+		store.dispose();
+	});
+
 	it("apply() posts the intent's own commandId when the caller supplies one", async () => {
 		const daemon = createFakeDaemon(EMPTY);
 		const store = await connectRemoteWorldStore({ baseUrl: "http://fake", fetcher: daemon.fetcher });
