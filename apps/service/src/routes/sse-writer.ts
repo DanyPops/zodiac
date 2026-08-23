@@ -30,8 +30,16 @@ export const DEFAULT_MAX_SSE_BUFFERED_BYTES = 2 * 1024 * 1024;
  */
 export function writeSseFrame(res: ServerResponse, payload: unknown, maxBufferedBytes: number = DEFAULT_MAX_SSE_BUFFERED_BYTES): boolean {
 	if (res.writableEnded || res.destroyed) return false;
-	res.write(`data: ${JSON.stringify(payload)}\n\n`);
+	const frame = `data: ${JSON.stringify(payload)}\n\n`;
+	res.write(frame);
 	if (res.writableLength > maxBufferedBytes) {
+		// This was previously silent -- a client falling behind (or a payload
+		// that's grown large enough on its own) got its connection destroyed
+		// with zero server-side trail, making "why did this client disconnect"
+		// undiagnosable after the fact. Logs the frame's own size (not just the
+		// buffered total) since that's what tells a payload-growth cause (e.g.
+		// an accumulating WorldViewModel) apart from a genuinely slow/stalled client.
+		console.error(`[zodiacd] SSE connection destroyed: buffered ${res.writableLength} bytes exceeds the ${maxBufferedBytes}-byte cap (this frame alone was ${frame.length} bytes)`);
 		res.destroy();
 		return false;
 	}
