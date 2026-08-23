@@ -19,6 +19,7 @@ import { createToolGrantRoutes } from "./routes/tool-grant-routes.js";
 import { createVehicleSurfaceRoutes } from "./routes/vehicle-surface-routes.js";
 import { createTerminalSessionRegistry } from "./terminal/terminal-session-registry.js";
 import type { TerminalPtyFactory } from "./terminal/terminal-pty-port.js";
+import { createOriginPolicy } from "./security/origin-policy.js";
 
 export interface CreateZodiacServiceOptions {
 	world: WorldStore;
@@ -51,6 +52,19 @@ export interface CreateZodiacServiceOptions {
 		commands: ReadonlyMap<string, ContributionCommand>;
 		providers: ReadonlyMap<string, ContributionResourceProvider>;
 	};
+	/**
+	 * Exact browser Origin values this daemon answers, e.g.
+	 * ["http://127.0.0.1:5173"] for apps/web's own fixed dev port. Defaults
+	 * to empty -- a request or WebSocket upgrade that carries an Origin
+	 * header at all is refused outright unless it matches exactly. A
+	 * request/upgrade with no Origin header (every real non-browser client)
+	 * is unaffected; see origin-policy.ts's own doc comment for why that
+	 * split is the real signal, not a loophole. cli.ts supplies the real
+	 * default (parse-args.ts's own --allowed-origin/ZODIAC_ALLOWED_ORIGINS);
+	 * an empty default here keeps this constructor's own behavior legible in
+	 * isolation rather than silently baking in one caller's dev convention.
+	 */
+	allowedOrigins?: readonly string[];
 }
 
 export interface ZodiacService {
@@ -84,15 +98,29 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 	const toolGrantRoutes = options.getWorkspaceToolIds ? createToolGrantRoutes(options.getWorkspaceToolIds) : undefined;
 	const vehicleSurfaceRoutes = options.vehicleSurfaces ? createVehicleSurfaceRoutes(options.vehicleSurfaces) : undefined;
 	const contributionRoutes = options.contributions ? createContributionRoutes(options.contributions) : undefined;
+	const originPolicy = createOriginPolicy(options.allowedOrigins ?? []);
 
 	const server = createServer((req, res) => {
-		// A browser-served static build (dist/) is necessarily a different origin
-		// than the daemon -- reflecting the request's own Origin (rather than a
-		// blanket "*") keeps this working with credentials/cookies later without
-		// another change here, and answering every OPTIONS preflight up front
-		// means no individual route below has to know CORS exists at all.
+		// Default-deny, not reflected: an Origin header present but not on the
+		// explicit allowlist is refused before any route runs -- CORS headers
+		// alone never stopped the request body from executing server-side, only
+		// whether a browser page's own script could read the response (see
+		// origin-policy.ts's own doc comment). A request with no Origin header
+		// at all (every real non-browser client) is unaffected.
 		const origin = req.headers.origin;
-		if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+		if (origin !== undefined && !originPolicy.isAllowed(origin)) {
+			res.statusCode = 403;
+			res.setHeader("Content-Type", "application/json");
+			res.end(JSON.stringify({ code: "origin-not-allowed", message: "This origin is not permitted to call zodiacd." }));
+			return;
+		}
+		// Vary: Origin -- this response's own CORS header depends on the
+		// request's Origin, so an intermediary must not serve a cached response
+		// for one allowed origin back to a different one.
+		if (origin !== undefined) {
+			res.setHeader("Access-Control-Allow-Origin", origin);
+			res.setHeader("Vary", "Origin");
+		}
 		res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 		res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 		if (req.method === "OPTIONS") {
@@ -219,6 +247,14 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 	// daemon that never enabled terminals is destroyed outright, the same
 	// refusal posture the request handler's own 404 gives every other route.
 	server.on("upgrade", (req, socket, head) => {
+		// Same default-deny origin check as the plain HTTP handler above --
+		// forged Origin/no-check upgrade is exactly how a browser page could
+		// otherwise attach to a live terminal WebSocket cross-origin.
+		const upgradeOrigin = req.headers.origin;
+		if (upgradeOrigin !== undefined && !originPolicy.isAllowed(upgradeOrigin)) {
+			socket.destroy();
+			return;
+		}
 		const pathname = new URL(req.url ?? "", "http://zodiac.local").pathname;
 		const match = terminalRoutes && webSocketServer ? /^\/api\/terminal\/sessions\/([^/]+)$/.exec(pathname) : null;
 		const sessionId = match?.[1];

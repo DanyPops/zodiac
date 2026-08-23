@@ -307,6 +307,7 @@ async function main(): Promise<void> {
 		port: args.port,
 		host: args.host,
 		fixtureMode: args.fixtureMode,
+		allowedOrigins: args.allowedOrigins,
 		createAgentIntegration: createDaemonAgentIntegration,
 		enableTerminal: args.enableTerminal,
 		createTerminalPty: args.enableTerminal ? createNodePtyFactory() : undefined,

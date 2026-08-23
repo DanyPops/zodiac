@@ -73,10 +73,10 @@ describe("createZodiacService", () => {
 		expect(agentSessions.status).toBe(200);
 	});
 
-	it("sends permissive CORS headers on every response and answers an OPTIONS preflight -- a browser-served static build is necessarily a different origin than the daemon", async () => {
+	it("sends CORS headers for an explicitly allowed Origin and answers its OPTIONS preflight", async () => {
 		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
 		const world = createWorldStore(worldId("zodiac"));
-		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration });
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration, allowedOrigins: ["http://127.0.0.1:5199"] });
 
 		const preflight = await fetch(`${service.baseUrl}/api/world/commands`, {
 			method: "OPTIONS",
@@ -87,7 +87,37 @@ describe("createZodiacService", () => {
 		expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
 
 		const real = await fetch(`${service.baseUrl}/api/world`, { headers: { Origin: "http://127.0.0.1:5199" } });
+		expect(real.status).toBe(200);
 		expect(real.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:5199");
+	});
+
+	it("refuses a request from an Origin outside the allowlist -- default-deny, never reflected", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration, allowedOrigins: ["http://127.0.0.1:5199"] });
+
+		const response = await fetch(`${service.baseUrl}/api/world`, { headers: { Origin: "https://evil.example" } });
+		expect(response.status).toBe(403);
+		expect(response.headers.get("access-control-allow-origin")).toBeNull();
+	});
+
+	it("refuses every browser Origin when no allowlist is configured", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration });
+
+		const response = await fetch(`${service.baseUrl}/api/world`, { headers: { Origin: "http://127.0.0.1:5173" } });
+		expect(response.status).toBe(403);
+	});
+
+	it("still serves a request that sent no Origin header at all, with no allowlist configured -- every real non-browser client", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		service = await createZodiacService({ world, sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: fakeIntegration });
+
+		const response = await fetch(`${service.baseUrl}/api/world`);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("access-control-allow-origin")).toBeNull();
 	});
 
 	it("404s an unrecognized route instead of hanging or crashing", async () => {
@@ -148,6 +178,33 @@ describe("createZodiacService", () => {
 		expect(pty.write).toHaveBeenCalledWith("ls\n");
 
 		client.close();
+	});
+
+	it("refuses a terminal WebSocket upgrade carrying an Origin outside the allowlist, before ever reaching the session", async () => {
+		dir = mkdtempSync(join(tmpdir(), "zodiac-service-"));
+		const world = createWorldStore(worldId("zodiac"));
+		const pty = fakePty();
+		service = await createZodiacService({
+			world,
+			sessionsRoot: join(dir, "sessions"),
+			port: 0,
+			host: "127.0.0.1",
+			createAgentIntegration: fakeIntegration,
+			enableTerminal: true,
+			createTerminalPty: () => pty,
+			allowedOrigins: ["http://127.0.0.1:5199"],
+		});
+
+		const created = await fetch(`${service.baseUrl}/api/terminal/sessions`, { method: "POST" });
+		const { sessionId } = (await created.json()) as { sessionId: string };
+
+		const wsUrl = service.baseUrl.replace("http://", "ws://");
+		const client = new WebSocket(`${wsUrl}/api/terminal/sessions/${sessionId}`, { origin: "https://evil.example" });
+		const outcome = await new Promise<"error" | "open">((resolve) => {
+			client.once("error", () => resolve("error"));
+			client.once("open", () => resolve("open"));
+		});
+		expect(outcome).toBe("error");
 	});
 
 	it("tools route is 404 by default, live when getWorkspaceToolIds is provided", async () => {

@@ -9,10 +9,18 @@ export interface ZodiacdArgs {
 	enableTerminal: boolean;
 	/** Explicit package.json files only; bounded and resolved by the Integration loader. */
 	integrationPackageJsonPaths: readonly string[];
+	/** Exact browser Origin values this daemon answers -- see server.ts's own CreateZodiacServiceOptions.allowedOrigins doc comment. */
+	allowedOrigins: readonly string[];
 }
 
 export const DEFAULT_PORT = 4390;
 export const DEFAULT_HOST = "127.0.0.1";
+// apps/web's own fixed, --strictPort dev server (scripts/check-dev-port.mjs)
+// -- the one real, statically-known Web origin this daemon serves out of the
+// box. A packaged production deployment (a static host serving apps/web's
+// dist/, or a future Electron custom-protocol origin) is not knowable here
+// and must be configured explicitly via --allowed-origin/ZODIAC_ALLOWED_ORIGINS.
+export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["http://127.0.0.1:5173", "http://localhost:5173"];
 
 /**
  * Minimal, dependency-free CLI arg parsing for zodiacd -- --port/--host
@@ -28,6 +36,7 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 	let stateDir: string | undefined;
 	let fixtureMode = env.ZODIAC_FIXTURE_MODE === "1";
 	let enableTerminal = env.ZODIAC_ENABLE_TERMINAL === "1";
+	let allowedOrigins: string[] = env.ZODIAC_ALLOWED_ORIGINS !== undefined ? env.ZODIAC_ALLOWED_ORIGINS.split(",").map((value) => value.trim()).filter((value) => value.length > 0) : [...DEFAULT_ALLOWED_ORIGINS];
 	let integrationPackageJsonPaths: string[] = [];
 	if (env.ZODIAC_INTEGRATION_PACKAGES !== undefined) {
 		let configured: unknown;
@@ -50,7 +59,11 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 		else if (arg === "--state-dir") stateDir = argv[++i];
 		else if (arg === "--fixture-mode") fixtureMode = true;
 		else if (arg === "--enable-terminal") enableTerminal = true;
-		else if (arg === "--integration-package") {
+		else if (arg === "--allowed-origin") {
+			const value = argv[++i];
+			if (!value) throw new Error("zodiacd: --allowed-origin requires an origin, e.g. http://127.0.0.1:5173");
+			allowedOrigins.push(value);
+		} else if (arg === "--integration-package") {
 			const path = argv[++i];
 			if (!path) throw new Error("zodiacd: --integration-package requires a package.json path");
 			integrationPackageJsonPaths.push(path);
@@ -59,5 +72,5 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 
 	if (!Number.isInteger(port) || port < 0) throw new Error(`zodiacd: invalid --port "${port}"`);
 
-	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal, integrationPackageJsonPaths };
+	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal, allowedOrigins, integrationPackageJsonPaths };
 }

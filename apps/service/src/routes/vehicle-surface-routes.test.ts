@@ -31,7 +31,7 @@ afterEach(async () => {
 
 async function start(gateway: VehicleSurfaceGateway): Promise<string> {
 	dir = mkdtempSync(join(tmpdir(), "zodiac-vehicle-surface-routes-"));
-	service = await createZodiacService({ world: createWorldStore(worldId("zodiac")), sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: integration, vehicleSurfaces: gateway });
+	service = await createZodiacService({ world: createWorldStore(worldId("zodiac")), sessionsRoot: join(dir, "sessions"), port: 0, host: "127.0.0.1", createAgentIntegration: integration, vehicleSurfaces: gateway, allowedOrigins: ["http://127.0.0.1:5173", "http://localhost:5173"] });
 	return service.baseUrl;
 }
 

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_HOST, DEFAULT_PORT, parseZodiacdArgs } from "./parse-args.js";
+import { DEFAULT_ALLOWED_ORIGINS, DEFAULT_HOST, DEFAULT_PORT, parseZodiacdArgs } from "./parse-args.js";
 
 describe("parseZodiacdArgs", () => {
 	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env, fixtureMode/enableTerminal false", () => {
 		const args = parseZodiacdArgs([], {});
-		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false, integrationPackageJsonPaths: [] });
+		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false, allowedOrigins: DEFAULT_ALLOWED_ORIGINS, integrationPackageJsonPaths: [] });
+	});
+
+	it("defaults allowedOrigins to apps/web's own fixed dev port, overridable via ZODIAC_ALLOWED_ORIGINS or repeated --allowed-origin flags", () => {
+		expect(parseZodiacdArgs([], { ZODIAC_ALLOWED_ORIGINS: "https://a.example, https://b.example" }).allowedOrigins).toEqual(["https://a.example", "https://b.example"]);
+		expect(parseZodiacdArgs(["--allowed-origin", "https://c.example", "--allowed-origin", "https://d.example"], {}).allowedOrigins).toEqual([...DEFAULT_ALLOWED_ORIGINS, "https://c.example", "https://d.example"]);
+		expect(() => parseZodiacdArgs(["--allowed-origin"], {})).toThrow(/allowed-origin/);
 	});
 
 	it("ZODIAC_ENABLE_TERMINAL=1 or --enable-terminal enables enableTerminal -- off by default, real RCE exposure once reachable off loopback", () => {
