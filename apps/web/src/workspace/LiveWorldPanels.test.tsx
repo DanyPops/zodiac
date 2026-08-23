@@ -39,4 +39,21 @@ describe("LiveWorldPanels", () => {
 		await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/world/commands"), expect.objectContaining({ method: "POST" })));
 		vi.unstubAllGlobals();
 	});
+
+	it("reports the live WorldViewModel via onWorldViewModel once connected, for a caller that needs more than Panel chrome", async () => {
+		vi.stubGlobal("fetch", createFakeDaemon());
+		const onWorldViewModel = vi.fn();
+		render(<LiveWorldPanels baseUrl="http://fake" onPanels={vi.fn()} onApply={vi.fn()} onWorldViewModel={onWorldViewModel} />);
+
+		await waitFor(() => expect(onWorldViewModel).toHaveBeenCalledWith(EMPTY));
+		vi.unstubAllGlobals();
+	});
+
+	it("never calls onWorldViewModel when the caller omits it -- optional, not required", async () => {
+		vi.stubGlobal("fetch", createFakeDaemon());
+		const onApply = vi.fn();
+		render(<LiveWorldPanels baseUrl="http://fake" onPanels={vi.fn()} onApply={onApply} />);
+		await waitFor(() => expect(onApply).toHaveBeenCalled());
+		vi.unstubAllGlobals();
+	});
 });

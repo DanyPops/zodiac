@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { CommandIntent, Panel } from "@zodiac/protocol";
+import type { CommandIntent, Panel, WorldViewModel } from "@zodiac/protocol";
 import { useWorldClient } from "../world/use-world-client.js";
 
 interface LiveWorldPanelsProps {
@@ -7,6 +7,8 @@ interface LiveWorldPanelsProps {
 	readonly onPanels: (panels: readonly Panel[]) => void;
 	/** Called on every render with the current apply() -- a plain ref write on the caller's side, never a state update, so this doesn't cascade into a render loop despite apply's own identity changing every render (useWorldClient's own apply is a fresh closure each call, not memoized). */
 	readonly onApply: (apply: (intent: CommandIntent) => void) => void;
+	/** Optional: the full live WorldViewModel (Workspace catalog, activeWorkspaceId), for a caller that needs more than just Panel chrome -- the Workspace-authority cutover's own read side. Omitted entirely by a caller (like the pre-cutover App.tsx) that only cares about Panel placement. */
+	readonly onWorldViewModel?: (viewModel: WorldViewModel) => void;
 }
 
 /**
@@ -19,11 +21,14 @@ interface LiveWorldPanelsProps {
  * (see applet-slots.ts) already covers the gap before this chunk loads or
  * connects, so there's nothing else for this component to render itself.
  */
-export function LiveWorldPanels({ baseUrl, onPanels, onApply }: LiveWorldPanelsProps): null {
+export function LiveWorldPanels({ baseUrl, onPanels, onApply, onWorldViewModel }: LiveWorldPanelsProps): null {
 	const world = useWorldClient(baseUrl);
 	useEffect(() => {
 		onPanels(world.panels);
 	}, [world.panels, onPanels]);
+	useEffect(() => {
+		onWorldViewModel?.(world.viewModel);
+	}, [world.viewModel, onWorldViewModel]);
 	// No dependency array, deliberately -- useWorldClient's own apply is a
 	// fresh closure every render (never memoized), so "only when it changes"
 	// would mean every render anyway; an effect (not a call during render)

@@ -8,6 +8,14 @@ const SAVED_SURFACE_TEMPLATES_KEY = "zodiac.saved-surface-templates";
 const USER_WORKSPACES_KEY = "zodiac.user-workspaces";
 const SHAPE_KEY = "zodiac.shape";
 const CHAT_PLACEMENT_KEY = "zodiac.chat-placement";
+// A Workspace's glyph is a genuinely per-client rendering preference, not
+// domain identity -- the daemon's own WorkspaceViewModel has no glyph
+// concept at all (confirmed: packages/protocol/src/view-models.ts). Two
+// clients may legitimately show the same daemon Workspace with different
+// glyphs; this key is deliberately separate from USER_WORKSPACES_KEY (whose
+// own id+title catalog role the daemon-authoritative cutover retires).
+const WORKSPACE_GLYPHS_KEY = "zodiac.workspace-glyphs";
+const MAX_WORKSPACE_GLYPHS = 200;
 const MAX_USER_WORKSPACES = 50;
 // A real, no-longer-current localStorage namespace (agent-deck, the product's
 // prior name) an existing user's browser may still hold.
@@ -51,6 +59,9 @@ export interface Preferences {
 	setShapeSettings: (value: ShapeSettings) => void;
 	chatPlacement: () => ChatPlacement;
 	setChatPlacement: (value: ChatPlacement) => void;
+	/** One glyph id per Workspace, keyed by the daemon's own WorkspaceId -- purely cosmetic, never domain identity. Absent for a Workspace this client has never seen a create/rename dialog for (e.g. one another client created); callers fall back to a default glyph. */
+	workspaceGlyphs: () => Readonly<Record<string, string>>;
+	setWorkspaceGlyph: (workspaceId: string, glyphId: string) => void;
 }
 
 export function createPreferences(storage: Storage): Preferences {
@@ -157,7 +168,32 @@ export function createPreferences(storage: Storage): Preferences {
 				// The active in-memory Chat placement remains usable when storage is unavailable.
 			}
 		},
+		workspaceGlyphs() {
+			try {
+				const value: unknown = JSON.parse(storage.getItem(WORKSPACE_GLYPHS_KEY) ?? "{}");
+				return isWorkspaceGlyphMap(value) ? value : {};
+			} catch {
+				return {};
+			}
+		},
+		setWorkspaceGlyph(workspaceId, glyphId) {
+			try {
+				const value: unknown = JSON.parse(storage.getItem(WORKSPACE_GLYPHS_KEY) ?? "{}");
+				const current = isWorkspaceGlyphMap(value) ? value : {};
+				const entries = Object.entries({ ...current, [workspaceId]: glyphId });
+				// Bounded the same way every other preference collection here is -- an unbounded map would grow forever across a long-lived browser profile. Drops the oldest entries (insertion order) once over the cap, keeping the one just written.
+				const bounded = entries.length > MAX_WORKSPACE_GLYPHS ? entries.slice(entries.length - MAX_WORKSPACE_GLYPHS) : entries;
+				storage.setItem(WORKSPACE_GLYPHS_KEY, JSON.stringify(Object.fromEntries(bounded)));
+			} catch {
+				// The active in-memory glyph choice remains usable when storage is unavailable.
+			}
+		},
 	};
+}
+
+function isWorkspaceGlyphMap(value: unknown): value is Record<string, string> {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	return Object.entries(value).every(([key, glyph]) => typeof key === "string" && key.length > 0 && typeof glyph === "string" && glyph.length > 0);
 }
 
 function isSavedSurfaceTemplate(value: unknown): value is SavedSurfaceTemplate {

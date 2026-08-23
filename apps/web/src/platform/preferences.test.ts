@@ -114,3 +114,38 @@ describe("Zodiac preferences", () => {
 		expect(storage.getItem("zodiac.workspace-selection-collapsed")).toBe("true");
 	});
 });
+
+describe("workspaceGlyphs -- a per-client cosmetic preference, not domain identity", () => {
+	it("starts empty for a fresh storage", () => {
+		expect(createPreferences(memoryStorage()).workspaceGlyphs()).toEqual({});
+	});
+
+	it("setWorkspaceGlyph persists a glyph choice keyed by WorkspaceId, readable back", () => {
+		const storage = memoryStorage();
+		const preferences = createPreferences(storage);
+		preferences.setWorkspaceGlyph("ws-1", "rocket");
+		expect(preferences.workspaceGlyphs()).toEqual({ "ws-1": "rocket" });
+		expect(createPreferences(storage).workspaceGlyphs()).toEqual({ "ws-1": "rocket" });
+	});
+
+	it("multiple Workspaces' glyphs coexist, each independently updatable", () => {
+		const storage = memoryStorage();
+		const preferences = createPreferences(storage);
+		preferences.setWorkspaceGlyph("ws-1", "rocket");
+		preferences.setWorkspaceGlyph("ws-2", "bug");
+		preferences.setWorkspaceGlyph("ws-1", "flag");
+		expect(preferences.workspaceGlyphs()).toEqual({ "ws-1": "flag", "ws-2": "bug" });
+	});
+
+	it("ignores malformed stored JSON, falling back to empty rather than throwing", () => {
+		const storage = memoryStorage();
+		storage.setItem("zodiac.workspace-glyphs", "not json");
+		expect(createPreferences(storage).workspaceGlyphs()).toEqual({});
+	});
+
+	it("ignores a non-object or array value, same defensive posture as every other collection here", () => {
+		const storage = memoryStorage();
+		storage.setItem("zodiac.workspace-glyphs", "[1,2,3]");
+		expect(createPreferences(storage).workspaceGlyphs()).toEqual({});
+	});
+});

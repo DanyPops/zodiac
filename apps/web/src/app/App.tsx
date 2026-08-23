@@ -27,7 +27,6 @@ import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
 import { SurfaceTemplatesGallery } from "../workspace/SurfaceTemplatesGallery.js";
 import { useSurfaceTemplates } from "../workspace/useSurfaceTemplates.js";
 import { useWorkspaceListNavigation } from "../workspace/useWorkspaceListNavigation.js";
-import { useUserWorkspaces } from "../workspace/useUserWorkspaces.js";
 import { useWorkspaceRegistry } from "../workspace/useWorkspaceRegistry.js";
 import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog.js";
 import { useWorkspaceSelectionCollapse } from "../workspace/useWorkspaceSelectionCollapse.js";
@@ -36,10 +35,11 @@ import type { DockRulerFrameMark } from "../workspace/dock-ruler.js";
 import type { Rect } from "../platform/geometry.js";
 import { WindowCarousel } from "../workspace/WindowCarousel.js";
 import type { PendingDock } from "../workspace/WindowDockview.js";
-import { DEFAULT_WORKSPACE_GLYPH_ID } from "../workspace/workspace-catalog.js";
+import { DEFAULT_WORKSPACE_GLYPH_ID, resolveWorkspaceGlyph, type WorkspaceCatalogEntry } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 import { WorldShell } from "../workspace/WorldShell.js";
-import type { CommandIntent, Panel } from "@zodiac/protocol";
+import type { CommandIntent, Panel, WorldViewModel } from "@zodiac/protocol";
+import { workspaceId } from "@zodiac/protocol";
 import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
@@ -55,6 +55,29 @@ const LiveDaemonPanel = lazy(() => import("../workspace/LiveDaemonPanel.js").the
 const LiveWorldPanels = lazy(() => import("../workspace/LiveWorldPanels.js").then((module) => ({ default: module.LiveWorldPanels })));
 // Same lazy-bridge discipline as LiveWorldPanels -- NotificationsPill's real data source (useNotifications' own SSE connection) stays out of the entry bundle the same way.
 const LiveNotifications = lazy(() => import("../workspace/LiveNotifications.js").then((module) => ({ default: module.LiveNotifications })));
+
+const EMPTY_WORLD_VIEW_MODEL: WorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
+
+/**
+ * A fresh, collision-safe WorkspaceId. Deliberately not a sequential
+ * counter seeded from any client's own locally-observed state (the
+ * pre-cutover useUserWorkspaces did this against localStorage) -- once
+ * more than one browser tab is a real concurrent writer against one
+ * daemon, a counter-based id only ever avoided collisions under a
+ * single-writer assumption that no longer holds. crypto.randomUUID()
+ * makes the collision probability negligible regardless of how many
+ * clients are creating Workspaces at once, at the cost of a less
+ * human-typeable id -- an acceptable trade since no UI surface displays a
+ * raw WorkspaceId to the user.
+ */
+function freshWorkspaceId(): ReturnType<typeof workspaceId> {
+	return workspaceId(`workspace-${crypto.randomUUID()}`);
+}
+
+/** True once the daemon's own live view model lists this WorkspaceId -- the confirmed half of the pending/confirmed reconciliation catalog and pendingWorkspaces' own pruning effect share. */
+function isConfirmedInViewModel(viewModel: WorldViewModel, id: string): boolean {
+	return viewModel.workspaces.some((entry) => entry.id === id);
+}
 
 export function App(): React.JSX.Element {
 	const { zodiacdBaseUrl, conversationClient, piClient } = useRuntimeClientBundle();
@@ -85,14 +108,71 @@ export function App(): React.JSX.Element {
 	// torn down -- see usePiChatSessions's own doc comment for why `chatFor`
 	// is a plain function call here, not another hook.
 	const piChatSessions = usePiChatSessions(piClient);
-	const userWorkspaces = useUserWorkspaces(preferences);
+	// The daemon's own live WorldViewModel is this app's real Workspace-catalog
+	// authority (create/rename/remove/select all dispatch CommandIntents and
+	// read back from here) -- reported by the lazy LiveWorldPanels bridge below
+	// (see its own doc comment for why this isn't a direct useWorldClient()
+	// call: that regressed entryJs from 151.4kB to 168.2kB when tried before).
+	// Starts empty until that chunk loads and connects, the same fallback
+	// policy useWorldClient itself establishes.
+	const [liveWorldViewModel, setLiveWorldViewModel] = useState<WorldViewModel>(EMPTY_WORLD_VIEW_MODEL);
+	// A Workspace's glyph is a genuinely per-client cosmetic preference (see
+	// preferences.ts's own WORKSPACE_GLYPHS_KEY doc comment) -- the daemon's
+	// WorkspaceViewModel has no glyph field at all. Read once per render, not
+	// memoized against a dependency array: setWorkspaceGlyph's own writes don't
+	// trigger a re-render by themselves (plain localStorage), so a stale memo
+	// would show yesterday's glyph until something else re-rendered this tree.
+	const workspaceGlyphs = preferences.workspaceGlyphs();
+	// A just-dispatched workspace.create's own optimistic catalog entry, kept
+	// only until the daemon's own round trip confirms it (liveWorldViewModel
+	// actually lists the id) -- the same optimistic-then-reconciled shape
+	// dockTemplate's own pendingDock already established. Without this, a
+	// freshly created Workspace's id would be selected locally before the
+	// catalog contains it, and useWorkspaceRegistry's own deliberate
+	// unknown-id guard would throw -- confirmed live (Uncaught Error:
+	// useWorkspaceRegistry: no Workspace registered for id ...) before this
+	// was added.
+	const [pendingWorkspaces, setPendingWorkspaces] = useState<readonly WorkspaceCatalogEntry[]>([]);
 	// Zodiac starts with zero Workspaces -- WORKSPACE_CATALOG's fixed demo
 	// entries (Bug/Metrics/Chat/PRs) are no longer merged in by default; only
-	// real, persisted, user-created Workspaces populate the catalog. The first
-	// one is created automatically the moment the user sends a first prompt
-	// with none active -- see sendMessage() below.
-	const catalog = useMemo(() => userWorkspaces.entries, [userWorkspaces.entries]);
+	// real Workspaces the daemon's own World holds populate the catalog. The
+	// first one is created automatically the moment the user sends a first
+	// prompt with none active -- see sendMessage() below.
+	const catalog: readonly WorkspaceCatalogEntry[] = useMemo(() => {
+		const confirmed = liveWorldViewModel.workspaces.map((entry) => ({ id: entry.id, title: entry.title, icon: resolveWorkspaceGlyph(workspaceGlyphs[entry.id] ?? DEFAULT_WORKSPACE_GLYPH_ID) }));
+		const stillPending = pendingWorkspaces.filter((pending) => !isConfirmedInViewModel(liveWorldViewModel, pending.id));
+		return [...confirmed, ...stillPending];
+	}, [liveWorldViewModel, workspaceGlyphs, pendingWorkspaces]);
+	// Once the daemon's own round trip confirms a pending id, drop it from
+	// state outright -- not just filtered at render time above. Leaving a
+	// confirmed entry sitting in `pendingWorkspaces` forever would zombie it
+	// back into `catalog` the moment that same id is later genuinely removed
+	// (confirmed.some would then stop matching it) -- confirmed live: this
+	// was exactly why a removed Workspace kept reappearing before this effect
+	// was added.
+	useEffect(() => {
+		setPendingWorkspaces((current) => {
+			const next = current.filter((pending) => !isConfirmedInViewModel(liveWorldViewModel, pending.id));
+			return next.length === current.length ? current : next;
+		});
+	}, [liveWorldViewModel]);
 	const workspace = useWorkspaceRegistry(catalog, (id, title) => createWorkspace({ id, title }), extensionHost);
+	// Keeps useWorkspaceRegistry's own local activeWorkspaceId (which still
+	// drives which Workspace's local Window/Surface mock state renders --
+	// that cutover is the Window-carousel/Surface-dock sibling tasks' own job,
+	// not this one) in step with the daemon's real selection, including a
+	// remote client's own workspace.select landing here. Optimistic local
+	// selectWorkspace calls (sendMessage's auto-create, CreateWorkspaceDialog,
+	// the selectWorkspace command below) already update this immediately;
+	// this effect is what reconciles a *remote* change or confirms this
+	// client's own once the daemon's broadcast round-trips.
+	useEffect(() => {
+		const daemonActiveId = liveWorldViewModel.activeWorkspaceId;
+		if (daemonActiveId && daemonActiveId !== workspace.activeWorkspaceId) workspace.selectWorkspace(daemonActiveId);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- workspace.selectWorkspace is a fresh closure every render (useWorkspaceRegistry never memoizes it); depending on it would re-run this effect every render regardless of whether the daemon's own activeWorkspaceId actually changed.
+	}, [liveWorldViewModel.activeWorkspaceId]);
+
+
 	// The one production LLM-naming adapter: a short-lived Pi session used
 	// purely to answer the naming prompt (see workspace-title.ts). piClient
 	// comes from the injected runtime bundle (useRuntimeClientBundle above),
@@ -118,16 +198,29 @@ export function App(): React.JSX.Element {
 	// Workspace's own title is read. Not routed through the command registry:
 	// unlike selectWorkspace/etc., this always carries a dynamic, freshly-typed
 	// string value, not a fixed keybinding-triggered arg.
+	// A ref, not state -- useWorldClient's own apply() has no stable identity
+	// to depend on (LiveWorldPanels reports a fresh closure every render), so
+	// a state update here would cascade into a render loop; see
+	// LiveWorldPanels's own doc comment. Declared here (moved up from its own
+	// original panel.resize-only call site below) so the Workspace-dispatch
+	// functions below can use it too.
+	const applyRef = useRef<(intent: CommandIntent) => void>(() => {});
+	/** Dispatches workspace.rename to the daemon -- the sole authority for a Workspace's title once this cutover lands; no more local-registry mirror to keep in sync. */
 	function renameWorkspace(id: string, title: string): void {
-		userWorkspaces.renameWorkspace(id, title);
-		workspace.renameWorkspace(id, title);
+		applyRef.current({ type: "workspace.rename", workspaceId: workspaceId(id), title });
 	}
-	// Same two-layer split as renameWorkspace above: the persisted catalog
-	// entry (userWorkspaces) and the live in-memory Workspace state
-	// (useWorkspaceRegistry) each own their own half and must drop it together.
+	/** Dispatches workspace.remove to the daemon. The local useWorkspaceRegistry's own Window/Surface mock state for this id is cleaned up separately once liveWorldViewModel.workspaces no longer lists it (that reconciliation is the Window-carousel/Surface-dock sibling tasks' own job) -- calling both here would race the daemon's own authoritative removal. */
 	function removeWorkspace(id: string): void {
-		userWorkspaces.removeWorkspace(id);
-		workspace.removeWorkspace(id);
+		applyRef.current({ type: "workspace.remove", workspaceId: workspaceId(id) });
+	}
+	/** Creates a Workspace via daemon dispatch and optimistically selects it locally (useWorkspaceRegistry's own documented fallback already covers the transient window before liveWorldViewModel catches up -- see its own doc comment). Persists the chosen glyph locally (cosmetic only, see preferences.ts). Returns the fresh id so a caller can act on it immediately (name it from an LLM prompt, start a Chat session), matching the synchronous feel the pre-cutover local-only creation had. */
+	function createWorkspaceViaDaemon(title: string, glyphId: string): string {
+		const id = freshWorkspaceId();
+		applyRef.current({ type: "workspace.create", workspaceId: id, title });
+		preferences.setWorkspaceGlyph(id, glyphId);
+		setPendingWorkspaces((current) => [...current, { id, title, icon: resolveWorkspaceGlyph(glyphId) }]);
+		workspace.selectWorkspace(id);
+		return id;
 	}
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
@@ -199,11 +292,6 @@ export function App(): React.JSX.Element {
 	// LiveNotifications bridge below loads and connects -- see its own doc comment.
 	const [livePendingApprovals, setLivePendingApprovals] = useState<readonly VehicleApprovalRequest[]>([]);
 	const notificationActionsRef = useRef<{ approve: (requestId: string) => void; deny: (requestId: string) => void }>({ approve: () => {}, deny: () => {} });
-	// A ref, not state -- LiveWorldPanels calls onApply on every one of its own
-	// renders (useWorldClient's own apply() has no stable identity to depend
-	// on), so a state update here would cascade into a render loop; see
-	// LiveWorldPanels's own doc comment.
-	const applyRef = useRef<(intent: CommandIntent) => void>(() => {});
 	const leftAppletId = appletIdForLocation("left", livePanels);
 	const rightAppletId = appletIdForLocation("right", livePanels);
 	// Drag-resize-with-snapping's own dispatch: keeps the local collapse
@@ -272,8 +360,10 @@ export function App(): React.JSX.Element {
 			selectNextWorkspace: workspaceNavigation.focusNext,
 			selectFirstWorkspace: workspaceNavigation.focusFirst,
 			selectLastWorkspace: workspaceNavigation.focusLast,
-			selectWorkspace(workspaceId) {
-				if (typeof workspaceId === "string") workspace.selectWorkspace(workspaceId);
+			selectWorkspace(id) {
+				if (typeof id !== "string") return;
+				workspace.selectWorkspace(id);
+				applyRef.current({ type: "workspace.select", workspaceId: workspaceId(id) });
 			},
 			cycleTheme: theme.cycleTheme,
 			sendMessage() {
@@ -294,9 +384,7 @@ export function App(): React.JSX.Element {
 				// (workspace-title.ts) replaces the heuristic one in the background
 				// once it resolves.
 				const heuristicTitle = provisionalTitleFromText(text) ?? "New Workspace";
-				const id = userWorkspaces.createWorkspace(heuristicTitle, DEFAULT_WORKSPACE_GLYPH_ID);
-				if (!id) return;
-				workspace.selectWorkspace(id);
+				const id = createWorkspaceViaDaemon(heuristicTitle, DEFAULT_WORKSPACE_GLYPH_ID);
 				piChatSessions.chatFor(id, { onToolCall: visualCueClientAction }).sendMessage(text);
 				setDraft("");
 				void titleFromPrompt(text).then((llmTitle) => {
@@ -332,7 +420,7 @@ export function App(): React.JSX.Element {
 			<div className={cn("relative flex h-dvh min-h-[32rem] gap-2 overflow-hidden p-2", PAGE_BG)} data-workspace-id={workspace.workspace?.id} data-template-dragging={templateDragging}>
 				<div className="min-w-0 flex-1">
 				<Suspense fallback={null}>
-					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} />
+					<LiveWorldPanels baseUrl={zodiacdBaseUrl} onPanels={setLivePanels} onApply={(apply) => { applyRef.current = apply; }} onWorldViewModel={setLiveWorldViewModel} />
 					<LiveNotifications baseUrl={zodiacdBaseUrl} onPending={setLivePendingApprovals} onActions={(actions) => { notificationActionsRef.current = actions; }} />
 				</Suspense>
 				<WorldShell panels={livePanels} left={leftAppletId && appletRenderers[leftAppletId]?.()} right={rightAppletId && appletRenderers[rightAppletId]?.()}>
@@ -451,8 +539,7 @@ export function App(): React.JSX.Element {
 					open={creatingWorkspace}
 					onClose={() => setCreatingWorkspace(false)}
 					onCreate={(title, glyphId) => {
-						const id = userWorkspaces.createWorkspace(title, glyphId);
-						if (id) workspace.selectWorkspace(id);
+						createWorkspaceViaDaemon(title, glyphId);
 						setCreatingWorkspace(false);
 					}}
 				/>
