@@ -1,10 +1,45 @@
+import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { ZODIACD_PORT } from "../playwright.config.js";
 
 const ZODIACD_BASE_URL = `http://127.0.0.1:${ZODIACD_PORT}`;
 
+/**
+ * Same real POST /api/world/commands endpoint live-world-tiles.spec.ts's
+ * own precedent uses.
+ */
+async function postCommand(intent: Record<string, unknown>): Promise<void> {
+	const response = await fetch(`${ZODIACD_BASE_URL}/api/world/commands`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ intent }),
+	});
+	if (!response.ok) throw new Error(`postCommand(${String(intent["type"])}) rejected: ${response.status} ${await response.text()}`);
+}
+
 test.beforeEach(async ({ page }) => {
+	// Explicitly create+activate a fresh Workspace for this test rather than
+	// relying on sendMessage()'s own auto-create heuristic below -- that only
+	// fires for the World's very first message, ever: App.tsx derives
+	// `piChat` straight from `activeWorkspaceId`, which reconciles from the
+	// daemon's own (shared, cross-test) WorldViewModel on every fresh page
+	// load the moment *any* Workspace exists anywhere in this World, well
+	// before the composer is ever touched. Confirmed live: every test in this
+	// file after the first was silently continuing whichever Workspace the
+	// previous test left active, not getting its own (task 600b6363's own
+	// second, deeper finding, distinct from workspace.create's own
+	// activate flag fix that made *which* Workspace that is at least
+	// deterministic instead of always reverting to the very first one).
+	// A unique title too, not just a unique id -- the catalog now genuinely
+	// accumulates one real Workspace per test for the rest of this file's own
+	// run (this is the correct outcome of fixing per-test isolation, not a
+	// regression); a shared generic title would make any test filtering the
+	// catalog by title text (e.g. "keyboard-only flow..." below) match every
+	// prior test's own leftover entry too.
+	const sliceTestWorkspaceId = randomUUID();
+	await postCommand({ type: "workspace.create", workspaceId: `slice-test-${sliceTestWorkspaceId}`, title: `Slice Test Workspace ${sliceTestWorkspaceId}`, activate: true });
+
 	await page.goto("/");
 	await expect(page.getByRole("heading", { name: "Zodiac", exact: true })).toBeVisible();
 	// Reload switches the active Chat conversation from the live "start" exchange just sent

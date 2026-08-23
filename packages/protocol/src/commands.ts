@@ -21,7 +21,18 @@ const commandIdField = { commandId: CommandIdSchema.optional() };
  * expected to do so exhaustively (see world/store.ts's `apply`).
  */
 export const CommandIntentSchema = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("workspace.create"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1), ...commandIdField }),
+	// activate is optional and false by default, matching create's own
+	// pre-existing single-request behavior (only the World's very first-ever
+	// Workspace auto-activates -- see world/store.ts) -- explicit opt-in so a
+	// creating client can claim its own fresh Workspace as active without
+	// yanking every other connected client's own view (a real multi-writer
+	// concern, not an accident). Atomic in the same request as create itself
+	// rather than a separate follow-up workspace.select: two independent
+	// requests can race a client-side event like a page navigation between
+	// them (confirmed live -- see task 600b6363), losing the second one even
+	// with keepalive, since keepalive only protects a request already in
+	// flight, not the JS callback that would still need to schedule it.
+	z.object({ type: z.literal("workspace.create"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1), activate: z.boolean().optional(), ...commandIdField }),
 	z.object({ type: z.literal("workspace.rename"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1), ...commandIdField }),
 	z.object({ type: z.literal("workspace.remove"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("workspace.select"), workspaceId: WorkspaceIdSchema, ...commandIdField }),

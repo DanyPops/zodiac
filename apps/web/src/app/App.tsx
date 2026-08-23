@@ -267,7 +267,18 @@ export function App(): React.JSX.Element {
 	function createWorkspaceViaDaemon(title: string, glyphId: string): string {
 		const id = freshWorkspaceId();
 		const commandIdForCreate = freshCommandId();
-		applyRef.current({ type: "workspace.create", workspaceId: id, title, commandId: commandIdForCreate });
+		// activate: true -- every call site here means "start using this
+		// Workspace right now" (an explicit "New Workspace" click, or
+		// sendMessage()'s auto-create), never a background create on someone
+		// else's behalf. Without it, workspace.create only auto-activates the
+		// daemon's own WorldViewModel.activeWorkspaceId for the World's very
+		// first-ever Workspace (see store.ts); a separate follow-up
+		// workspace.select used to be needed for every later one, but two
+		// independent requests can race a client-side event like a page
+		// navigation between them and lose the second one even with keepalive
+		// (confirmed live -- task 600b6363's own real root cause). activate
+		// makes create-and-select atomic in the one request that matters.
+		applyRef.current({ type: "workspace.create", workspaceId: id, title, activate: true, commandId: commandIdForCreate });
 		preferences.setWorkspaceGlyph(id, glyphId);
 		setPendingWorkspaces((current) => [...current, { id, title, icon: resolveWorkspaceGlyph(glyphId), commandId: commandIdForCreate }]);
 		selectWorkspaceLocally(id);

@@ -280,13 +280,14 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return workspace;
 	}
 
-	function createWorkspace(workspaceId: WorkspaceId, title: string, acknowledgedCommandId?: CommandId): Workspace {
+	/** `activate`: explicit opt-in (see CommandIntentSchema's own doc comment on workspace.create) -- the first-ever Workspace in a World's lifetime always auto-activates regardless, matching worldViewModel's own longstanding "first created" fallback; every later create only activates if the caller asks. */
+	function createWorkspace(workspaceId: WorkspaceId, title: string, acknowledgedCommandId?: CommandId, activate?: boolean): Workspace {
 		if (workspaces.has(workspaceId)) throw new Error(`World "${worldId}" already has a Workspace "${workspaceId}"`);
 		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: "Window 0" };
 		tileByWindow.set(window.id, null);
 		const workspace: Workspace = { id: workspaceId, title, windows: [window], surfaces: [], activeWindowIndex: 0 };
 		workspaces.set(workspaceId, workspace);
-		if (activeWorkspaceId === null) activeWorkspaceId = workspaceId; // first-ever Workspace becomes active by default, same as worldViewModel's old "first created" fallback.
+		if (activeWorkspaceId === null || activate) activeWorkspaceId = workspaceId;
 		emitChange(acknowledgedCommandId);
 		return workspace;
 	}
@@ -489,7 +490,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	function apply(intent: CommandIntent): ApplyOutcome {
 		switch (intent.type) {
 			case "workspace.create":
-				createWorkspace(intent.workspaceId, intent.title, intent.commandId);
+				createWorkspace(intent.workspaceId, intent.title, intent.commandId, intent.activate);
 				return { commandId: intent.commandId };
 			case "surface.dock": {
 				if (intent.windowId !== undefined) {

@@ -858,6 +858,31 @@ describe("workspace.rename/remove/select -- the daemon-authoritative Workspace c
 		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("second"));
 	});
 
+	// Regression for task 600b6363's own real root cause: a client dispatching
+	// workspace.create then a separate workspace.select as two independent
+	// requests can lose the second one to a page navigation racing between
+	// them (confirmed live) -- activate makes create-and-select atomic in one
+	// request instead.
+	it("workspace.create with activate: true makes the new Workspace active immediately, even though it isn't the World's first-ever one", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.apply({ type: "workspace.create", workspaceId: workspaceId("first"), title: "First" });
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("first"));
+		store.apply({ type: "workspace.create", workspaceId: workspaceId("second"), title: "Second", activate: true });
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("second"));
+	});
+
+	// The pre-existing default (no other connected client should have its own
+	// view yanked just because someone else created a Workspace) stays intact
+	// when activate is omitted -- this is the exact scenario the two
+	// "second Workspace" tests immediately above already characterize; this
+	// test just makes the *contrast* with activate: true explicit in one place.
+	it("workspace.create without activate leaves the World's own activeWorkspaceId unchanged, once a first Workspace already exists", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.apply({ type: "workspace.create", workspaceId: workspaceId("first"), title: "First" });
+		store.apply({ type: "workspace.create", workspaceId: workspaceId("second"), title: "Second" });
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("first"));
+	});
+
 	it("workspace.select throws for an unknown Workspace", () => {
 		const store = createWorldStore(worldId("w1"));
 		store.createWorkspace(workspaceId("ws"), "WS");

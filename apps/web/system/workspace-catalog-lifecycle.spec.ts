@@ -100,3 +100,44 @@ test("removing a Workspace requires confirmation, then drops it from the catalog
 
 	await expect(page.getByRole("button", { name: "Disposable", exact: true })).toHaveCount(0, { timeout: 15000 }); // see this file's own header note on the disclosed intermittent timing sensitivity
 });
+
+/**
+ * Regression for task 600b6363's own real root cause: createWorkspaceViaDaemon
+ * (App.tsx) only ever called selectWorkspaceLocally -- a client-only
+ * optimistic selection -- never dispatching workspace.select to the daemon.
+ * A freshly created Workspace therefore never became the daemon's own
+ * WorldViewModel.activeWorkspaceId (store.ts only auto-activates the very
+ * first-ever Workspace in a World's lifetime); a page reload wipes the local
+ * override and the reconciliation effect falls back to whatever that
+ * first-ever Workspace was, silently reverting away from the one this test
+ * (or user) actually just created and meant to keep using. This is the exact
+ * mechanism that made workspace-slice.spec.ts's own beforeEach (create then
+ * reload, every one of its 31 tests) leave every test actually operating on
+ * test #1's own single, ever-accumulating Workspace instead of its own fresh
+ * one -- not an SSE payload or command-rejection issue (see that task's own
+ * updated body for what was already ruled out).
+ */
+test("a freshly created Workspace stays active across a reload, not reverting to an earlier one", async ({ page }) => {
+	// A prior Workspace must already exist and be the daemon's own
+	// first-ever-created (permanently "active by default") one, or this
+	// regression can't actually manifest -- this file's own preceding tests
+	// already guarantee that shared daemon has at least one from an earlier
+	// test, but create one explicitly here too so this test is self-sufficient
+	// even run in isolation.
+	await page.getByRole("button", { name: "Create a new Workspace" }).click();
+	await page.getByRole("dialog").getByLabel("Workspace title").fill("Earlier Workspace");
+	await page.getByRole("dialog").getByRole("button", { name: "Create" }).click();
+	await expect(page.getByRole("dialog")).toBeHidden();
+
+	await page.getByRole("button", { name: "Create a new Workspace" }).click();
+	await page.getByRole("dialog").getByLabel("Workspace title").fill("Should Stay Active");
+	await page.getByRole("dialog").getByRole("button", { name: "Create" }).click();
+	await expect(page.getByRole("dialog")).toBeHidden();
+
+	const created = page.getByRole("button", { name: "Should Stay Active", exact: true });
+	await expect(created).toHaveAttribute("aria-current", "page");
+
+	await page.reload();
+
+	await expect(page.getByRole("button", { name: "Should Stay Active", exact: true })).toHaveAttribute("aria-current", "page");
+});
