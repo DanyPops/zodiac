@@ -218,6 +218,13 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		for (const surface of workspace.surfaces) surfaceById.set(surface.id, { workspaceId: workspace.id, surface });
 	}
 	const changeListeners = new Set<(change: WorldChange) => void>();
+	// Explicit selection state -- distinct from worldViewModel's old
+	// "always the first created Workspace" fallback, which had no real
+	// selection concept at all (there was no workspace.select intent yet).
+	// Defaults to the first Workspace this store already holds (preserving
+	// prior behavior for a store seeded with existing Workspaces); becomes
+	// null only once every Workspace is removed.
+	let activeWorkspaceId: WorkspaceId | null = [...initialWorkspaces.keys()][0] ?? null;
 	const panels = new Map((panelOptions.panels ?? []).map((panel) => [panel.id, panel]));
 	const getApplet = panelOptions.getApplet ?? (() => undefined);
 	const getIntegration = panelOptions.getIntegration ?? (() => undefined);
@@ -279,6 +286,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		tileByWindow.set(window.id, null);
 		const workspace: Workspace = { id: workspaceId, title, windows: [window], surfaces: [], activeWindowIndex: 0 };
 		workspaces.set(workspaceId, workspace);
+		if (activeWorkspaceId === null) activeWorkspaceId = workspaceId; // first-ever Workspace becomes active by default, same as worldViewModel's old "first created" fallback.
 		emitChange(acknowledgedCommandId);
 		return workspace;
 	}
@@ -316,6 +324,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, workspace);
 		for (const surface of surfaces) surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(window.id, tile);
+		if (activeWorkspaceId === null) activeWorkspaceId = workspaceId;
 		emitChange();
 		return { ok: true, value: workspace };
 	}
@@ -410,6 +419,52 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, activeWindowIndex });
 	}
 
+	function renameWorkspace(workspaceId: WorkspaceId, title: string, acknowledgedCommandId?: CommandId): void {
+		const workspace = requireWorkspace(workspaceId);
+		workspaces.set(workspaceId, { ...workspace, title });
+		emitChange(acknowledgedCommandId);
+	}
+
+	/** Drops a Workspace and every Window/Surface it owns. If it was the active one, falls back to another remaining Workspace (insertion order), or null once none remain -- the same "no Workspace is authoritatively active" state a fresh, empty World starts in. */
+	function removeWorkspace(workspaceId: WorkspaceId, acknowledgedCommandId?: CommandId): void {
+		const workspace = requireWorkspace(workspaceId);
+		for (const surface of workspace.surfaces) surfaceById.delete(surface.id);
+		for (const window of workspace.windows) tileByWindow.delete(window.id);
+		workspaces.delete(workspaceId);
+		if (activeWorkspaceId === workspaceId) activeWorkspaceId = [...workspaces.keys()][0] ?? null;
+		emitChange(acknowledgedCommandId);
+	}
+
+	function selectWorkspace(workspaceId: WorkspaceId, acknowledgedCommandId?: CommandId): void {
+		requireWorkspace(workspaceId);
+		activeWorkspaceId = workspaceId;
+		emitChange(acknowledgedCommandId);
+	}
+
+	function selectWindow(workspaceId: WorkspaceId, targetWindowId: WindowId, acknowledgedCommandId?: CommandId): void {
+		const workspace = requireWorkspace(workspaceId);
+		const index = workspace.windows.findIndex((window) => window.id === targetWindowId);
+		if (index < 0) throw new Error(`Workspace "${workspaceId}" has no Window "${targetWindowId}"`);
+		workspaces.set(workspaceId, { ...workspace, activeWindowIndex: index });
+		emitChange(acknowledgedCommandId);
+	}
+
+	/** Appends a new, empty Window at the end and makes it active -- mirrors model.ts's own addWindow. Not the ephemeral, auto-pruned kind window.scroll's own CommandIntent doc comment describes; that behavior isn't ported to the daemon domain model yet. */
+	function addWindow(workspaceId: WorkspaceId, acknowledgedCommandId?: CommandId): void {
+		const workspace = requireWorkspace(workspaceId);
+		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: `Window ${workspace.windows.length}` };
+		tileByWindow.set(window.id, null);
+		workspaces.set(workspaceId, { ...workspace, windows: [...workspace.windows, window], activeWindowIndex: workspace.windows.length });
+		emitChange(acknowledgedCommandId);
+	}
+
+	function renameWindow(workspaceId: WorkspaceId, targetWindowId: WindowId, title: string, acknowledgedCommandId?: CommandId): void {
+		const workspace = requireWorkspace(workspaceId);
+		if (!workspace.windows.some((window) => window.id === targetWindowId)) throw new Error(`Workspace "${workspaceId}" has no Window "${targetWindowId}"`);
+		workspaces.set(workspaceId, { ...workspace, windows: workspace.windows.map((window) => (window.id === targetWindowId ? { ...window, title } : window)) });
+		emitChange(acknowledgedCommandId);
+	}
+
 	function movePanel(targetPanelId: PanelId, placement: Extract<CommandIntent, { type: "panel.move" }>["placement"], acknowledgedCommandId?: CommandId): void {
 		const panel = panels.get(targetPanelId);
 		if (!panel) throw new Error(`World "${worldId}" has no Panel "${targetPanelId}"`);
@@ -456,6 +511,28 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				moveActiveWindow(intent.workspaceId, -1);
 				emitChange(intent.commandId);
 				return { commandId: intent.commandId };
+			case "workspace.rename":
+				renameWorkspace(intent.workspaceId, intent.title, intent.commandId);
+				return { commandId: intent.commandId };
+			case "workspace.remove":
+				removeWorkspace(intent.workspaceId, intent.commandId);
+				return { commandId: intent.commandId };
+			case "workspace.select":
+				selectWorkspace(intent.workspaceId, intent.commandId);
+				return { commandId: intent.commandId };
+			case "window.select":
+				selectWindow(intent.workspaceId, intent.windowId, intent.commandId);
+				return { commandId: intent.commandId };
+			case "window.add":
+				addWindow(intent.workspaceId, intent.commandId);
+				return { commandId: intent.commandId };
+			case "window.scroll":
+				moveActiveWindow(intent.workspaceId, intent.direction);
+				emitChange(intent.commandId);
+				return { commandId: intent.commandId };
+			case "window.rename":
+				renameWindow(intent.workspaceId, intent.windowId, intent.title, intent.commandId);
+				return { commandId: intent.commandId };
 			case "panel.move":
 				movePanel(intent.panelId, intent.placement, intent.commandId);
 				return { commandId: intent.commandId };
@@ -500,7 +577,10 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 	function worldViewModel(): WorldViewModel {
 		const projected = [...workspaces.keys()].map(workspaceViewModel).filter((workspace): workspace is WorkspaceViewModel => workspace !== undefined);
 		const first = projected[0];
-		return first ? { state: "ready", workspaces: projected, activeWorkspaceId: first.id } : { state: "empty", workspaces: [], activeWorkspaceId: null };
+		if (!first) return { state: "empty", workspaces: [], activeWorkspaceId: null };
+		// activeWorkspaceId may be stale only if something bypassed removeWorkspace's own cleanup -- fall back to the first projected Workspace rather than project a dangling id.
+		const resolvedActiveId = activeWorkspaceId !== null && projected.some((workspace) => workspace.id === activeWorkspaceId) ? activeWorkspaceId : first.id;
+		return { state: "ready", workspaces: projected, activeWorkspaceId: resolvedActiveId };
 	}
 
 	return {

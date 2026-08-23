@@ -143,3 +143,57 @@ describe("CommandIntentSchema version/capability negotiation", () => {
 		expect(isSupportedCommandIntent(resize, COMMAND_INTENT_PROTOCOL_VERSION)).toBe(true);
 	});
 });
+
+describe("Workspace/Window lifecycle CommandIntent variants (rename/remove/select/window.select/add/scroll/rename)", () => {
+	it("accepts a well-formed workspace.rename intent", () => {
+		expect(CommandIntentSchema.safeParse({ type: "workspace.rename", workspaceId: "w1", title: "Deploys" }).success).toBe(true);
+	});
+
+	it("rejects workspace.rename with a blank title", () => {
+		expect(CommandIntentSchema.safeParse({ type: "workspace.rename", workspaceId: "w1", title: "" }).success).toBe(false);
+	});
+
+	it("accepts a well-formed workspace.remove intent, with no other fields required", () => {
+		expect(CommandIntentSchema.safeParse({ type: "workspace.remove", workspaceId: "w1" }).success).toBe(true);
+	});
+
+	it("accepts a well-formed workspace.select intent", () => {
+		expect(CommandIntentSchema.safeParse({ type: "workspace.select", workspaceId: "w1" }).success).toBe(true);
+	});
+
+	it("accepts a well-formed window.select intent", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.select", workspaceId: "w1", windowId: "window-0" }).success).toBe(true);
+	});
+
+	it("rejects window.select missing windowId", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.select", workspaceId: "w1" }).success).toBe(false);
+	});
+
+	it("accepts a well-formed window.add intent, with no other fields required", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.add", workspaceId: "w1" }).success).toBe(true);
+	});
+
+	it("accepts window.scroll with direction 1 or -1", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.scroll", workspaceId: "w1", direction: 1 }).success).toBe(true);
+		expect(CommandIntentSchema.safeParse({ type: "window.scroll", workspaceId: "w1", direction: -1 }).success).toBe(true);
+	});
+
+	it("rejects window.scroll with a direction other than 1 or -1", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.scroll", workspaceId: "w1", direction: 2 }).success).toBe(false);
+	});
+
+	it("accepts a well-formed window.rename intent", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.rename", workspaceId: "w1", windowId: "window-0", title: "Renamed" }).success).toBe(true);
+	});
+
+	it("rejects window.rename with a blank title", () => {
+		expect(CommandIntentSchema.safeParse({ type: "window.rename", workspaceId: "w1", windowId: "window-0", title: "" }).success).toBe(false);
+	});
+
+	it("every new variant records COMMAND_INTENT_MIN_VERSION 4, this protocol version's own bump", () => {
+		for (const type of ["workspace.rename", "workspace.remove", "workspace.select", "window.select", "window.add", "window.scroll", "window.rename"] as const) {
+			expect(COMMAND_INTENT_MIN_VERSION[type]).toBe(4);
+		}
+		expect(COMMAND_INTENT_PROTOCOL_VERSION).toBe(4);
+	});
+});

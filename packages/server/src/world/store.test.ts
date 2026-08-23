@@ -810,3 +810,121 @@ describe("integration.invoke", () => {
 		expect(contexts).toEqual([{ presentedCapability: "cap-abc" }, { presentedCapability: undefined }]);
 	});
 });
+
+describe("workspace.rename/remove/select -- the daemon-authoritative Workspace catalog lifecycle", () => {
+	it("workspace.rename updates the title and echoes commandId", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "Original");
+		const outcome = store.apply({ type: "workspace.rename", workspaceId: workspaceId("ws"), title: "Renamed", commandId: commandId("cmd-1") });
+		expect(outcome).toEqual({ commandId: commandId("cmd-1") });
+		expect(store.getWorkspace(workspaceId("ws"))?.title).toBe("Renamed");
+	});
+
+	it("workspace.rename throws for an unknown Workspace, same contract as every other Workspace-scoped intent", () => {
+		const store = createWorldStore(worldId("w1"));
+		expect(() => store.apply({ type: "workspace.rename", workspaceId: workspaceId("ghost"), title: "X" })).toThrow();
+	});
+
+	it("workspace.remove drops the Workspace and every Surface/Window it owned", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity", surfaceId("s1"));
+		store.apply({ type: "workspace.remove", workspaceId: workspaceId("ws") });
+		expect(store.getWorkspace(workspaceId("ws"))).toBeUndefined();
+		expect(store.worldViewModel()).toEqual({ state: "empty", workspaces: [], activeWorkspaceId: null });
+	});
+
+	it("workspace.remove throws for an unknown Workspace", () => {
+		const store = createWorldStore(worldId("w1"));
+		expect(() => store.apply({ type: "workspace.remove", workspaceId: workspaceId("ghost") })).toThrow();
+	});
+
+	it("removing the active Workspace falls back to another remaining one, not a dangling id", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("first"), "First");
+		store.createWorkspace(workspaceId("second"), "Second");
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("first"));
+		store.apply({ type: "workspace.remove", workspaceId: workspaceId("first") });
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("second"));
+	});
+
+	it("workspace.select changes worldViewModel's own activeWorkspaceId", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("first"), "First");
+		store.createWorkspace(workspaceId("second"), "Second");
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("first"));
+		const outcome = store.apply({ type: "workspace.select", workspaceId: workspaceId("second"), commandId: commandId("cmd-2") });
+		expect(outcome).toEqual({ commandId: commandId("cmd-2") });
+		expect(store.worldViewModel().activeWorkspaceId).toBe(workspaceId("second"));
+	});
+
+	it("workspace.select throws for an unknown Workspace", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		expect(() => store.apply({ type: "workspace.select", workspaceId: workspaceId("ghost") })).toThrow();
+	});
+});
+
+describe("window.select/add/scroll/rename -- the daemon-authoritative Window carousel", () => {
+	it("window.select jumps directly to a Window by id", () => {
+		const store = createWorldStore(worldId("w1"));
+		const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+		store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
+		const firstWindowId = workspace.windows[0]!.id;
+		store.apply({ type: "window.select", workspaceId: workspaceId("ws"), windowId: firstWindowId, commandId: commandId("cmd-3") });
+		expect(store.workspaceViewModel(workspaceId("ws"))?.activeWindowId).toBe(firstWindowId);
+	});
+
+	it("window.select throws for an unknown Window", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		expect(() => store.apply({ type: "window.select", workspaceId: workspaceId("ws"), windowId: windowId("ghost-window") })).toThrow();
+	});
+
+	it("window.add appends a new empty Window and makes it active", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		const outcome = store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
+		expect(outcome).toEqual({});
+		const viewModel = store.workspaceViewModel(workspaceId("ws"));
+		expect(viewModel?.windows).toHaveLength(2);
+		expect(viewModel?.activeWindowId).toBe(viewModel?.windows[1]?.id);
+	});
+
+	it("window.add throws for an unknown Workspace", () => {
+		const store = createWorldStore(worldId("w1"));
+		expect(() => store.apply({ type: "window.add", workspaceId: workspaceId("ghost") })).toThrow();
+	});
+
+	it("window.scroll is a plain wrap-around move, the same ring as window.next/previous -- not the ephemeral-Window creation model.ts's own scrollWindow performs (deliberately deferred, see the CommandIntent's own doc comment)", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
+		const before = store.workspaceViewModel(workspaceId("ws"))!;
+		store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1, commandId: commandId("cmd-4") });
+		const after = store.workspaceViewModel(workspaceId("ws"))!;
+		expect(after.activeWindowId).not.toBe(before.activeWindowId);
+		expect(after.windows).toHaveLength(2); // no ephemeral Window created
+	});
+
+	it("window.scroll throws for an unknown Workspace", () => {
+		const store = createWorldStore(worldId("w1"));
+		expect(() => store.apply({ type: "window.scroll", workspaceId: workspaceId("ghost"), direction: 1 })).toThrow();
+	});
+
+	it("window.rename retitles a specific Window by id, not necessarily the active one", () => {
+		const store = createWorldStore(worldId("w1"));
+		const workspace = store.createWorkspace(workspaceId("ws"), "WS");
+		store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
+		const firstWindowId = workspace.windows[0]!.id;
+		store.apply({ type: "window.rename", workspaceId: workspaceId("ws"), windowId: firstWindowId, title: "Renamed Window", commandId: commandId("cmd-5") });
+		const viewModel = store.workspaceViewModel(workspaceId("ws"));
+		expect(viewModel?.windows.find((window) => window.id === firstWindowId)?.title).toBe("Renamed Window");
+	});
+
+	it("window.rename throws for an unknown Window", () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		expect(() => store.apply({ type: "window.rename", workspaceId: workspaceId("ws"), windowId: windowId("ghost-window"), title: "X" })).toThrow();
+	});
+});

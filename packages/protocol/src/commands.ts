@@ -22,10 +22,29 @@ const commandIdField = { commandId: CommandIdSchema.optional() };
  */
 export const CommandIntentSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("workspace.create"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1), ...commandIdField }),
+	z.object({ type: z.literal("workspace.rename"), workspaceId: WorkspaceIdSchema, title: z.string().trim().min(1), ...commandIdField }),
+	z.object({ type: z.literal("workspace.remove"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
+	z.object({ type: z.literal("workspace.select"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("surface.dock"), workspaceId: WorkspaceIdSchema, integrationId: IntegrationIdSchema, title: z.string().trim().min(1), windowId: WindowIdSchema.optional(), surfaceId: SurfaceIdSchema.optional(), ...commandIdField }),
 	z.object({ type: z.literal("surface.undock"), workspaceId: WorkspaceIdSchema, surfaceId: SurfaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.next"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.previous"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
+	z.object({ type: z.literal("window.select"), workspaceId: WorkspaceIdSchema, windowId: WindowIdSchema, ...commandIdField }),
+	z.object({ type: z.literal("window.add"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
+	/**
+	 * Deliberately a plain +/-1 active-Window move -- the *same* wrap-around
+	 * ring as window.next/window.previous, not model.ts's own scrollWindow
+	 * (which creates an ephemeral Window at either end and prunes an empty
+	 * one scrolled away from). Porting that full behavior requires an
+	 * `ephemeral` concept the real domain Workspace/WorkspaceWindow entities
+	 * don't have yet -- a real, separate, explicitly filed follow-on
+	 * ("Port scrollWindow's ephemeral-Window creation/pruning to the daemon
+	 * domain model"), not silently absorbed into this variant. Until that
+	 * lands, the Window Carousel's own scroll-past-the-end auto-create UX is
+	 * a known, disclosed regression versus today's local mock model.
+	 */
+	z.object({ type: z.literal("window.scroll"), workspaceId: WorkspaceIdSchema, direction: z.union([z.literal(1), z.literal(-1)]), ...commandIdField }),
+	z.object({ type: z.literal("window.rename"), workspaceId: WorkspaceIdSchema, windowId: WindowIdSchema, title: z.string().trim().min(1), ...commandIdField }),
 	// No workspaceId -- a Panel is global World chrome, not owned by any one Workspace (mirrors today's header/pillar/footer regions, which are also global).
 	z.object({ type: z.literal("panel.move"), panelId: PanelIdSchema, placement: z.object({ location: LocationSchema, alignment: PanelAlignmentSchema, offset: z.number().int().nonnegative() }), ...commandIdField }),
 	/**
@@ -77,7 +96,7 @@ export type CommandIntent = z.infer<typeof CommandIntentSchema>;
  * older protocol version can reject/degrade an intent it doesn't understand
  * instead of silently misinterpreting it).
  */
-export const COMMAND_INTENT_PROTOCOL_VERSION = 3;
+export const COMMAND_INTENT_PROTOCOL_VERSION = 4;
 
 /**
  * The minimum COMMAND_INTENT_PROTOCOL_VERSION a dispatcher must declare
@@ -97,6 +116,13 @@ export const COMMAND_INTENT_MIN_VERSION: Readonly<Record<CommandIntent["type"], 
 	"panel.move": 1,
 	"integration.invoke": 2,
 	"panel.resize": 3,
+	"workspace.rename": 4,
+	"workspace.remove": 4,
+	"workspace.select": 4,
+	"window.select": 4,
+	"window.add": 4,
+	"window.scroll": 4,
+	"window.rename": 4,
 };
 
 /**
