@@ -299,6 +299,40 @@ export function App(): React.JSX.Element {
 		workspace.undockSurface(instanceId);
 	}
 
+	// The daemon's own WorkspaceViewModel for the active Workspace -- the real
+	// read side for the Window Carousel now (windowCount/activeIndex/title),
+	// once a Workspace's id is confirmed there (see createWorkspaceViaDaemon /
+	// the catalog reconciliation above). Undefined during the same transient
+	// window pendingWorkspaces already covers -- callers fall back to the
+	// local useWorkspaceRegistry model below rather than rendering nothing.
+	const daemonWorkspace = workspace.workspace ? liveWorldViewModel.workspaces.find((entry) => entry.id === workspace.workspace!.id) : undefined;
+	const daemonActiveWindowIndex = daemonWorkspace ? daemonWorkspace.windows.findIndex((candidate) => candidate.id === daemonWorkspace.activeWindowId) : -1;
+	const windowCount = daemonWorkspace ? daemonWorkspace.windows.length : (workspace.workspace?.windows.length ?? 0);
+	const activeWindowIndex = daemonWorkspace && daemonActiveWindowIndex >= 0 ? daemonActiveWindowIndex : (workspace.workspace?.activeWindowIndex ?? 0);
+	const activeWindowTitle = daemonWorkspace ? (daemonWorkspace.windows[activeWindowIndex]?.title ?? "") : (workspace.activeWindow?.title ?? "");
+
+	/** Dispatches window.select to the daemon, translating the Carousel's own index prop into the real WindowId at that position -- window.select's own CommandIntent shape, not the Carousel's. A no-op if the daemon Workspace/index isn't resolved yet (same transient window every other Workspace-scoped dispatch here tolerates). */
+	function selectWindowViaDaemon(index: number): void {
+		if (!workspace.workspace || !daemonWorkspace) return;
+		const target = daemonWorkspace.windows[index];
+		if (!target) return;
+		applyRef.current({ type: "window.select", workspaceId: workspaceId(workspace.workspace.id), windowId: target.id });
+	}
+
+	/** Dispatches window.scroll to the daemon -- the same plain wrap-around ring as window.next/window.previous (see the CommandIntent schema's own doc comment); the Carousel's own ephemeral-Window-at-the-edge behavior isn't ported yet (see the "Port scrollWindow's ephemeral-Window creation/pruning" follow-on task). */
+	function scrollWindowViaDaemon(direction: 1 | -1): void {
+		if (!workspace.workspace) return;
+		applyRef.current({ type: "window.scroll", workspaceId: workspaceId(workspace.workspace.id), direction });
+	}
+
+	/** Dispatches window.rename for the active Window to the daemon. */
+	function renameActiveWindowViaDaemon(title: string): void {
+		if (!workspace.workspace || !daemonWorkspace) return;
+		const active = daemonWorkspace.windows[activeWindowIndex];
+		if (!active) return;
+		applyRef.current({ type: "window.rename", workspaceId: workspaceId(workspace.workspace.id), windowId: active.id, title });
+	}
+
 	// Only World-level chrome placement (which edge WorkspaceSelection/
 	// SurfaceTemplatesPillar render at) is live-daemon-driven today -- the
 	// underlying Workspace/Window/Surface catalog above is still userWorkspaces'
@@ -422,9 +456,18 @@ export function App(): React.JSX.Element {
 				conversationWorkspace.openConversation(typeof conversationId === "string" ? conversationId : undefined);
 			},
 			canSendMessage: () => draft.trim().length > 0,
-			nextWindow: workspace.nextWindow,
-			previousWindow: workspace.previousWindow,
-			newWindow: workspace.addWindow,
+			nextWindow() {
+				if (!workspace.workspace) return;
+				applyRef.current({ type: "window.next", workspaceId: workspaceId(workspace.workspace.id) });
+			},
+			previousWindow() {
+				if (!workspace.workspace) return;
+				applyRef.current({ type: "window.previous", workspaceId: workspaceId(workspace.workspace.id) });
+			},
+			newWindow() {
+				if (!workspace.workspace) return;
+				applyRef.current({ type: "window.add", workspaceId: workspaceId(workspace.workspace.id) });
+			},
 			openTemplatesPicker: () => contexts.openDialog("templates"),
 			openTemplatesGallery: () => contexts.openDialog("templatesGallery"),
 			dockDefaultTemplate(templateId) {
@@ -456,12 +499,12 @@ export function App(): React.JSX.Element {
 						center={
 							workspace.workspace && workspace.activeWindow ? (
 								<WindowCarousel
-									windowCount={workspace.workspace.windows.length}
-									activeIndex={workspace.workspace.activeWindowIndex}
-									onSelect={workspace.selectWindow}
-									onScroll={workspace.scrollWindow}
-									activeWindowTitle={workspace.activeWindow.title}
-									onRenameActiveWindow={(title) => workspace.renameWindow(workspace.activeWindow!.id, title)}
+									windowCount={windowCount}
+									activeIndex={activeWindowIndex}
+									onSelect={selectWindowViaDaemon}
+									onScroll={scrollWindowViaDaemon}
+									activeWindowTitle={activeWindowTitle}
+									onRenameActiveWindow={renameActiveWindowViaDaemon}
 								/>
 							) : undefined
 						}
