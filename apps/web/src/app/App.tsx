@@ -23,6 +23,7 @@ import { latestToolCallName } from "../conversation/projector.js";
 import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, type DockedSurfaceInstance } from "../workspace/model.js";
 import { pruneAcknowledgedRename, type PendingRename } from "./pending-rename.js";
 import { pruneAcknowledgedItem, type Acknowledgeable } from "./pending-overlay.js";
+import { resolveActiveWindowId } from "./active-window-id.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -328,6 +329,8 @@ export function App(): React.JSX.Element {
 	const windowCount = daemonWorkspace ? daemonWorkspace.windows.length : (workspace.workspace?.windows.length ?? 0);
 	const activeWindowIndex = daemonWorkspace && daemonActiveWindowIndex >= 0 ? daemonActiveWindowIndex : (workspace.workspace?.activeWindowIndex ?? 0);
 	const activeWindowTitle = daemonWorkspace ? (daemonWorkspace.windows[activeWindowIndex]?.title ?? "") : (workspace.activeWindow?.title ?? "");
+	// The real WindowId WindowDockview must key on -- see resolveActiveWindowId's own doc comment.
+	const activeWindowId = resolveActiveWindowId(daemonWorkspace, activeWindowIndex, workspace.activeWindow?.id);
 	// The active Window's real docked Surfaces (Activity/Lector/Papyrus/
 	// Terminal/...), mapped from SurfaceViewModel's shape into
 	// DockedSurfaceInstance's (WindowDockview's own established prop shape,
@@ -580,7 +583,7 @@ export function App(): React.JSX.Element {
 							>
 								<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 									<WindowDockview
-										windowId={workspace.activeWindow.id}
+										windowId={activeWindowId ?? workspace.activeWindow.id}
 										dockedSurfaces={dockedSurfacesForActiveWindow}
 										pendingDock={pendingDock}
 										onPendingDockConsumed={() => setPendingDock(undefined)}

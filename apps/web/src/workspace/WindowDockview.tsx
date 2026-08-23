@@ -589,8 +589,14 @@ export function WindowDockview({
 		}
 
 		const dockedIds = new Set(dockedSurfaces.map((surface) => surface.id));
-		for (const mountedId of mountedIdsRef.current) {
-			if (dockedIds.has(mountedId)) continue;
+		const toClose = [...mountedIdsRef.current].filter((mountedId) => !dockedIds.has(mountedId));
+		// A legitimate same-window removal (the close button) is always one
+		// Surface at a time. More than one closing in a single pass previously
+		// meant a window switch masquerading as a removal (see windowId's own
+		// doc comment in App.tsx) -- logged so a regression is visible without
+		// re-discovering it live.
+		if (toClose.length > 1) console.error(`WindowDockview(${windowId}): closing ${toClose.length} Surfaces in one pass -- expected at most 1 for a real removal`, toClose);
+		for (const mountedId of toClose) {
 			apiRef.current.getPanel(mountedId)?.api.close();
 			mountedIdsRef.current.delete(mountedId);
 		}
