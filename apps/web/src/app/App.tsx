@@ -20,7 +20,7 @@ import { useShapeSettings } from "../shape-settings-hooks.js";
 import { CanvasWell } from "../workspace/CanvasWell.js";
 import { Composer } from "../conversation/ConversationSurface.js";
 import { latestToolCallName } from "../conversation/projector.js";
-import { createWorkspace, findWorkspaceIdForToolName } from "../workspace/model.js";
+import { CHAT_TEMPLATE_ID, createWorkspace, findWorkspaceIdForToolName, type DockedSurfaceInstance } from "../workspace/model.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
 import { TemplatesDialog } from "../workspace/TemplatesDialog.js";
@@ -38,8 +38,8 @@ import type { PendingDock } from "../workspace/WindowDockview.js";
 import { DEFAULT_WORKSPACE_GLYPH_ID, resolveWorkspaceGlyph, type WorkspaceCatalogEntry } from "../workspace/workspace-catalog.js";
 import { WorkspaceSelection } from "../workspace/WorkspaceSelection.js";
 import { WorldShell } from "../workspace/WorldShell.js";
-import type { CommandIntent, Panel, WorldViewModel } from "@zodiac/protocol";
-import { workspaceId } from "@zodiac/protocol";
+import type { CommandIntent, Panel, WorkspaceViewModel, WorldViewModel } from "@zodiac/protocol";
+import { integrationId, surfaceId, workspaceId } from "@zodiac/protocol";
 import type { VehicleApprovalRequest } from "@danypops/vehicle-core";
 import { appletIdForLocation } from "./applet-slots.js";
 import { createLlmWorkspaceTitleGenerator, createPiWorkspaceTitleComplete, provisionalTitleFromText } from "../workspace/workspace-title.js";
@@ -74,6 +74,11 @@ function freshWorkspaceId(): ReturnType<typeof workspaceId> {
 	return workspaceId(`workspace-${crypto.randomUUID()}`);
 }
 
+/** Same reasoning as freshWorkspaceId above -- a client-minted SurfaceId, passed explicitly in surface.dock's own optional surfaceId field so the pendingDock overlay below can correlate this exact dispatch with its eventual daemon-confirmed arrival (the join key a daemon-minted id couldn't offer synchronously). */
+function freshSurfaceId(): ReturnType<typeof surfaceId> {
+	return surfaceId(`surface-${crypto.randomUUID()}`);
+}
+
 /** True once the daemon's own live view model lists this WorkspaceId -- the confirmed half of the pending/confirmed reconciliation catalog and pendingWorkspaces' own pruning effect share. */
 function isConfirmedInViewModel(viewModel: WorldViewModel, id: string): boolean {
 	return viewModel.workspaces.some((entry) => entry.id === id);
@@ -82,6 +87,21 @@ function isConfirmedInViewModel(viewModel: WorldViewModel, id: string): boolean 
 /** True once the daemon's own live view model reports this exact id+title pair -- the confirmed half of pendingRenames' own optimistic-then-reconciled overlay. */
 function isRenameConfirmedInViewModel(viewModel: WorldViewModel, id: string, title: string): boolean {
 	return viewModel.workspaces.some((entry) => entry.id === id && entry.title === title);
+}
+
+/** One Window's real (daemon-confirmed) docked Surfaces, mapped from SurfaceViewModel's shape into DockedSurfaceInstance's -- WindowDockview's own established prop shape, unchanged by this cutover. */
+function daemonDockedSurfacesForWindow(window: WorkspaceViewModel["windows"][number] | undefined): DockedSurfaceInstance[] {
+	return (window?.surfaces ?? []).map((surface) => ({ id: surface.id, templateId: surface.integrationId, title: surface.title }));
+}
+
+/** True once a pending dock's own client-minted id appears among the daemon's own confirmed docked Surfaces -- the confirmed half of pendingDockedSurfaces' own optimistic-then-reconciled overlay (mirrors isConfirmedInViewModel above, one level down at the Surface rather than Workspace scope). */
+function isDockConfirmed(daemonDockedSurfaces: readonly DockedSurfaceInstance[], pendingId: string): boolean {
+	return daemonDockedSurfaces.some((surface) => surface.id === pendingId);
+}
+
+/** The full docked-Surface list WindowDockview renders for one Window: Chat first (a client-local concept, never daemon-confirmed -- see dockTemplate's own doc comment), then every daemon-confirmed real Surface, then anything still awaiting its own round trip. */
+function dockedSurfacesForWindow(chatDockedSurface: DockedSurfaceInstance | undefined, daemonDockedSurfaces: readonly DockedSurfaceInstance[], stillPendingDockedSurfaces: readonly DockedSurfaceInstance[]): DockedSurfaceInstance[] {
+	return [...(chatDockedSurface ? [chatDockedSurface] : []), ...daemonDockedSurfaces, ...stillPendingDockedSurfaces];
 }
 
 export function App(): React.JSX.Element {
@@ -249,6 +269,13 @@ export function App(): React.JSX.Element {
 	const surfaceTemplates = useSurfaceTemplates(preferences, extensionSurfaceTemplates);
 	const [draft, setDraft] = useState("");
 	const [pendingDock, setPendingDock] = useState<PendingDock | undefined>(undefined);
+	// A just-dispatched surface.dock's own optimistic entry, kept only until the
+	// daemon's own round trip confirms it (the freshSurfaceId this client
+	// minted appears among the active Window's real surfaces) -- the same
+	// pending/confirmed shape pendingWorkspaces already established for
+	// Workspace creation. Chat itself is never dispatched this way (see
+	// dockTemplate's own doc comment) so it never appears here.
+	const [pendingDockedSurfaces, setPendingDockedSurfaces] = useState<readonly DockedSurfaceInstance[]>([]);
 	// The Dock Ruler frame's own visibility (the whole drag's duration, driven
 	// by the Surface Templates pillar's own dragstart/dragend -- not tied to
 	// hovering a specific drop target), its live highlighted mark (from
@@ -288,19 +315,9 @@ export function App(): React.JSX.Element {
 		requestAnimationFrame(() => selectedButtonRef.current?.focus());
 	}
 
-	/** `newGroupSizeRatio` -- the fraction of the reference group's current size (along whichever axis `position` implies) the newly-docked Surface should occupy, chosen via the Dock Ruler. Undefined for the plain click-to-dock/tab-insert paths, which have no drag geometry to derive a fraction from. Only reachable once a Workspace exists -- the empty-state landing renders no Surface Templates pillar to trigger this from. */
-	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string, newGroupSizeRatio?: number): void {
-		const instance = workspace.dockSurface(templateId, title);
-		if (!instance) return;
-		setPendingDock({ instanceId: instance.id, position, referenceGroupId, newGroupSizeRatio });
-	}
-
-	function handlePanelClosed(instanceId: string): void {
-		workspace.undockSurface(instanceId);
-	}
-
 	// The daemon's own WorkspaceViewModel for the active Workspace -- the real
-	// read side for the Window Carousel now (windowCount/activeIndex/title),
+	// read side for the Window Carousel and docked-Surface rendering now
+	// (windowCount/activeIndex/title, and dockedSurfacesForActiveWindow below),
 	// once a Workspace's id is confirmed there (see createWorkspaceViaDaemon /
 	// the catalog reconciliation above). Undefined during the same transient
 	// window pendingWorkspaces already covers -- callers fall back to the
@@ -310,6 +327,46 @@ export function App(): React.JSX.Element {
 	const windowCount = daemonWorkspace ? daemonWorkspace.windows.length : (workspace.workspace?.windows.length ?? 0);
 	const activeWindowIndex = daemonWorkspace && daemonActiveWindowIndex >= 0 ? daemonActiveWindowIndex : (workspace.workspace?.activeWindowIndex ?? 0);
 	const activeWindowTitle = daemonWorkspace ? (daemonWorkspace.windows[activeWindowIndex]?.title ?? "") : (workspace.activeWindow?.title ?? "");
+	// The active Window's real docked Surfaces (Activity/Lector/Papyrus/
+	// Terminal/...), mapped from SurfaceViewModel's shape into
+	// DockedSurfaceInstance's (WindowDockview's own established prop shape,
+	// unchanged by this cutover -- only its data source moves). Chat is
+	// deliberately excluded here and prepended from the local model instead
+	// (see dockTemplate's own doc comment) -- it was never part of the real
+	// domain model's Window.surfaces and this task doesn't migrate it.
+	const daemonDockedSurfaces = daemonDockedSurfacesForWindow(daemonWorkspace?.windows[activeWindowIndex]);
+	const stillPendingDockedSurfaces = pendingDockedSurfaces.filter((pending) => !isDockConfirmed(daemonDockedSurfaces, pending.id));
+	const chatDockedSurface = workspace.activeWindow?.dockedSurfaces.find((surface) => surface.templateId === CHAT_TEMPLATE_ID);
+	const dockedSurfacesForActiveWindow = dockedSurfacesForWindow(chatDockedSurface, daemonDockedSurfaces, stillPendingDockedSurfaces);
+	// Once the daemon's own round trip confirms a pending dock, drop it from
+	// state outright -- same not-just-filtered-at-render-time reasoning as
+	// pendingWorkspaces' own pruning effect.
+	useEffect(() => {
+		setPendingDockedSurfaces((current) => {
+			const next = current.filter((pending) => !isDockConfirmed(daemonDockedSurfaces, pending.id));
+			return next.length === current.length ? current : next;
+		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- daemonDockedSurfaces is a fresh array every render derived from liveWorldViewModel; depending on liveWorldViewModel itself (the real trigger for a genuine change) avoids re-running this effect every render regardless of whether the daemon's own data actually changed.
+	}, [liveWorldViewModel]);
+
+	/** `newGroupSizeRatio` -- the fraction of the reference group's current size (along whichever axis `position` implies) the newly-docked Surface should occupy, chosen via the Dock Ruler. Undefined for the plain click-to-dock/tab-insert paths, which have no drag geometry to derive a fraction from. Only reachable once a Workspace exists -- the empty-state landing renders no Surface Templates pillar to trigger this from. Dispatches surface.dock to the daemon with a client-minted SurfaceId (freshSurfaceId, mirroring freshWorkspaceId's own precedent) so pendingDock's own placement bookkeeping below has a synchronous id to key off, exactly as before -- only the authority (daemon, not the local registry) has moved. */
+	function dockTemplate(templateId: string, title: string, position: Position | undefined, referenceGroupId?: string, newGroupSizeRatio?: number): void {
+		if (!workspace.workspace) return;
+		const id = freshSurfaceId();
+		applyRef.current({ type: "surface.dock", workspaceId: workspaceId(workspace.workspace.id), integrationId: integrationId(templateId), title, surfaceId: id });
+		setPendingDockedSurfaces((current) => [...current, { id, templateId, title }]);
+		setPendingDock({ instanceId: id, position, referenceGroupId, newGroupSizeRatio });
+	}
+
+	/** Chat's own close is never a real domain-model removal (see dockTemplate's own doc comment -- Chat stays a client-local concept, out of this cutover's scope); every other docked Surface's close dispatches surface.undock to the daemon. */
+	function handlePanelClosed(instanceId: string): void {
+		if (chatDockedSurface?.id === instanceId) {
+			workspace.undockSurface(instanceId);
+			return;
+		}
+		if (!workspace.workspace) return;
+		applyRef.current({ type: "surface.undock", workspaceId: workspaceId(workspace.workspace.id), surfaceId: surfaceId(instanceId) });
+	}
 
 	/** Dispatches window.select to the daemon, translating the Carousel's own index prop into the real WindowId at that position -- window.select's own CommandIntent shape, not the Carousel's. A no-op if the daemon Workspace/index isn't resolved yet (same transient window every other Workspace-scoped dispatch here tolerates). */
 	function selectWindowViaDaemon(index: number): void {
@@ -522,7 +579,7 @@ export function App(): React.JSX.Element {
 								<Suspense fallback={<div className="grid h-full place-items-center text-sm text-gray-500 dark:text-gray-400">Loading Window…</div>}>
 									<WindowDockview
 										windowId={workspace.activeWindow.id}
-										dockedSurfaces={workspace.activeWindow.dockedSurfaces}
+										dockedSurfaces={dockedSurfacesForActiveWindow}
 										pendingDock={pendingDock}
 										onPendingDockConsumed={() => setPendingDock(undefined)}
 										onPanelClosed={handlePanelClosed}
