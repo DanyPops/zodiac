@@ -118,7 +118,12 @@ describe("zodiacd: package-owned vehicle-surface configured Integration", () => 
 		expect(stdout).toContain("@fixture/zodiac-fixture-vehicle/vehicle-surface/fixture-vehicle");
 
 		const list = await (await fetch(`${baseUrl}/api/vehicle-surfaces`)).json() as { surfaces: Array<{ id: string; title: string }> };
-		expect(list.surfaces).toEqual([{ id: "papyrus", title: "Papyrus" }, { id: "fixture-vehicle", title: "Fixture Vehicle" }]);
+		// No hardcoded Papyrus entry anymore -- Papyrus is now purely a
+		// package-owned vehicle-surface configured Integration itself (its own
+		// package.json's zodiac.integrations field), the identical mechanism
+		// this fixture proves; with no Papyrus package configured here, only
+		// the fixture Vehicle this test itself configured is discoverable.
+		expect(list.surfaces).toEqual([{ id: "fixture-vehicle", title: "Fixture Vehicle" }]);
 
 		const manifestResponse = await fetch(`${baseUrl}/api/vehicle-surfaces/fixture-vehicle/manifest`);
 		expect(manifestResponse.status).toBe(200);

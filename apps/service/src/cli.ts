@@ -321,15 +321,14 @@ async function main(): Promise<void> {
 		process.stderr.write("[zodiacd] WARNING: --enable-terminal exposes a real shell over the network. No auth is implemented yet -- loopback only.\n");
 	}
 
-	// Papyrus's own definition stays hardcoded here for now (a known,
-	// disclosed anti-pattern -- see task "Contributions: move from in-process
-	// trust to a real process/trust boundary" and "Wire Jittor as Zodiac's
-	// canonical live token/cost/context meter"); every OTHER Vehicle Surface
-	// (Jittor, and any future one) is package-owned via a declarative
-	// vehicle-surface configured-Integration entry instead, never hand-added
-	// here.
+	// Every Vehicle Surface (Papyrus, Jittor, and any future one) is
+	// package-owned via a declarative vehicle-surface configured-Integration
+	// entry in that package's own package.json -- zodiacd's own source names
+	// none of them. A host that wants Papyrus passes its package.json path
+	// via --integration-package/ZODIAC_INTEGRATION_PACKAGES, the identical
+	// bounded discovery mechanism every other Integration goes through.
 	const vehicleSurfaces = createSharedVehicleSurfaceGateway({
-		definitions: [{ id: "papyrus", title: "Papyrus", vehicleName: "papyrus", invalidationTopics: ["tasks"] }, ...vehicleSurfaceDefinitionsFrom(configuredIntegrations.integrations)],
+		definitions: vehicleSurfaceDefinitionsFrom(configuredIntegrations.integrations),
 	});
 	const service = await createZodiacService({
 		world,
