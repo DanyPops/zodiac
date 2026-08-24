@@ -44,7 +44,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@danypops/jittor": "^0.20.0",
+    "@danypops/jittor": "^0.21.2",
     "@icons-pack/react-simple-icons": "^13.11.1",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-context-menu": "^2.3.7",
