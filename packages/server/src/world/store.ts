@@ -330,6 +330,11 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		return { ok: true, value: workspace };
 	}
 
+	/** Docking into an ephemeral Window promotes it to a real, permanent one -- it's no longer eligible for scrollWindow's own scroll-away pruning. Mirrors model.ts's own dockSurface (pre-removal); a no-op object shape change for a Window that was never ephemeral. */
+	function promoteWindowToPermanent(workspace: Workspace, targetWindowId: WindowId): WorkspaceWindow[] {
+		return workspace.windows.map((window) => (window.id === targetWindowId ? { ...window, ephemeral: false } : window));
+	}
+
 	function dockSurface(workspaceId: WorkspaceId, integrationId: IntegrationId, title: string, requestedSurfaceId?: SurfaceId, acknowledgedCommandId?: CommandId): Surface {
 		const workspace = requireWorkspace(workspaceId);
 		const activeWindow = workspace.windows[workspace.activeWindowIndex];
@@ -338,7 +343,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		const surface: Surface = { id: requestedSurfaceId ?? makeSurfaceId(nextSurfaceId()), windowId: activeWindow.id, integrationId, title };
 		const inserted = insertTile(tileByWindow.get(activeWindow.id) ?? null, surface.id);
 		if (!inserted.ok) throw new Error(`Cannot dock Surface "${surface.id}" into Window "${activeWindow.id}": ${inserted.reason}`);
-		workspaces.set(workspaceId, { ...workspace, surfaces: [...workspace.surfaces, surface] });
+		workspaces.set(workspaceId, { ...workspace, windows: promoteWindowToPermanent(workspace, activeWindow.id), surfaces: [...workspace.surfaces, surface] });
 		surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(activeWindow.id, inserted.value);
 		emitChange(acknowledgedCommandId);
@@ -357,7 +362,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		const inserted = insertTile(tileByWindow.get(targetWindowId) ?? null, surface.id);
 		if (!inserted.ok) return inserted;
 
-		workspaces.set(workspaceId, { ...workspace, surfaces: [...workspace.surfaces, surface] });
+		workspaces.set(workspaceId, { ...workspace, windows: promoteWindowToPermanent(workspace, targetWindowId), surfaces: [...workspace.surfaces, surface] });
 		surfaceById.set(surface.id, { workspaceId, surface });
 		tileByWindow.set(targetWindowId, inserted.value);
 		emitChange(acknowledgedCommandId);
@@ -420,6 +425,54 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		workspaces.set(workspaceId, { ...workspace, activeWindowIndex });
 	}
 
+	/** A Window is eligible for scroll-away pruning once it's both ephemeral and empty. Unlike model.ts's own isEmptyEphemeral (pre-removal), no pre-docked Chat surface needs excluding here: Chat is a client-local concept, never migrated to a real Window.surfaces membership (see chat-docking.ts's own doc comment). */
+	function isPrunableEphemeral(workspace: Workspace, window: WorkspaceWindow): boolean {
+		return window.ephemeral === true && !workspace.surfaces.some((surface) => surface.windowId === window.id);
+	}
+
+	/**
+	 * The Window Carousel's own scroll/wheel policy -- deliberately not the
+	 * same wrap-around ring window.next/window.previous use (moveActiveWindow
+	 * above): scrolling past either end creates exactly one new ephemeral
+	 * Window instead of wrapping; scrolling away from a still-empty ephemeral
+	 * Window prunes it. Mid-list movement is a plain +/-1 step. Ported from
+	 * apps/web/src/workspace/model.ts's own scrollWindow (pre-removal) -- see
+	 * the "Port scrollWindow's ephemeral-Window creation/pruning to the
+	 * daemon domain model" task.
+	 */
+	function scrollWindow(workspaceId: WorkspaceId, direction: 1 | -1, acknowledgedCommandId?: CommandId): void {
+		const workspace = requireWorkspace(workspaceId);
+		const currentIndex = workspace.activeWindowIndex;
+		const currentWindow = workspace.windows[currentIndex];
+		if (!currentWindow) return; // an out-of-bounds activeWindowIndex is a pre-existing invariant violation elsewhere, not this function's own concern to repair
+		const atEdge = direction > 0 ? currentIndex === workspace.windows.length - 1 : currentIndex === 0;
+
+		if (atEdge) {
+			if (isPrunableEphemeral(workspace, currentWindow)) {
+				emitChange(acknowledgedCommandId); // already at the transient slot -- nothing further to create, but the command still gets acknowledged
+				return;
+			}
+			// Its real final index is 0 when prepended (every existing Window shifts up, but keeps its own already-assigned title -- a title is fixed at creation, not live-recomputed from position), or the current length when appended.
+			const newWindow: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: `Window ${direction > 0 ? workspace.windows.length : 0}`, ephemeral: true };
+			tileByWindow.set(newWindow.id, null);
+			const windows = direction > 0 ? [...workspace.windows, newWindow] : [newWindow, ...workspace.windows];
+			workspaces.set(workspaceId, { ...workspace, windows, activeWindowIndex: direction > 0 ? windows.length - 1 : 0 });
+			emitChange(acknowledgedCommandId);
+			return;
+		}
+
+		const moved: Workspace = { ...workspace, activeWindowIndex: currentIndex + direction };
+		if (isPrunableEphemeral(workspace, currentWindow)) {
+			tileByWindow.delete(currentWindow.id);
+			const windows = moved.windows.filter((_, index) => index !== currentIndex);
+			const activeWindowIndex = moved.activeWindowIndex > currentIndex ? moved.activeWindowIndex - 1 : moved.activeWindowIndex;
+			workspaces.set(workspaceId, { ...moved, windows, activeWindowIndex });
+		} else {
+			workspaces.set(workspaceId, moved);
+		}
+		emitChange(acknowledgedCommandId);
+	}
+
 	function renameWorkspace(workspaceId: WorkspaceId, title: string, acknowledgedCommandId?: CommandId): void {
 		const workspace = requireWorkspace(workspaceId);
 		workspaces.set(workspaceId, { ...workspace, title });
@@ -450,7 +503,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		emitChange(acknowledgedCommandId);
 	}
 
-	/** Appends a new, empty Window at the end and makes it active -- mirrors model.ts's own addWindow. Not the ephemeral, auto-pruned kind window.scroll's own CommandIntent doc comment describes; that behavior isn't ported to the daemon domain model yet. */
+	/** Appends a new, empty, non-ephemeral Window at the end and makes it active -- mirrors model.ts's own addWindow. Distinct from scrollWindow's own ephemeral create-at-edge Window: this one (the "New Window" control) is permanent from creation, never eligible for scroll-away pruning. */
 	function addWindow(workspaceId: WorkspaceId, acknowledgedCommandId?: CommandId): void {
 		const workspace = requireWorkspace(workspaceId);
 		const window: WorkspaceWindow = { id: makeWindowId(nextWindowId()), title: `Window ${workspace.windows.length}` };
@@ -528,8 +581,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				addWindow(intent.workspaceId, intent.commandId);
 				return { commandId: intent.commandId };
 			case "window.scroll":
-				moveActiveWindow(intent.workspaceId, intent.direction);
-				emitChange(intent.commandId);
+				scrollWindow(intent.workspaceId, intent.direction, intent.commandId);
 				return { commandId: intent.commandId };
 			case "window.rename":
 				renameWindow(intent.workspaceId, intent.windowId, intent.title, intent.commandId);

@@ -921,21 +921,105 @@ describe("window.select/add/scroll/rename -- the daemon-authoritative Window car
 		expect(() => store.apply({ type: "window.add", workspaceId: workspaceId("ghost") })).toThrow();
 	});
 
-	it("window.scroll is a plain wrap-around move, the same ring as window.next/previous -- not the ephemeral-Window creation model.ts's own scrollWindow performs (deliberately deferred, see the CommandIntent's own doc comment)", () => {
-		const store = createWorldStore(worldId("w1"));
-		store.createWorkspace(workspaceId("ws"), "WS");
-		store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
-		const before = store.workspaceViewModel(workspaceId("ws"))!;
-		store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1, commandId: commandId("cmd-4") });
-		const after = store.workspaceViewModel(workspaceId("ws"))!;
-		expect(after.activeWindowId).not.toBe(before.activeWindowId);
-		expect(after.windows).toHaveLength(2); // no ephemeral Window created
+	// Ported from the pre-daemon local mock model's own scrollWindow (apps/web/src/workspace/model.ts, since
+	// removed) -- the real behavior workspace-slice.spec.ts's own "wheel-scrolling forward past the last real
+	// Window..." system test exercises end to end. See task "Port scrollWindow's ephemeral-Window
+	// creation/pruning to the daemon domain model."
+	describe("window.scroll: ephemeral-Window creation/pruning (not the same wrap-around ring as window.next/previous)", () => {
+		it("scrolling past the last real Window creates a fresh ephemeral one, appended, and activates it -- not a wrap to index 0", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			const before = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(before.windows).toHaveLength(1);
+
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1, commandId: commandId("cmd-scroll") });
+
+			const after = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(after.windows).toHaveLength(2);
+			expect(after.activeWindowId).toBe(after.windows[1]?.id);
+			expect(after.windows[1]?.surfaces).toHaveLength(0); // the fresh ephemeral Window starts genuinely empty
+		});
+
+		it("scrolling backward past the first Window creates a fresh ephemeral one, prepended, and activates it", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			const originalFirstId = store.workspaceViewModel(workspaceId("ws"))!.windows[0]!.id;
+
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: -1 });
+
+			const after = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(after.windows).toHaveLength(2);
+			expect(after.activeWindowId).toBe(after.windows[0]?.id); // the new ephemeral Window, now at index 0
+			expect(after.windows[1]?.id).toBe(originalFirstId); // the original Window shifted up, kept its own identity
+		});
+
+		it("scrolling forward again from an already-created, still-empty ephemeral Window at the edge does not create a second one", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1 });
+			const onceScrolled = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(onceScrolled.windows).toHaveLength(2);
+
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1 });
+
+			const after = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(after.windows).toHaveLength(2); // still just the one ephemeral Window, not a second
+			expect(after.activeWindowId).toBe(onceScrolled.windows[1]?.id);
+		});
+
+		it("scrolling away from a still-empty ephemeral Window prunes it", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			const originalFirstId = store.workspaceViewModel(workspaceId("ws"))!.windows[0]!.id;
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1 });
+			expect(store.workspaceViewModel(workspaceId("ws"))!.windows).toHaveLength(2);
+
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: -1, commandId: commandId("cmd-prune") });
+
+			const after = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(after.windows).toHaveLength(1); // pruned back down
+			expect(after.windows[0]?.id).toBe(originalFirstId);
+			expect(after.activeWindowId).toBe(originalFirstId);
+		});
+
+		it("docking a Surface into an ephemeral Window promotes it to permanent -- scrolling away from it afterward does not prune it", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			const originalFirstId = store.workspaceViewModel(workspaceId("ws"))!.windows[0]!.id;
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1 });
+			const ephemeralId = store.workspaceViewModel(workspaceId("ws"))!.windows[1]!.id;
+
+			store.dockSurface(workspaceId("ws"), integrationId("activity"), "Activity");
+
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: -1 });
+
+			const after = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(after.windows).toHaveLength(2); // not pruned -- it's real now
+			expect(after.windows.map((window) => window.id)).toEqual([originalFirstId, ephemeralId]);
+		});
+
+		it("mid-list scrolling (not at either edge) is a plain +/-1 step, no ephemeral Window involved", () => {
+			const store = createWorldStore(worldId("w1"));
+			store.createWorkspace(workspaceId("ws"), "WS");
+			store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
+			store.apply({ type: "window.add", workspaceId: workspaceId("ws") });
+			const windows = store.workspaceViewModel(workspaceId("ws"))!.windows;
+			store.apply({ type: "window.select", workspaceId: workspaceId("ws"), windowId: windows[1]!.id });
+
+			store.apply({ type: "window.scroll", workspaceId: workspaceId("ws"), direction: 1 });
+
+			const after = store.workspaceViewModel(workspaceId("ws"))!;
+			expect(after.windows).toHaveLength(3); // no Window created or pruned
+			expect(after.activeWindowId).toBe(windows[2]!.id);
+		});
+
+		it("throws for an unknown Workspace", () => {
+			const store = createWorldStore(worldId("w1"));
+			expect(() => store.apply({ type: "window.scroll", workspaceId: workspaceId("ghost"), direction: 1 })).toThrow();
+		});
 	});
 
-	it("window.scroll throws for an unknown Workspace", () => {
-		const store = createWorldStore(worldId("w1"));
-		expect(() => store.apply({ type: "window.scroll", workspaceId: workspaceId("ghost"), direction: 1 })).toThrow();
-	});
+
 
 	it("window.rename retitles a specific Window by id, not necessarily the active one", () => {
 		const store = createWorldStore(worldId("w1"));

@@ -71,11 +71,25 @@ export const VerticalSchema = z
 	});
 export type Vertical = z.infer<typeof VerticalSchema>;
 
-/** One Workspace's numbered arrangement slot. It owns per-Window layout, not Surface membership; membership is derived from each Surface's authoritative `windowId`. */
+/**
+ * One Workspace's numbered arrangement slot. It owns per-Window layout, not
+ * Surface membership; membership is derived from each Surface's
+ * authoritative `windowId`.
+ *
+ * `ephemeral` (optional, absent for every ordinarily-created Window):
+ * true for a Window created by scrolling the Carousel past either end --
+ * pruned automatically if the user scrolls away from it while it's still
+ * empty, and promoted to permanent (cleared) the moment any Surface is
+ * docked into it. Mirrors the pre-daemon local mock model's own
+ * WorkspaceWindow.ephemeral (apps/web/src/workspace/model.ts, before its
+ * removal) -- see world/store.ts's own scrollWindow for the ported
+ * create-at-edge/prune-on-empty-scroll-away behavior.
+ */
 export const WorkspaceWindowSchema = z
 	.object({
 		id: WindowIdSchema,
 		title: z.string().trim().min(1),
+		ephemeral: z.boolean().optional(),
 	})
 	.strict();
 export type WorkspaceWindow = z.infer<typeof WorkspaceWindowSchema>;

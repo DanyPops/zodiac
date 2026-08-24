@@ -402,7 +402,7 @@ export function App(): React.JSX.Element {
 		applyRef.current({ type: "window.select", workspaceId: workspaceId(activeWorkspaceId), windowId: target.id });
 	}
 
-	/** Dispatches window.scroll to the daemon -- the same plain wrap-around ring as window.next/window.previous (see the CommandIntent schema's own doc comment); the Carousel's own ephemeral-Window-at-the-edge behavior isn't ported yet (see the "Port scrollWindow's ephemeral-Window creation/pruning" follow-on task). */
+	/** Dispatches window.scroll to the daemon -- its own ephemeral create-at-edge/prune-on-empty-scroll-away behavior (see the CommandIntent schema's own doc comment), not the plain wrap-around ring window.next/window.previous use. */
 	function scrollWindowViaDaemon(direction: 1 | -1): void {
 		if (!activeWorkspaceId) return;
 		applyRef.current({ type: "window.scroll", workspaceId: workspaceId(activeWorkspaceId), direction });

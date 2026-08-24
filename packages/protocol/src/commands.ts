@@ -43,16 +43,13 @@ export const CommandIntentSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("window.select"), workspaceId: WorkspaceIdSchema, windowId: WindowIdSchema, ...commandIdField }),
 	z.object({ type: z.literal("window.add"), workspaceId: WorkspaceIdSchema, ...commandIdField }),
 	/**
-	 * Deliberately a plain +/-1 active-Window move -- the *same* wrap-around
-	 * ring as window.next/window.previous, not model.ts's own scrollWindow
-	 * (which creates an ephemeral Window at either end and prunes an empty
-	 * one scrolled away from). Porting that full behavior requires an
-	 * `ephemeral` concept the real domain Workspace/WorkspaceWindow entities
-	 * don't have yet -- a real, separate, explicitly filed follow-on
-	 * ("Port scrollWindow's ephemeral-Window creation/pruning to the daemon
-	 * domain model"), not silently absorbed into this variant. Until that
-	 * lands, the Window Carousel's own scroll-past-the-end auto-create UX is
-	 * a known, disclosed regression versus today's local mock model.
+	 * The Window Carousel's own scroll/wheel policy -- deliberately not the
+	 * same wrap-around ring as window.next/window.previous: scrolling past
+	 * either end creates a fresh ephemeral Window (WorkspaceWindow.ephemeral)
+	 * instead of wrapping; scrolling away from a still-empty one prunes it.
+	 * See world/store.ts's own scrollWindow, ported from the pre-daemon local
+	 * mock model's own scrollWindow (apps/web/src/workspace/model.ts, since
+	 * removed).
 	 */
 	z.object({ type: z.literal("window.scroll"), workspaceId: WorkspaceIdSchema, direction: z.union([z.literal(1), z.literal(-1)]), ...commandIdField }),
 	z.object({ type: z.literal("window.rename"), workspaceId: WorkspaceIdSchema, windowId: WindowIdSchema, title: z.string().trim().min(1), ...commandIdField }),

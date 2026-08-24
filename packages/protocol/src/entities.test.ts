@@ -38,6 +38,17 @@ describe("WorkspaceSchema", () => {
 		expect(WorkspaceSchema.safeParse(undefined).success).toBe(false);
 	});
 
+	it("accepts a Window with ephemeral: true -- the Window Carousel's own scroll-past-the-end transient slot", () => {
+		const result = WorkspaceSchema.safeParse({ ...validWorkspace(), windows: [{ id: "window-0", title: "Window 0", ephemeral: true }] });
+		expect(result.success).toBe(true);
+	});
+
+	it("a Window with no ephemeral field at all is still valid -- absent, not false, for every ordinarily-created Window", () => {
+		const result = WorkspaceSchema.safeParse(validWorkspace());
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.windows[0]?.ephemeral).toBeUndefined();
+	});
+
 	it("requires every Surface to name its authoritative Window", () => {
 		expect(SurfaceSchema.safeParse({ id: "s1", integrationId: "activity", title: "Activity" }).success).toBe(false);
 		expect(SurfaceSchema.safeParse({ id: "s1", windowId: "window-0", integrationId: "activity", title: "Activity" }).success).toBe(true);
