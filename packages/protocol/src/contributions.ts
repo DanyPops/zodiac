@@ -136,5 +136,15 @@ export interface ContributionDescription {
 export interface ZodiacContribution {
   describe(): ContributionDescription;
   activate(host: ContributionHost): void | Promise<void>;
+  /**
+   * Must undo everything this contribution's own activate() registered --
+   * in particular, calling every unregister function host.registerCommand/
+   * registerResourceProvider returned. A contribution that skips this
+   * leaves its own command/resource-scheme ids occupied after dispose():
+   * harmless for a one-shot shutdown, but confirmed live to make a
+   * hot-reloaded fresh instance's own re-registration of the identical id
+   * fail with what looks like an activation bug in the *new* code, when
+   * the real fault is the *old* instance's own incomplete dispose().
+   */
   dispose(): void | Promise<void>;
 }

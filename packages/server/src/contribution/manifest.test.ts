@@ -16,7 +16,7 @@ describe("readZodiacManifest", () => {
 
 	it("parses a valid single-entry manifest", () => {
 		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "editor", entry: "./src/index.ts" }] } });
-		expect(manifest).toEqual({ integrations: [{ kind: "editor", entry: "./src/index.ts" }] });
+		expect(manifest).toEqual({ integrations: [{ kind: "editor", entry: "./src/index.ts" }], dependsOn: [] });
 	});
 
 	it("parses a manifest declaring both known kinds", () => {
@@ -37,7 +37,7 @@ describe("readZodiacManifest", () => {
 	// proxies through.
 	it("parses a vehicle-surface entry -- declarative, no entry module", () => {
 		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-surface", vehicleName: "jittor", title: "Jittor" }] } });
-		expect(manifest).toEqual({ integrations: [{ kind: "vehicle-surface", vehicleName: "jittor", title: "Jittor" }] });
+		expect(manifest).toEqual({ integrations: [{ kind: "vehicle-surface", vehicleName: "jittor", title: "Jittor" }], dependsOn: [] });
 	});
 
 	it("parses a vehicle-surface entry's own optional invalidationTopics", () => {
@@ -61,7 +61,7 @@ describe("readZodiacManifest", () => {
 	// comment).
 	it("parses a vehicle-loopback entry -- code-bearing, but spawned out-of-process rather than in-process imported", () => {
 		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js" }] } });
-		expect(manifest).toEqual({ integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js" }] });
+		expect(manifest).toEqual({ integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js" }], dependsOn: [] });
 	});
 
 	it("parses a vehicle-loopback entry's own optional extra args", () => {
@@ -85,6 +85,26 @@ describe("readZodiacManifest", () => {
 	it("throws on a malformed \"zodiac\" field rather than silently contributing nothing", () => {
 		expect(() => readZodiacManifest({ zodiac: "not an object" })).toThrow();
 	});
+
+	// dependsOn is a package-level coeffect declaration (Cordis's own
+	// `inject`-as-capability-request, ported): a hot-reload of a changed
+	// package also cascades into every other configured package that
+	// names it here, since those packages hold a reference into the
+	// changed one's own module graph.
+	it("parses a package-level dependsOn declaration", () => {
+		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "editor", entry: "./index.js" }], dependsOn: ["@danypops/zodiac-lector"] } });
+		expect(manifest?.dependsOn).toEqual(["@danypops/zodiac-lector"]);
+	});
+
+	it("defaults dependsOn to an empty list when absent", () => {
+		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "editor", entry: "./index.js" }] } });
+		expect(manifest?.dependsOn).toEqual([]);
+	});
+
+	it("bounds the number and length of dependsOn entries", () => {
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "editor", entry: "./index.js" }], dependsOn: Array.from({ length: 17 }, (_, index) => `pkg-${index}`) } })).toThrow();
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "editor", entry: "./index.js" }], dependsOn: [""] } })).toThrow();
+	});
 });
 
 describe("readZodiacManifestFile", () => {
@@ -101,7 +121,7 @@ describe("readZodiacManifestFile", () => {
 	it("reads and parses a package.json's own \"zodiac\" field", () => {
 		const path = join(dir, "package.json");
 		writeFileSync(path, JSON.stringify({ name: "@danypops/zodiac-lector", zodiac: { integrations: [{ kind: "editor", entry: "./src/index.ts" }] } }));
-		expect(readZodiacManifestFile(path)).toEqual({ integrations: [{ kind: "editor", entry: "./src/index.ts" }] });
+		expect(readZodiacManifestFile(path)).toEqual({ integrations: [{ kind: "editor", entry: "./src/index.ts" }], dependsOn: [] });
 	});
 
 	it("returns undefined for a package.json with no \"zodiac\" field", () => {

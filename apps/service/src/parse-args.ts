@@ -11,6 +11,8 @@ export interface ZodiacdArgs {
 	integrationPackageJsonPaths: readonly string[];
 	/** Exact browser Origin values this daemon answers -- see server.ts's own CreateZodiacServiceOptions.allowedOrigins doc comment. */
 	allowedOrigins: readonly string[];
+	/** Undefined (disabled) by default -- opt-in bounded poll interval, in milliseconds, for configured-loader.ts's own checkForChanges() to detect a configured Integration package's own on-disk file change without a zodiacd restart. */
+	hotReloadPollMs: number | undefined;
 }
 
 export const DEFAULT_PORT = 4390;
@@ -50,6 +52,10 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 		}
 		integrationPackageJsonPaths = configured;
 	}
+	let hotReloadPollMs: number | undefined = env.ZODIAC_HOT_RELOAD_POLL_MS !== undefined ? Number(env.ZODIAC_HOT_RELOAD_POLL_MS) : undefined;
+	if (hotReloadPollMs !== undefined && (!Number.isInteger(hotReloadPollMs) || hotReloadPollMs <= 0)) {
+		throw new Error(`zodiacd: ZODIAC_HOT_RELOAD_POLL_MS/--hot-reload-poll-ms must be a positive integer, got "${env.ZODIAC_HOT_RELOAD_POLL_MS}"`);
+	}
 
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
@@ -67,10 +73,15 @@ export function parseZodiacdArgs(argv: readonly string[], env: Record<string, st
 			const path = argv[++i];
 			if (!path) throw new Error("zodiacd: --integration-package requires a package.json path");
 			integrationPackageJsonPaths.push(path);
+		} else if (arg === "--hot-reload-poll-ms") {
+			const raw = argv[++i];
+			const value = raw ? Number(raw) : Number.NaN;
+			if (!Number.isInteger(value) || value <= 0) throw new Error(`zodiacd: --hot-reload-poll-ms must be a positive integer, got "${raw}"`);
+			hotReloadPollMs = value;
 		}
 	}
 
 	if (!Number.isInteger(port) || port < 0) throw new Error(`zodiacd: invalid --port "${port}"`);
 
-	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal, allowedOrigins, integrationPackageJsonPaths };
+	return { port, host, sessionsRoot, stateDir, fixtureMode, enableTerminal, allowedOrigins, integrationPackageJsonPaths, hotReloadPollMs };
 }

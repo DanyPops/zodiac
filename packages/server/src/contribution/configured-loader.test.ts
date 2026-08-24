@@ -1,6 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { ContributionHost, ZodiacContribution } from "@zodiac/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAppletRegistry } from "./applet-registry.js";
@@ -164,5 +165,180 @@ describe("loadConfiguredIntegrationPackages", () => {
 			loadModule: async (path) => modules.get(path) ?? {},
 		})).rejects.toMatchObject({ code: "activation-failed", packageId: "@acme/second" });
 		expect(firstDispose).toHaveBeenCalledOnce();
+	});
+});
+
+describe("loadConfiguredIntegrationPackages -- reload", () => {
+	it("swaps an editor contribution's fresh module in transactionally: old disposed only after new activates", async () => {
+		const root = packageFixture("@acme/hot", "1.0.0", [{ kind: "editor", entry: "./dist/editor.js" }]);
+		const path = join(root, "dist/editor.js");
+		const oldDispose = vi.fn();
+		const newActivate = vi.fn();
+		const modules = new Map<string, Record<string, unknown>>([[path, { default: editor("hot", vi.fn(), oldDispose) }]]);
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(root, "package.json")], applets: createAppletRegistry(), host,
+			loadModule: async (p) => modules.get(p) ?? {},
+		});
+
+		modules.set(path, { default: editor("hot", newActivate, vi.fn()) });
+		const result = await loaded.reload("@acme/hot");
+
+		expect(result).toEqual({ succeeded: ["@acme/hot"], failed: [] });
+		expect(oldDispose).toHaveBeenCalledOnce();
+		expect(newActivate).toHaveBeenCalledOnce();
+		await loaded.dispose();
+	});
+
+	it("a broken update leaves the old instance fully intact and running -- no half-swapped state", async () => {
+		const root = packageFixture("@acme/hot", "1.0.0", [{ kind: "editor", entry: "./dist/editor.js" }]);
+		const path = join(root, "dist/editor.js");
+		const oldDispose = vi.fn();
+		const oldActive = editor("hot", vi.fn(), oldDispose);
+		const modules = new Map<string, Record<string, unknown>>([[path, { default: oldActive }]]);
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(root, "package.json")], applets: createAppletRegistry(), host,
+			loadModule: async (p) => modules.get(p) ?? {},
+		});
+
+		// Simulate a syntax-error-shaped bad update: entry now exports nothing valid.
+		modules.set(path, { default: {} });
+		const result = await loaded.reload("@acme/hot");
+
+		expect(result.succeeded).toEqual([]);
+		expect(result.failed).toHaveLength(1);
+		expect(result.failed[0]).toMatchObject({ packageId: "@acme/hot" });
+		expect(oldDispose).not.toHaveBeenCalled();
+		await loaded.dispose();
+		expect(oldDispose).toHaveBeenCalledOnce();
+	});
+
+	it("cascades a reload into every other configured package that declares dependsOn against the changed package", async () => {
+		// EDITOR_CONTRIBUTION_POINT is a global "exactly-one" -- two
+		// editor entries cannot coexist, so the downstream package here
+		// uses "vehicle-loopback" (zero-or-many) with an injected fake
+		// strategy instead of a second real spawn, to isolate this test to
+		// the cascade mechanic itself rather than re-exercising real
+		// subprocess spawning (already covered by
+		// vehicle-loopback-execution-strategy.test.ts).
+		const upstreamRoot = packageFixture("@acme/upstream", "1.0.0", [{ kind: "editor", entry: "./dist/editor.js" }]);
+		const downstreamRoot = mkdtempSync(join(tmpdir(), "zodiac-integration-"));
+		roots.push(downstreamRoot);
+		mkdirSync(join(downstreamRoot, "dist"), { recursive: true });
+		writeFileSync(join(downstreamRoot, "package.json"), JSON.stringify({ name: "@acme/downstream", version: "1.0.0", zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "downstream", title: "Downstream", command: "bun", entry: "./dist/entry.js" }], dependsOn: ["@acme/upstream"] } }));
+
+		const upstreamPath = join(upstreamRoot, "dist/editor.js");
+		const modules = new Map<string, Record<string, unknown>>([[upstreamPath, { default: editor("upstream") }]]);
+		const downstreamActivate = vi.fn(async () => ({ id: "downstream", description: { id: "downstream", title: "Downstream", commands: [], resourceSchemes: [] }, provenance: { packageId: "@acme/downstream", version: "1.0.0", source: "test" }, dispose: vi.fn() }));
+		const fakeVehicleLoopbackStrategy = { activate: downstreamActivate };
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(upstreamRoot, "package.json"), join(downstreamRoot, "package.json")],
+			applets: createAppletRegistry(), host,
+			loadModule: async (p) => modules.get(p) ?? {},
+			vehicleLoopbackStrategy: fakeVehicleLoopbackStrategy,
+		});
+
+		modules.set(upstreamPath, { default: editor("upstream") });
+		const result = await loaded.reload("@acme/upstream");
+
+		expect(result.succeeded).toEqual(["@acme/upstream", "@acme/downstream"]);
+		expect(result.failed).toEqual([]);
+		expect(downstreamActivate).toHaveBeenCalledTimes(2); // once at initial load, once on cascade
+		await loaded.dispose();
+	});
+
+	it("reloading an unknown package id returns a typed failure rather than throwing", async () => {
+		const root = packageFixture("@acme/hot", "1.0.0", [{ kind: "editor", entry: "./dist/editor.js" }]);
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(root, "package.json")], applets: createAppletRegistry(), host,
+			loadModule: async () => ({ default: editor("hot") }),
+		});
+		const result = await loaded.reload("@acme/does-not-exist");
+		expect(result.succeeded).toEqual([]);
+		expect(result.failed).toEqual([{ packageId: "@acme/does-not-exist", error: expect.objectContaining({ code: "unknown-package" }) }]);
+		await loaded.dispose();
+	});
+
+	// Uses the real default loadModule (no injected fixture) against real
+	// files on disk -- proves defaultLoadModule's own cache-busting import
+	// actually defeats Node's ESM module cache, not just the test
+	// fixture's own in-memory Map lookup every other test here relies on.
+	it("a real on-disk file change is genuinely re-evaluated on reload -- proves defaultLoadModule defeats Node's ESM cache", async () => {
+		const root = mkdtempSync(join(tmpdir(), "zodiac-integration-"));
+		roots.push(root);
+		mkdirSync(join(root, "dist"), { recursive: true });
+		writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@acme/real-fs", version: "1.0.0", zodiac: { integrations: [{ kind: "editor", entry: "./dist/editor.mjs" }] } }));
+		const entryPath = join(root, "dist/editor.mjs");
+		writeFileSync(entryPath, "export default { describe: () => ({ id: 'real-fs', title: 'v1', commands: [], resourceSchemes: [], contributionPoints: ['editor'] }), activate: async () => {}, dispose: async () => {} };\n");
+
+		const loaded = await loadConfiguredIntegrationPackages({ packageJsonPaths: [join(root, "package.json")], applets: createAppletRegistry(), host });
+		expect(loaded.integrations[0]?.description?.title).toBe("v1");
+
+		writeFileSync(entryPath, "export default { describe: () => ({ id: 'real-fs', title: 'v2', commands: [], resourceSchemes: [], contributionPoints: ['editor'] }), activate: async () => {}, dispose: async () => {} };\n");
+		const result = await loaded.reload("@acme/real-fs");
+
+		expect(result).toEqual({ succeeded: ["@acme/real-fs"], failed: [] });
+		expect(loaded.integrations[0]?.description?.title).toBe("v2");
+		await loaded.dispose();
+	});
+
+	it("checkForChanges detects a real on-disk edit and reloads exactly the changed package, leaving an untouched one alone", async () => {
+		const changedRoot = mkdtempSync(join(tmpdir(), "zodiac-integration-"));
+		roots.push(changedRoot);
+		mkdirSync(join(changedRoot, "dist"), { recursive: true });
+		writeFileSync(join(changedRoot, "package.json"), JSON.stringify({ name: "@acme/changed", version: "1.0.0", zodiac: { integrations: [{ kind: "editor", entry: "./dist/editor.mjs" }] } }));
+		const changedEntryPath = join(changedRoot, "dist/editor.mjs");
+		writeFileSync(changedEntryPath, "export default { describe: () => ({ id: 'changed', title: 'v1', commands: [], resourceSchemes: [], contributionPoints: ['editor'] }), activate: async () => {}, dispose: async () => {} };\n");
+
+		const untouchedRoot = packageFixture("@acme/untouched", "1.0.0", [{ kind: "applet", entry: "./dist/applet.js" }]);
+		writeFileSync(join(untouchedRoot, "dist/applet.js"), "");
+
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(changedRoot, "package.json"), join(untouchedRoot, "package.json")],
+			applets: createAppletRegistry(), host,
+			loadModule: async (p) => (p === changedEntryPath ? await import(pathToFileURL(changedEntryPath).href + `?t=${Date.now()}-${Math.random()}`) : { default: { id: "untouched", title: "Untouched", slot: "body", supportedFormFactors: new Set(["horizontal"]), maxInstances: 1 } }),
+		});
+
+		expect(await loaded.checkForChanges()).toEqual({ succeeded: [], failed: [] }); // nothing changed yet
+
+		await new Promise((resolve) => setTimeout(resolve, 5)); // ensure a distinct mtime on filesystems with coarse timestamp resolution
+		writeFileSync(changedEntryPath, "export default { describe: () => ({ id: 'changed', title: 'v2', commands: [], resourceSchemes: [], contributionPoints: ['editor'] }), activate: async () => {}, dispose: async () => {} };\n");
+		const result = await loaded.checkForChanges();
+
+		expect(result).toEqual({ succeeded: ["@acme/changed"], failed: [] });
+		expect(loaded.integrations.find((entry) => entry.provenance.packageId === "@acme/changed")?.description?.title).toBe("v2");
+		expect(loaded.integrations.find((entry) => entry.provenance.packageId === "@acme/untouched")?.id).toBe("untouched");
+		await loaded.dispose();
+	});
+
+	// Regression: EDITOR_CONTRIBUTION_POINT's own exactly-one cardinality
+	// makes an overlapping reload of the same package a real correctness
+	// hazard (confirmed live against a real spawned zodiacd under a fast
+	// poll interval: two concurrent reloads raced to dispose/re-register
+	// the one active instance and could leave the editor point empty).
+	it("serializes overlapping reload calls against the same package rather than racing them", async () => {
+		const root = mkdtempSync(join(tmpdir(), "zodiac-integration-"));
+		roots.push(root);
+		mkdirSync(join(root, "dist"), { recursive: true });
+		writeFileSync(join(root, "package.json"), JSON.stringify({ name: "@acme/race", version: "1.0.0", zodiac: { integrations: [{ kind: "editor", entry: "./dist/editor.mjs" }] } }));
+		const entryPath = join(root, "dist/editor.mjs");
+		writeFileSync(entryPath, "export default { describe: () => ({ id: 'race', title: 'v1', commands: [], resourceSchemes: [], contributionPoints: ['editor'] }), activate: async () => {}, dispose: async () => {} };\n");
+
+		const loaded = await loadConfiguredIntegrationPackages({ packageJsonPaths: [join(root, "package.json")], applets: createAppletRegistry(), host });
+		writeFileSync(entryPath, "export default { describe: () => ({ id: 'race', title: 'v2', commands: [], resourceSchemes: [], contributionPoints: ['editor'] }), activate: async () => {}, dispose: async () => {} };\n");
+
+		const [first, second] = await Promise.all([loaded.reload("@acme/race"), loaded.reload("@acme/race")]);
+		expect(first).toEqual({ succeeded: ["@acme/race"], failed: [] });
+		expect(second).toEqual({ succeeded: ["@acme/race"], failed: [] });
+		expect(loaded.integrations[0]?.description?.title).toBe("v2");
+		await loaded.dispose();
+	});
+
+	it("declarative vehicle-surface and applet entries are not reload participants -- reload on them is a typed no-op success", async () => {
+		const root = packageFixture("@acme/decl", "1.0.0", [{ kind: "vehicle-surface", vehicleName: "decl", title: "Decl" }]);
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(root, "package.json")], applets: createAppletRegistry(), host, loadModule: vi.fn(),
+		});
+		expect(await loaded.reload("@acme/decl")).toEqual({ succeeded: ["@acme/decl"], failed: [] });
+		await loaded.dispose();
 	});
 });

@@ -4,7 +4,15 @@ import { DEFAULT_ALLOWED_ORIGINS, DEFAULT_HOST, DEFAULT_PORT, parseZodiacdArgs }
 describe("parseZodiacdArgs", () => {
 	it("defaults to DEFAULT_PORT/DEFAULT_HOST with no args or env, fixtureMode/enableTerminal false", () => {
 		const args = parseZodiacdArgs([], {});
-		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false, allowedOrigins: DEFAULT_ALLOWED_ORIGINS, integrationPackageJsonPaths: [] });
+		expect(args).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, sessionsRoot: undefined, stateDir: undefined, fixtureMode: false, enableTerminal: false, allowedOrigins: DEFAULT_ALLOWED_ORIGINS, integrationPackageJsonPaths: [], hotReloadPollMs: undefined });
+	});
+
+	it("hot-reload polling is opt-in and undefined (disabled) by default -- ZODIAC_HOT_RELOAD_POLL_MS or --hot-reload-poll-ms enables it, bounded to a positive integer", () => {
+		expect(parseZodiacdArgs([]).hotReloadPollMs).toBeUndefined();
+		expect(parseZodiacdArgs([], { ZODIAC_HOT_RELOAD_POLL_MS: "2000" }).hotReloadPollMs).toBe(2000);
+		expect(parseZodiacdArgs(["--hot-reload-poll-ms", "500"]).hotReloadPollMs).toBe(500);
+		expect(() => parseZodiacdArgs(["--hot-reload-poll-ms", "0"])).toThrow(/hot-reload-poll-ms/);
+		expect(() => parseZodiacdArgs(["--hot-reload-poll-ms", "not-a-number"])).toThrow(/hot-reload-poll-ms/);
 	});
 
 	it("defaults allowedOrigins to apps/web's own fixed dev port, overridable via ZODIAC_ALLOWED_ORIGINS or repeated --allowed-origin flags", () => {

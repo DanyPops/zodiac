@@ -379,11 +379,29 @@ async function main(): Promise<void> {
 
 	console.log(`[zodiacd] listening on ${service.baseUrl} (World "${world.id}", sessions root: ${sessionsRoot}${args.enableTerminal ? ", terminal: enabled" : ""})`);
 
+	// Opt-in and disabled by default (see parse-args.ts's own doc comment) --
+	// checkForChanges() owns the actual file/version change classification
+	// and transactional swap (configured-loader.ts); this loop only owns the
+	// trigger. unref() so a running poll never itself keeps the process
+	// alive past a real shutdown signal.
+	let hotReloadInterval: NodeJS.Timeout | undefined;
+	if (args.hotReloadPollMs !== undefined) {
+		console.log(`[zodiacd] hot-reload polling enabled every ${args.hotReloadPollMs}ms`);
+		hotReloadInterval = setInterval(() => {
+			void configuredIntegrations.checkForChanges().then((result) => {
+				for (const packageId of result.succeeded) console.log(`[zodiacd] hot-reloaded configured Integration package: ${packageId}`);
+				for (const failure of result.failed) console.error(`[zodiacd] hot-reload failed for ${failure.packageId}: ${failure.error.message}`);
+			}, (error: unknown) => console.error(`[zodiacd] hot-reload check failed: ${String(error)}`));
+		}, args.hotReloadPollMs);
+		hotReloadInterval.unref();
+	}
+
 	let shuttingDown = false;
 	const shutdown = (signal: string) => {
 		if (shuttingDown) return;
 		shuttingDown = true;
 		console.log(`[zodiacd] ${signal} received, shutting down`);
+		if (hotReloadInterval) clearInterval(hotReloadInterval);
 		removeDaemonHandle(handlePath);
 		void configuredIntegrations.dispose()
 			.catch((error: unknown) => console.error(`[zodiacd] configured Integration disposal failed: ${String(error)}`))

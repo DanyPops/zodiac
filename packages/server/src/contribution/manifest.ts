@@ -71,8 +71,19 @@ export const ZodiacIntegrationEntrySchema = z.discriminatedUnion("kind", [
 ]);
 export type ZodiacIntegrationEntry = z.infer<typeof ZodiacIntegrationEntrySchema>;
 
+const MAX_MANIFEST_DEPENDS_ON = 16;
+
 export const ZodiacManifestFieldSchema = z.object({
 	integrations: z.array(ZodiacIntegrationEntrySchema).min(1).max(32),
+	/**
+	 * Other configured packages' own identities this package holds a
+	 * reference into (Cordis's own `inject`-as-capability-request,
+	 * ported). Reloading a changed package cascades into every other
+	 * configured package naming it here -- see hot-reload.ts. Empty by
+	 * default: Zodiac's current first-party packages (Papyrus/Lector/
+	 * Packed) do not depend on each other.
+	 */
+	dependsOn: z.array(z.string().trim().min(1).max(214)).max(MAX_MANIFEST_DEPENDS_ON).default([]),
 });
 export type ZodiacManifestField = z.infer<typeof ZodiacManifestFieldSchema>;
 
