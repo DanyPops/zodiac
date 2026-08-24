@@ -24,6 +24,7 @@ import { chatDockedSurfaceFor } from "./chat-docking.js";
 import { pruneAcknowledgedRename, type PendingRename } from "./pending-rename.js";
 import { pruneAcknowledgedItem, type Acknowledgeable } from "./pending-overlay.js";
 import { shouldApplyLlmRename } from "./llm-rename-guard.js";
+import { DEFAULT_EXPANDED_WORKSPACE_SELECTION_THICKNESS, resolveWorkspaceSelectionThickness } from "./workspace-selection-thickness.js";
 import { resolveActiveWindowId } from "./active-window-id.js";
 import { findSurfaceTemplate } from "../workspace/surface-templates.js";
 import { SurfaceTemplatesPillar } from "../workspace/SurfaceTemplatesPillar.js";
@@ -434,6 +435,14 @@ export function App(): React.JSX.Element {
 	const notificationActionsRef = useRef<{ approve: (requestId: string) => void; deny: (requestId: string) => void }>({ approve: () => {}, deny: () => {} });
 	const leftAppletId = appletIdForLocation("left", livePanels);
 	const rightAppletId = appletIdForLocation("right", livePanels);
+	// The most recently observed *expanded* (>100px) left Panel thickness --
+	// what collapsing-then-expanding via Ctrl+B restores to, so a manual
+	// drag-resize survives a collapse/expand cycle instead of always
+	// snapping back to the seeded default. A ref, not state: read only
+	// imperatively from the toggle/focus handlers below, never rendered.
+	const lastExpandedThicknessRef = useRef(DEFAULT_EXPANDED_WORKSPACE_SELECTION_THICKNESS);
+	const currentLeftPanelThickness = livePanels.find((panel) => panel.location === "left")?.thickness;
+	if (currentLeftPanelThickness !== undefined && currentLeftPanelThickness > 100) lastExpandedThicknessRef.current = currentLeftPanelThickness;
 	// Drag-resize-with-snapping's own dispatch: keeps the local collapse
 	// preference in sync (the pre-connection/no-daemon fallback default, per
 	// the "drag-resize" task's own instruction) and, once a real left Panel
@@ -445,6 +454,11 @@ export function App(): React.JSX.Element {
 		if (nextCollapsed !== selection.collapsed) selection.toggle();
 		const leftPanel = livePanels.find((panel) => panel.location === "left");
 		if (leftPanel) applyRef.current({ type: "panel.resize", panelId: leftPanel.id, thickness });
+	}
+	/** Dispatches the daemon-authoritative panel.resize a collapse/expand actually needs -- the real fix for the narrow-viewport bug: toggling used to only swap which nav renders locally, never shrinking/restoring the Panel's own reserved grid-column width (WorldShell.tsx reads Panel.thickness directly), leaving the old width reserved-but-empty. */
+	function resizeWorkspaceSelectionPanelFor(collapsed: boolean): void {
+		const leftPanel = livePanels.find((panel) => panel.location === "left");
+		if (leftPanel) applyRef.current({ type: "panel.resize", panelId: leftPanel.id, thickness: resolveWorkspaceSelectionThickness(collapsed, lastExpandedThicknessRef.current) });
 	}
 	// Each renderer is a thin container closure over this render's own local
 	// state/handlers (Container/Presentational split -- WorkspaceSelection and
@@ -480,7 +494,9 @@ export function App(): React.JSX.Element {
 	const registry = createZodiacCommandRegistry(
 		{
 			toggleWorkspaceSelection() {
-				if (selection.toggle()) {
+				const nowCollapsed = selection.toggle();
+				resizeWorkspaceSelectionPanelFor(nowCollapsed);
+				if (nowCollapsed) {
 					contexts.enterSurface();
 					return;
 				}
@@ -489,6 +505,7 @@ export function App(): React.JSX.Element {
 			},
 			focusWorkspaceSelection() {
 				selection.expand();
+				resizeWorkspaceSelectionPanelFor(false);
 				contexts.enterWorkspaceSelection();
 				focusSelectedWorkspaceButton();
 			},
