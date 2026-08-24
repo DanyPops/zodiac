@@ -4,6 +4,7 @@ import "dockview-react/dist/styles/dockview.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConversationSurface } from "../conversation/ConversationSurface.js";
 import type { ConversationItem } from "../conversation/projector.js";
+import { JittorUsageMeterLazy } from "../vehicle-surface/JittorUsageMeterLazy.js";
 import { chatOrientation, CHAT_SIZE_RATIO, type ChatOrientation, type ChatPlacement } from "../platform/chat-placement.js";
 import { cn } from "../platform/cn.js";
 import { toLocalRect, type Rect } from "../platform/geometry.js";
@@ -175,8 +176,9 @@ function DockedChatPanel(props: IDockviewPanelProps<DockedChatParams>): React.JS
 	const { conversationItems, conversationLoading, conversationError, draft, onDraftChange, onComposerFocus, siblingTitles, orientation, closing, focused } = props.params;
 	return (
 		<div className={cn("flex h-full min-h-0 flex-col animate-surface-spawn transition-opacity duration-[220ms] motion-reduce:animate-none", panelOpacityClassName(closing, focused))}>
-			<div className="flex h-8 shrink-0 items-center gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
+			<div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b-[length:var(--app-line-width)] border-gray-200 px-3 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300">
 				<span className="font-medium">{siblingTitles.length > 0 ? `Aware of: ${siblingTitles.join(", ")}` : "Aware of: nothing else docked here"}</span>
+				<JittorUsageMeterLazy />
 			</div>
 			<div className="min-h-0 flex-1">
 				<ConversationSurface items={conversationItems} loading={conversationLoading} error={conversationError} draft={draft} onDraftChange={onDraftChange} onComposerFocus={onComposerFocus} orientation={orientation} />

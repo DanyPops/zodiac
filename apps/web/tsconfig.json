@@ -4,7 +4,15 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "outDir": "dist",
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    // This app never emits via tsc (always invoked --noEmit; Vite does the
+    // real bundling) -- noEmit here (not just the CLI flag) is what lets
+    // allowImportingTsExtensions turn on below, needed to consume
+    // @danypops/jittor/usage's own raw .ts import specifiers (a Bun-native
+    // package with no compiled dist -- see the "Node/tsc consumers of a
+    // Bun-native raw-TypeScript package need a scoped boundary" rule).
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "vite.config.ts", "tailwind.config.ts"]
 }
