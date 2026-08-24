@@ -28,7 +28,12 @@ import type { ContributionCommand, ContributionDescription, ContributionHost, Co
 import type { ActiveContribution } from "./execution-strategy.js";
 import { resolveSharedVehicleTarget, type VehicleSurfaceTarget } from "../vehicle/vehicle-surface-gateway.js";
 
-export const DEFAULT_VEHICLE_LOOPBACK_READY_TIMEOUT_MS = 10_000;
+// A real Vehicle daemon's own first-run boot (schema migrations, config resolution) can
+// genuinely take longer than a synthetic fixture's near-instant startup, especially under
+// concurrent load -- confirmed live spawning the real @danypops/papyrus package. 20s matches
+// this codebase's own convention for a real zodiacd boot wait elsewhere in this suite, not an
+// arbitrarily large number.
+export const DEFAULT_VEHICLE_LOOPBACK_READY_TIMEOUT_MS = 20_000;
 export const DEFAULT_VEHICLE_LOOPBACK_INVOKE_TIMEOUT_MS = 10_000;
 
 export interface VehicleLoopbackSpawnSpec {
