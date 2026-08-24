@@ -3,7 +3,7 @@ import { z } from "zod";
 export const ContributionCardinalitySchema = z.enum(["exactly-one", "zero-or-one", "zero-or-many"]);
 export type ContributionCardinality = z.infer<typeof ContributionCardinalitySchema>;
 
-export const ContributionPointKindSchema = z.enum(["applet", "editor"]);
+export const ContributionPointKindSchema = z.enum(["applet", "editor", "vehicle-surface"]);
 export type ContributionPointKind = z.infer<typeof ContributionPointKindSchema>;
 
 export const ContributionPointDefinitionSchema = z.object({
@@ -17,6 +17,8 @@ export interface ContributionPointDefinition<TKind extends string = Contribution
 
 export const APPLET_CONTRIBUTION_POINT = { kind: "applet", cardinality: "zero-or-many" } as const satisfies ContributionPointDefinition<"applet">;
 export const EDITOR_CONTRIBUTION_POINT = { kind: "editor", cardinality: "exactly-one" } as const satisfies ContributionPointDefinition<"editor">;
+/** A declarative Vehicle Surface: no module to load (no `activate(host)` call, no code-loading risk beyond the manifest itself) -- just data naming which already-running Vehicle daemon to proxy through zodiacd's own VehicleSurfaceGateway. Zero-or-many: a package can name more than one Vehicle Surface. */
+export const VEHICLE_SURFACE_CONTRIBUTION_POINT = { kind: "vehicle-surface", cardinality: "zero-or-many" } as const satisfies ContributionPointDefinition<"vehicle-surface">;
 
 export const ContributionProvenanceSchema = z.object({
   packageId: z.string().trim().min(1).max(214),

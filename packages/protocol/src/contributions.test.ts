@@ -10,6 +10,7 @@ import {
   ContributionResourceReadRequestSchema,
   ContributionResourceReferenceSchema,
   EDITOR_CONTRIBUTION_POINT,
+  VEHICLE_SURFACE_CONTRIBUTION_POINT,
   type ZodiacContribution,
   type ContributionHost,
 } from "./contributions.js";
@@ -18,6 +19,7 @@ describe("package contribution contract", () => {
   it("defines bounded applet/editor points, generic cardinality, and package provenance", () => {
     expect(APPLET_CONTRIBUTION_POINT).toEqual({ kind: "applet", cardinality: "zero-or-many" });
     expect(EDITOR_CONTRIBUTION_POINT).toEqual({ kind: "editor", cardinality: "exactly-one" });
+    expect(VEHICLE_SURFACE_CONTRIBUTION_POINT).toEqual({ kind: "vehicle-surface", cardinality: "zero-or-many" });
     expect(ContributionCardinalitySchema.options).toEqual(["exactly-one", "zero-or-one", "zero-or-many"]);
     expect(ContributionPointDefinitionSchema.safeParse(EDITOR_CONTRIBUTION_POINT).success).toBe(true);
     expect(ContributionPointDefinitionSchema.safeParse({ kind: "unknown", cardinality: "many" }).success).toBe(false);

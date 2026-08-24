@@ -1,9 +1,11 @@
 /**
  * A package's own "zodiac" package.json field: a package declares itself as
- * an Integration without Zodiac's own source tree needing to name it. Two
- * named contribution kinds today, matching the two that already exist as
- * separate, hand-wired interfaces -- AppletDefinition (applet-registry.ts)
- * and ZodiacContribution (packages/protocol/src/contributions.ts).
+ * an Integration without Zodiac's own source tree needing to name it. Three
+ * named contribution kinds today: two loadable, in-process ones matching
+ * existing hand-wired interfaces -- AppletDefinition (applet-registry.ts)
+ * and ZodiacContribution (packages/protocol/src/contributions.ts) -- and
+ * one purely declarative one (vehicle-surface) naming an already-running
+ * Vehicle daemon to proxy through, with no code to load at all.
  *
  * Resolution and filesystem scanning are out of scope here -- this module
  * only parses a manifest object/file it's handed. See Doc "Design: Zodiac
@@ -17,11 +19,32 @@ import { z } from "zod";
 export const ZodiacIntegrationKindSchema = ContributionPointKindSchema;
 export type ZodiacIntegrationKind = ContributionPointKind;
 
-/** One contribution point a package activates. `entry` is a module path relative to the package root, resolved by the caller -- this module never touches the filesystem beyond reading the manifest itself. */
-export const ZodiacIntegrationEntrySchema = z.object({
-	kind: ZodiacIntegrationKindSchema,
-	entry: z.string().trim().min(1).max(1_024),
-});
+const MAX_VEHICLE_SURFACE_INVALIDATION_TOPICS = 32;
+
+/**
+ * A declarative Vehicle Surface: no `entry` module, since there's no code
+ * to load or activate -- just naming data for an already-running Vehicle
+ * daemon zodiacd's own VehicleSurfaceGateway proxies through (see
+ * contributions.ts's own VEHICLE_SURFACE_CONTRIBUTION_POINT doc comment).
+ * `.strict()` so an accidental `entry` field (a copy-paste from a loadable
+ * entry) fails loud at manifest-parse time instead of being silently
+ * ignored.
+ */
+export const ZodiacVehicleSurfaceIntegrationEntrySchema = z
+	.object({
+		kind: z.literal("vehicle-surface"),
+		vehicleName: z.string().trim().min(1).max(214),
+		title: z.string().trim().min(1).max(200),
+		invalidationTopics: z.array(z.string().trim().min(1).max(200)).max(MAX_VEHICLE_SURFACE_INVALIDATION_TOPICS).optional(),
+	})
+	.strict();
+export type ZodiacVehicleSurfaceIntegrationEntry = z.infer<typeof ZodiacVehicleSurfaceIntegrationEntrySchema>;
+
+export const ZodiacIntegrationEntrySchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("applet"), entry: z.string().trim().min(1).max(1_024) }),
+	z.object({ kind: z.literal("editor"), entry: z.string().trim().min(1).max(1_024) }),
+	ZodiacVehicleSurfaceIntegrationEntrySchema,
+]);
 export type ZodiacIntegrationEntry = z.infer<typeof ZodiacIntegrationEntrySchema>;
 
 export const ZodiacManifestFieldSchema = z.object({

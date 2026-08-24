@@ -8,12 +8,15 @@ import {
 	ConfiguredIntegrationLoadError,
 	MAX_CONFIGURED_INTEGRATION_PACKAGES,
 	loadConfiguredIntegrationPackages,
+	vehicleSurfaceDefinitionsFrom,
 } from "./configured-loader.js";
 
 const host: ContributionHost = { registerCommand: () => () => {}, registerResourceProvider: () => () => {} };
 const roots: string[] = [];
 
-function packageFixture(name: string, version: string, integrations: readonly { kind: "applet" | "editor"; entry: string }[]): string {
+type IntegrationFixtureEntry = { kind: "applet" | "editor"; entry: string } | { kind: "vehicle-surface"; vehicleName: string; title: string; invalidationTopics?: readonly string[] };
+
+function packageFixture(name: string, version: string, integrations: readonly IntegrationFixtureEntry[]): string {
 	const root = mkdtempSync(join(tmpdir(), "zodiac-integration-"));
 	roots.push(root);
 	mkdirSync(join(root, "dist"), { recursive: true });
@@ -67,6 +70,56 @@ describe("loadConfiguredIntegrationPackages", () => {
 		expect(applets.applets()).toEqual([]);
 		await loaded.dispose();
 		expect(dispose).toHaveBeenCalledOnce();
+	});
+
+	// Regression for task 09bcc382 ("Wire Jittor as Zodiac's canonical live
+	// token/cost/context meter"): a declarative vehicle-surface entry needs
+	// no module load/activation at all -- it's pure naming data for
+	// zodiacd's own VehicleSurfaceGateway.
+	it("loads a declarative vehicle-surface entry with no module load, no ContributionHost registration, and no loadModule call for it", async () => {
+		const jittorRoot = packageFixture("@danypops/jittor", "1.0.0", [{ kind: "vehicle-surface", vehicleName: "jittor", title: "Jittor", invalidationTopics: ["usage"] }]);
+		const applets = createAppletRegistry();
+		const loadModule = vi.fn(async () => ({}));
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(jittorRoot, "package.json")],
+			applets,
+			host,
+			loadModule,
+		});
+
+		expect(loaded.integrations).toEqual([
+			{
+				kind: "vehicle-surface",
+				id: "jittor",
+				vehicleName: "jittor",
+				invalidationTopics: ["usage"],
+				description: { id: "jittor", title: "Jittor", commands: [], resourceSchemes: [] },
+				provenance: { packageId: "@danypops/jittor", version: "1.0.0", source: `path:${join(jittorRoot, "package.json")}` },
+			},
+		]);
+		expect(loadModule).not.toHaveBeenCalled();
+		expect(vehicleSurfaceDefinitionsFrom(loaded.integrations)).toEqual([{ id: "jittor", title: "Jittor", vehicleName: "jittor", invalidationTopics: ["usage"] }]);
+
+		// Declarative -- dispose() is a real no-op for it, not an error.
+		await loaded.dispose();
+	});
+
+	it("a mix of loadable and declarative vehicle-surface entries load together, in order", async () => {
+		const lectorRoot = packageFixture("@danypops/zodiac-lector", "1.2.3", [{ kind: "editor", entry: "./dist/editor.js" }]);
+		const jittorRoot = packageFixture("@danypops/jittor", "1.0.0", [{ kind: "vehicle-surface", vehicleName: "jittor", title: "Jittor" }]);
+		const modules = new Map<string, Record<string, unknown>>([[join(lectorRoot, "dist/editor.js"), { default: editor("lector") }]]);
+		const applets = createAppletRegistry();
+		const loaded = await loadConfiguredIntegrationPackages({
+			packageJsonPaths: [join(lectorRoot, "package.json"), join(jittorRoot, "package.json")],
+			applets,
+			host,
+			loadModule: async (path) => modules.get(path) ?? {},
+		});
+		expect(loaded.integrations.map((entry) => `${entry.provenance.packageId}:${entry.kind}:${entry.id}`)).toEqual([
+			"@danypops/zodiac-lector:editor:lector",
+			"@danypops/jittor:vehicle-surface:jittor",
+		]);
+		await loaded.dispose();
 	});
 
 	it("rejects configured-package and manifest bounds before loading code", async () => {

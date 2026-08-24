@@ -54,9 +54,28 @@ export class ConfiguredIntegrationLoadError extends Error {
 export interface LoadedConfiguredIntegration {
 	readonly kind: ContributionPointKind;
 	readonly id: string;
-	readonly entry: string;
+	/** Absent for a declarative vehicle-surface entry -- there is no module to load. */
+	readonly entry?: string;
 	readonly description?: ContributionDescription;
 	readonly provenance: ContributionProvenance;
+	/** Present only for kind: "vehicle-surface" -- see vehicleSurfaceDefinitionsFrom. */
+	readonly vehicleName?: string;
+	readonly invalidationTopics?: readonly string[];
+}
+
+/**
+ * Projects the vehicle-surface entries out of a load result into the exact
+ * shape `createSharedVehicleSurfaceGateway`'s own `definitions` option
+ * expects -- the caller (zodiacd's own cli.ts) merges these with any
+ * hardcoded definitions rather than this module depending on
+ * @zodiac/server's own vehicle-surface-gateway module (contribution
+ * loading stays independent of that specific gateway's own shape beyond
+ * this narrow projection).
+ */
+export function vehicleSurfaceDefinitionsFrom(integrations: readonly LoadedConfiguredIntegration[]): readonly { id: string; title: string; vehicleName: string; invalidationTopics?: readonly string[] }[] {
+	return integrations
+		.filter((integration) => integration.kind === "vehicle-surface" && integration.vehicleName !== undefined)
+		.map((integration) => ({ id: integration.id, title: integration.description?.title ?? integration.id, vehicleName: integration.vehicleName!, invalidationTopics: integration.invalidationTopics }));
 }
 
 export interface LoadedConfiguredIntegrations {
@@ -176,6 +195,12 @@ export async function loadConfiguredIntegrationPackages(options: LoadConfiguredI
 	try {
 		for (const pkg of packages) {
 			for (const declared of pkg.manifest.integrations) {
+				if (declared.kind === "vehicle-surface") {
+					// Declarative -- no module to load, no ContributionHost
+					// registration, no cleanup needed on dispose.
+					loaded.push({ kind: "vehicle-surface", id: declared.vehicleName, provenance: pkg.provenance, vehicleName: declared.vehicleName, invalidationTopics: declared.invalidationTopics, description: { id: declared.vehicleName, title: declared.title, commands: [], resourceSchemes: [] } });
+					continue;
+				}
 				const entry = resolveEntry(pkg, declared.entry);
 				let module: unknown;
 				try {

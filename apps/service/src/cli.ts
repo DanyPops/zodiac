@@ -5,7 +5,7 @@ import { acquireDaemonLock, LOOPBACK_HOST, releaseDaemonLock, removeDaemonHandle
 import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type ContributionCommand, type ContributionResourceProvider, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
 import { createAppletRegistry, createEventBus, seedBuiltinApplets, type AppletRegistry } from "@zodiac/server";
-import { loadConfiguredIntegrationPackages } from "@zodiac/server/contribution-loader";
+import { loadConfiguredIntegrationPackages, vehicleSurfaceDefinitionsFrom } from "@zodiac/server/contribution-loader";
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
 import { createSharedVehicleSurfaceGateway, registerVisualCueOperations } from "@zodiac/server/vehicle";
 import { registerVehicleGrantOperation } from "@danypops/vehicle-server/grant";
@@ -298,8 +298,15 @@ async function main(): Promise<void> {
 		process.stderr.write("[zodiacd] WARNING: --enable-terminal exposes a real shell over the network. No auth is implemented yet -- loopback only.\n");
 	}
 
+	// Papyrus's own definition stays hardcoded here for now (a known,
+	// disclosed anti-pattern -- see task "Contributions: move from in-process
+	// trust to a real process/trust boundary" and "Wire Jittor as Zodiac's
+	// canonical live token/cost/context meter"); every OTHER Vehicle Surface
+	// (Jittor, and any future one) is package-owned via a declarative
+	// vehicle-surface configured-Integration entry instead, never hand-added
+	// here.
 	const vehicleSurfaces = createSharedVehicleSurfaceGateway({
-		definitions: [{ id: "papyrus", title: "Papyrus", vehicleName: "papyrus", invalidationTopics: ["tasks"] }],
+		definitions: [{ id: "papyrus", title: "Papyrus", vehicleName: "papyrus", invalidationTopics: ["tasks"] }, ...vehicleSurfaceDefinitionsFrom(configuredIntegrations.integrations)],
 	});
 	const service = await createZodiacService({
 		world,
