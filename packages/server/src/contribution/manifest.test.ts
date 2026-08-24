@@ -54,6 +54,28 @@ describe("readZodiacManifest", () => {
 		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-surface", vehicleName: "jittor", title: "Jittor", entry: "./x.ts" }] } })).toThrow();
 	});
 
+	// vehicle-loopback is code-bearing (unlike vehicle-surface) but
+	// out-of-process: zodiacd spawns `command` running `entry` as a real
+	// Vehicle daemon rather than importing it in-process (see
+	// contributions.ts's own VEHICLE_LOOPBACK_CONTRIBUTION_POINT doc
+	// comment).
+	it("parses a vehicle-loopback entry -- code-bearing, but spawned out-of-process rather than in-process imported", () => {
+		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js" }] } });
+		expect(manifest).toEqual({ integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js" }] });
+	});
+
+	it("parses a vehicle-loopback entry's own optional extra args", () => {
+		const manifest = readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js", args: ["serve"] }] } });
+		expect(manifest?.integrations[0]).toEqual({ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun", entry: "./dist/vehicle-entry.js", args: ["serve"] });
+	});
+
+	it("rejects a vehicle-loopback entry missing vehicleName, title, command, or entry", () => {
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", title: "Lector", command: "bun", entry: "./x.js" }] } })).toThrow();
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", command: "bun", entry: "./x.js" }] } })).toThrow();
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", entry: "./x.js" }] } })).toThrow();
+		expect(() => readZodiacManifest({ zodiac: { integrations: [{ kind: "vehicle-loopback", vehicleName: "lector", title: "Lector", command: "bun" }] } })).toThrow();
+	});
+
 	it("bounds the number and path length of declared integrations", () => {
 		expect(() => readZodiacManifest({ zodiac: { integrations: [] } })).toThrow();
 		expect(() => readZodiacManifest({ zodiac: { integrations: Array.from({ length: 33 }, (_, index) => ({ kind: "applet", entry: `./${index}.js` })) } })).toThrow();

@@ -23,6 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@danypops/pi-process-harness": "^0.1.3",
     "@danypops/vehicle-client": "^0.10.5",
     "@danypops/vehicle-core": "^0.18.0",
     "@danypops/vehicle-server": "^0.26.0",

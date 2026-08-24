@@ -194,19 +194,39 @@ export interface SharedVehicleSurfaceGatewayOptions {
 	readonly home?: string;
 }
 
+export interface ResolveSharedVehicleTargetOptions {
+	readonly env?: Record<string, string | undefined>;
+	readonly home?: string;
+}
+
+/**
+ * Resolves a named Vehicle's authenticated loopback target purely from the
+ * shared Vehicle Handle Directory -- the exact same credential-reading
+ * logic `createSharedVehicleSurfaceGateway` uses for a proxied
+ * already-running Vehicle Surface, factored out so a second real caller
+ * (the vehicle-loopback contribution execution strategy, which zodiacd
+ * itself spawns and then connects to the same way) never re-implements
+ * this security-sensitive path a second time. Throws
+ * VehicleSurfaceUnavailableError with `vehicleName` as its own
+ * surfaceId when no live, authenticated handle exists yet.
+ */
+export async function resolveSharedVehicleTarget(vehicleName: string, options: ResolveSharedVehicleTargetOptions = {}): Promise<VehicleSurfaceTarget> {
+	const handlePath = resolveSharedVehicleHandlePath(vehicleName, { env: options.env, home: options.home });
+	const handle = readDaemonHandle(handlePath);
+	if (!handle || handle.host !== LOOPBACK_HOST || !handle.tokenPath) throw new VehicleSurfaceUnavailableError(vehicleName, `Vehicle "${vehicleName}" has no authenticated loopback handle`);
+	const tokenSize = statSync(handle.tokenPath).size;
+	if (tokenSize < 1 || tokenSize > MAX_TOKEN_BYTES) throw new VehicleSurfaceUnavailableError(vehicleName, `Vehicle "${vehicleName}" token file is invalid`);
+	const token = readFileSync(handle.tokenPath, "utf8").trim();
+	if (!token) throw new VehicleSurfaceUnavailableError(vehicleName, `Vehicle "${vehicleName}" token is empty`);
+	const baseUrl = `http://${LOOPBACK_HOST}:${handle.port}`;
+	return { baseUrl, pushUrl: `ws://${LOOPBACK_HOST}:${handle.port}/push`, token };
+}
+
 export function createSharedVehicleSurfaceGateway(options: SharedVehicleSurfaceGatewayOptions): VehicleSurfaceGateway {
 	return createVehicleSurfaceGateway({
 		definitions: options.definitions,
 		async resolveTarget(vehicleName) {
-			const handlePath = resolveSharedVehicleHandlePath(vehicleName, { env: options.env, home: options.home });
-			const handle = readDaemonHandle(handlePath);
-			if (!handle || handle.host !== LOOPBACK_HOST || !handle.tokenPath) throw new VehicleSurfaceUnavailableError(vehicleName, `Vehicle "${vehicleName}" has no authenticated loopback handle`);
-			const tokenSize = statSync(handle.tokenPath).size;
-			if (tokenSize < 1 || tokenSize > MAX_TOKEN_BYTES) throw new VehicleSurfaceUnavailableError(vehicleName, `Vehicle "${vehicleName}" token file is invalid`);
-			const token = readFileSync(handle.tokenPath, "utf8").trim();
-			if (!token) throw new VehicleSurfaceUnavailableError(vehicleName, `Vehicle "${vehicleName}" token is empty`);
-			const baseUrl = `http://${LOOPBACK_HOST}:${handle.port}`;
-			return { baseUrl, pushUrl: `ws://${LOOPBACK_HOST}:${handle.port}/push`, token };
+			return resolveSharedVehicleTarget(vehicleName, options);
 		},
 	});
 }

@@ -59,6 +59,8 @@ export {
   ContributionResourceReadRequestSchema,
   ContributionResourceReferenceSchema,
   EDITOR_CONTRIBUTION_POINT,
+  VEHICLE_LOOPBACK_CONTRIBUTION_POINT,
+  VEHICLE_SURFACE_CONTRIBUTION_POINT,
 } from "./contributions.js";
 // Compatibility alias, not dead weight: the vendored, unpublished
 // @danypops/alignment-lector's own frozen source (repacked upstream, not

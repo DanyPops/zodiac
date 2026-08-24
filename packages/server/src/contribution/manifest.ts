@@ -40,10 +40,34 @@ export const ZodiacVehicleSurfaceIntegrationEntrySchema = z
 	.strict();
 export type ZodiacVehicleSurfaceIntegrationEntry = z.infer<typeof ZodiacVehicleSurfaceIntegrationEntrySchema>;
 
+const MAX_VEHICLE_LOOPBACK_ARGS = 16;
+
+/**
+ * A code-bearing, out-of-process contribution: zodiacd spawns `command`
+ * (typically "bun" or "node") with `entry` (a package-relative script,
+ * validated the exact same way an in-process "editor"/"applet" entry is)
+ * as its first argument, plus any `args` after it, and expects the result
+ * to come up as a real Vehicle daemon zodiacd connects to over an
+ * authenticated loopback -- see contributions.ts's own
+ * VEHICLE_LOOPBACK_CONTRIBUTION_POINT doc comment.
+ */
+export const ZodiacVehicleLoopbackIntegrationEntrySchema = z
+	.object({
+		kind: z.literal("vehicle-loopback"),
+		vehicleName: z.string().trim().min(1).max(214),
+		title: z.string().trim().min(1).max(200),
+		command: z.string().trim().min(1).max(200),
+		entry: z.string().trim().min(1).max(1_024),
+		args: z.array(z.string().trim().min(1).max(200)).max(MAX_VEHICLE_LOOPBACK_ARGS).optional(),
+	})
+	.strict();
+export type ZodiacVehicleLoopbackIntegrationEntry = z.infer<typeof ZodiacVehicleLoopbackIntegrationEntrySchema>;
+
 export const ZodiacIntegrationEntrySchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("applet"), entry: z.string().trim().min(1).max(1_024) }),
 	z.object({ kind: z.literal("editor"), entry: z.string().trim().min(1).max(1_024) }),
 	ZodiacVehicleSurfaceIntegrationEntrySchema,
+	ZodiacVehicleLoopbackIntegrationEntrySchema,
 ]);
 export type ZodiacIntegrationEntry = z.infer<typeof ZodiacIntegrationEntrySchema>;
 

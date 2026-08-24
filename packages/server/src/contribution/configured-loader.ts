@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import {
 	AppletDefinitionSchema,
 	EDITOR_CONTRIBUTION_POINT,
+	VEHICLE_LOOPBACK_CONTRIBUTION_POINT,
 	type ContributionDescription,
 	type ContributionHost,
 	type ContributionPointKind,
@@ -14,6 +15,7 @@ import { z } from "zod";
 import type { AppletRegistry } from "./applet-registry.js";
 import { createInProcessExecutionStrategy, type ActiveContribution, type EditorContributionRegistration } from "./execution-strategy.js";
 import { createContributionPointRegistry } from "./point-registry.js";
+import { createVehicleLoopbackExecutionStrategy } from "./vehicle-loopback-execution-strategy.js";
 import { readZodiacManifest, type ZodiacManifestField } from "./manifest.js";
 
 export const MAX_CONFIGURED_INTEGRATION_PACKAGES = 32;
@@ -181,6 +183,8 @@ export async function loadConfiguredIntegrationPackages(options: LoadConfiguredI
 
 	const editorPoints = createContributionPointRegistry<{ editor: EditorContributionRegistration }>([EDITOR_CONTRIBUTION_POINT]);
 	const strategy = createInProcessExecutionStrategy(editorPoints, options.host);
+	const vehicleLoopbackPoints = createContributionPointRegistry<{ "vehicle-loopback": { readonly id: string } }>([VEHICLE_LOOPBACK_CONTRIBUTION_POINT]);
+	const vehicleLoopbackStrategy = createVehicleLoopbackExecutionStrategy(vehicleLoopbackPoints, options.host);
 	const loadModule = options.loadModule ?? defaultLoadModule;
 	const cleanup: Array<() => void | Promise<void>> = [];
 	const loaded: LoadedConfiguredIntegration[] = [];
@@ -199,6 +203,23 @@ export async function loadConfiguredIntegrationPackages(options: LoadConfiguredI
 					// Declarative -- no module to load, no ContributionHost
 					// registration, no cleanup needed on dispose.
 					loaded.push({ kind: "vehicle-surface", id: declared.vehicleName, provenance: pkg.provenance, vehicleName: declared.vehicleName, invalidationTopics: declared.invalidationTopics, description: { id: declared.vehicleName, title: declared.title, commands: [], resourceSchemes: [] } });
+					continue;
+				}
+				if (declared.kind === "vehicle-loopback") {
+					// Code-bearing, but zodiacd never imports it in-process: the
+					// entry is resolved/contained exactly like an in-process
+					// editor/applet entry, but spawned as a real child process
+					// and connected to over an authenticated Vehicle loopback
+					// (see vehicle-loopback-execution-strategy.ts).
+					const entryPath = resolveEntry(pkg, declared.entry);
+					let active: ActiveContribution;
+					try {
+						active = await vehicleLoopbackStrategy.activate(declared.vehicleName, declared.title, { command: declared.command, args: [entryPath, ...(declared.args ?? [])], cwd: pkg.root }, pkg.provenance);
+					} catch (error) {
+						throw new ConfiguredIntegrationLoadError("activation-failed", entryPath, `Failed activating ${pkg.provenance.packageId} vehicle-loopback contribution`, { packageId: pkg.provenance.packageId, cause: error });
+					}
+					cleanup.push(() => active.dispose());
+					loaded.push({ kind: "vehicle-loopback", id: active.id, entry: entryPath, description: active.description, provenance: pkg.provenance, vehicleName: declared.vehicleName });
 					continue;
 				}
 				const entry = resolveEntry(pkg, declared.entry);

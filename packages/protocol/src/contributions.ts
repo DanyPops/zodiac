@@ -3,7 +3,7 @@ import { z } from "zod";
 export const ContributionCardinalitySchema = z.enum(["exactly-one", "zero-or-one", "zero-or-many"]);
 export type ContributionCardinality = z.infer<typeof ContributionCardinalitySchema>;
 
-export const ContributionPointKindSchema = z.enum(["applet", "editor", "vehicle-surface"]);
+export const ContributionPointKindSchema = z.enum(["applet", "editor", "vehicle-surface", "vehicle-loopback"]);
 export type ContributionPointKind = z.infer<typeof ContributionPointKindSchema>;
 
 export const ContributionPointDefinitionSchema = z.object({
@@ -19,6 +19,22 @@ export const APPLET_CONTRIBUTION_POINT = { kind: "applet", cardinality: "zero-or
 export const EDITOR_CONTRIBUTION_POINT = { kind: "editor", cardinality: "exactly-one" } as const satisfies ContributionPointDefinition<"editor">;
 /** A declarative Vehicle Surface: no module to load (no `activate(host)` call, no code-loading risk beyond the manifest itself) -- just data naming which already-running Vehicle daemon to proxy through zodiacd's own VehicleSurfaceGateway. Zero-or-many: a package can name more than one Vehicle Surface. */
 export const VEHICLE_SURFACE_CONTRIBUTION_POINT = { kind: "vehicle-surface", cardinality: "zero-or-many" } as const satisfies ContributionPointDefinition<"vehicle-surface">;
+/**
+ * A code-bearing contribution executed out-of-process, over the same
+ * authenticated Vehicle loopback transport every Vehicle daemon uses --
+ * the real process/trust boundary a plain in-process `editor` contribution
+ * does not have. Unlike `vehicle-surface` (an already-running daemon
+ * zodiacd only discovers and proxies to), zodiacd itself spawns and owns
+ * this contribution's process for the lifetime of its activation. Its
+ * commands still register into the same `ContributionHost` an in-process
+ * `editor` contribution would, so `integration.invoke`/the HTTP invoke
+ * route/tool-grant loading all treat it identically -- the same enforced
+ * boundary and dispatch path a hypothetical third-party contribution would
+ * use, not a first-party-only shortcut. Zero-or-many: more than one
+ * out-of-process contribution can be docked at once, unlike the
+ * exactly-one in-process editor point.
+ */
+export const VEHICLE_LOOPBACK_CONTRIBUTION_POINT = { kind: "vehicle-loopback", cardinality: "zero-or-many" } as const satisfies ContributionPointDefinition<"vehicle-loopback">;
 
 export const ContributionProvenanceSchema = z.object({
   packageId: z.string().trim().min(1).max(214),

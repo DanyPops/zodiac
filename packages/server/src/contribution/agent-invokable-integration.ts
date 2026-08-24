@@ -14,15 +14,16 @@ import { invokeContributionCommand, type ContributionInvokeRegistry } from "./co
 export const AGENT_INVOKABLE_CAPABILITY = "agent-invokable";
 
 /**
- * Projects loaded editor/applet contribution entries into the
- * IntegrationDefinition shape the tool-grant/authorizeAgentCommand system
- * reads `capabilities.hasApi` from. A vehicle-surface entry is excluded --
- * that kind has its own separate Integration story (see
- * vehicleSurfaceDefinitionsFrom) and never dock into a Window as a Surface.
+ * Projects loaded editor/applet/vehicle-loopback contribution entries into
+ * the IntegrationDefinition shape the tool-grant/authorizeAgentCommand
+ * system reads `capabilities.hasApi` from. A vehicle-surface entry is
+ * excluded -- that kind has its own separate Integration story (see
+ * vehicleSurfaceDefinitionsFrom) and never docks into a Window as a
+ * Surface.
  */
 export function integrationDefinitionsFrom(entries: readonly { readonly id: string; readonly kind: ContributionPointKind; readonly description?: ContributionDescription }[]): IntegrationDefinition[] {
 	return entries
-		.filter((entry) => entry.kind === "editor" || entry.kind === "applet")
+		.filter((entry) => entry.kind === "editor" || entry.kind === "applet" || entry.kind === "vehicle-loopback")
 		.map((entry) => ({
 			id: integrationId(entry.id),
 			title: entry.description?.title ?? entry.id,
