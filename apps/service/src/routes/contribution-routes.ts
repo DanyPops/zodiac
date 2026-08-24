@@ -7,6 +7,7 @@ import {
 	type ContributionDescription,
 	type ContributionResourceProvider,
 } from "@zodiac/protocol";
+import { invokeContributionCommand } from "@zodiac/server";
 
 const MAX_BODY_BYTES = 1_048_576;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -73,13 +74,14 @@ export function createContributionRoutes(registry: ContributionRouteRegistry) {
 			try { raw = await body(req); } catch (error) { json(res, error instanceof Error && error.message === "request-too-large" ? 413 : 400, { code: error instanceof Error ? error.message : "invalid-json" }); return; }
 			const parsed = parseWithSchema(ContributionInvokeRequestSchema, raw);
 			if (!parsed.ok) { json(res, 400, { code: "invalid-invocation", issues: parsed.issues }); return; }
-			const description = descriptions.get(contributionId);
-			if (!description) { json(res, 404, { code: "contribution-not-found" }); return; }
-			if (!description.commands.some((command) => command.id === parsed.value.commandId)) { json(res, 404, { code: "command-not-found" }); return; }
-			const command = registry.commands.get(parsed.value.commandId);
-			if (!command) { json(res, 503, { code: "command-unavailable" }); return; }
-			try { json(res, 200, await command.execute(parsed.value.input)); }
-			catch (error) { json(res, 502, { ok: false, code: "contribution-error", message: error instanceof Error ? error.message : "Contribution command failed" }); }
+			// Shares its lookup/error-code logic with integration.invoke's own
+			// agent-facing dispatch (agent-invokable-integration.ts's
+			// createContributionInvokeHandler) -- one contribution-command
+			// resolution rule for both a direct client call and an
+			// authorized agent command.
+			const outcome = await invokeContributionCommand(contributionId, parsed.value.commandId, parsed.value.input, { descriptions, commands: registry.commands });
+			const status = outcome.ok ? 200 : outcome.code === "contribution-not-found" || outcome.code === "command-not-found" ? 404 : outcome.code === "command-unavailable" ? 503 : 502;
+			json(res, status, outcome);
 		},
 		async read(req: IncomingMessage, res: ServerResponse, contributionId: string): Promise<void> {
 			if (!trusted(req)) { json(res, 403, { code: "untrusted-origin", message: "Contributions are available only to local Zodiac clients." }); return; }

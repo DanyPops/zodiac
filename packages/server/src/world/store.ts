@@ -73,7 +73,17 @@ export interface WorldStore {
 	 * A caller that ignores the return value (every pre-existing call site)
 	 * keeps working unchanged.
 	 */
-	apply: (intent: CommandIntent) => ApplyOutcome;
+	/**
+	 * Synchronous for every intent except integration.invoke, whose own
+	 * registered handler may itself be async (see IntegrationInvokeHandler's
+	 * own doc comment) -- apply() returns a Promise<ApplyOutcome> in exactly
+	 * that one case, ApplyOutcome directly otherwise. A caller that only ever
+	 * dispatches other intent types keeps working completely unchanged; a
+	 * caller that dispatches integration.invoke must await the result (a
+	 * plain, already-resolved value awaits harmlessly too, so this is safe
+	 * to always await defensively).
+	 */
+	apply: (intent: CommandIntent) => ApplyOutcome | Promise<ApplyOutcome>;
 	/**
 	 * Registers the handler that `apply()` routes an `integration.invoke`
 	 * CommandIntent to for this `integrationId`. Exactly one handler per
@@ -189,7 +199,16 @@ export interface WorldStorePanelOptions {
  * See packages/server/src/approval/gated-integration-invoke.ts for the
  * gating wrapper that actually reads it.
  */
-export type IntegrationInvokeHandler = (action: string, input: unknown, context?: IntegrationInvokeContext) => ContributionOutcome<unknown>;
+/**
+ * May return its outcome synchronously or as a Promise -- most real
+ * Integration operations (e.g. Lector's own file save, a real daemon round
+ * trip) are inherently async. `apply()` itself stays synchronous for every
+ * other CommandIntent variant (the torn-write-safety invariant this
+ * session's own FauxHuman/FauxAgent racing tests prove depends on it); only
+ * this one variant's own return value reflects whichever shape this
+ * handler actually returned -- see apply()'s own doc comment.
+ */
+export type IntegrationInvokeHandler = (action: string, input: unknown, context?: IntegrationInvokeContext) => ContributionOutcome<unknown> | Promise<ContributionOutcome<unknown>>;
 
 /** See IntegrationInvokeHandler's own doc comment. */
 export interface IntegrationInvokeContext {
@@ -204,6 +223,19 @@ export interface ApplyOutcome {
 	readonly surfaceId?: SurfaceId;
 	/** The registered IntegrationInvokeHandler's own returned outcome for integration.invoke; absent for every other intent type. */
 	readonly invokeResult?: ContributionOutcome<unknown>;
+}
+
+/**
+ * Narrows apply()'s own `ApplyOutcome | Promise<ApplyOutcome>` union back
+ * down for a caller that knows -- because it never dispatches
+ * integration.invoke, or already awaited apply() itself -- that this
+ * particular result really is synchronous. Throws rather than silently
+ * returning a Promise's own enumerable-looking-but-wrong properties if that
+ * assumption ever turns out false.
+ */
+export function applySync(outcome: ApplyOutcome | Promise<ApplyOutcome>): ApplyOutcome {
+	if (outcome instanceof Promise) throw new Error("apply() returned a Promise -- await it directly instead of calling applySync");
+	return outcome;
 }
 
 function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId, Workspace>, panelOptions: WorldStorePanelOptions = {}): WorldStore {
@@ -540,7 +572,7 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 		emitChange(acknowledgedCommandId);
 	}
 
-	function apply(intent: CommandIntent): ApplyOutcome {
+	function apply(intent: CommandIntent): ApplyOutcome | Promise<ApplyOutcome> {
 		switch (intent.type) {
 			case "workspace.create":
 				createWorkspace(intent.workspaceId, intent.title, intent.commandId, intent.activate);
@@ -596,9 +628,21 @@ function buildStore(worldId: WorldId, initialWorkspaces: ReadonlyMap<WorkspaceId
 				requireWorkspace(intent.workspaceId);
 				const handler = integrationInvokeHandlers.get(intent.integrationId);
 				if (!handler) throw new Error(`World "${worldId}" has no registered integration.invoke handler for Integration "${intent.integrationId}"`);
-				const invokeResult = handler(intent.action, intent.input, { presentedCapability: intent.approvalCapability });
+				const handlerResult = handler(intent.action, intent.input, { presentedCapability: intent.approvalCapability });
+				// Most real handlers (a Lector file save, any real daemon round trip)
+				// are async -- see IntegrationInvokeHandler's own doc comment. A
+				// synchronous handler's result is returned exactly as before (every
+				// other intent type's own contract, unaffected); an async one makes
+				// this call itself return a Promise<ApplyOutcome>, per apply()'s own
+				// doc comment.
+				if (handlerResult instanceof Promise) {
+					return handlerResult.then((invokeResult) => {
+						emitChange(intent.commandId);
+						return { commandId: intent.commandId, invokeResult };
+					});
+				}
 				emitChange(intent.commandId);
-				return { commandId: intent.commandId, invokeResult };
+				return { commandId: intent.commandId, invokeResult: handlerResult };
 			}
 			default:
 				assertNeverIntent(intent);

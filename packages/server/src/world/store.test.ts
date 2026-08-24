@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appletId, commandId, integrationId, panelId, surfaceId, verticalId, windowId, workspaceId, worldId, type AppletDefinition, type ContributionOutcome, type IntegrationDefinition, type Panel } from "@zodiac/protocol";
 import { authorizeAgentCommand } from "../agent/authorize-command.js";
 import { createCommandDispatcher, type CommandDefinition } from "../command/dispatcher.js";
-import { createWorldStore, hydrateWorldStore } from "./store.js";
+import { applySync, createWorldStore, hydrateWorldStore } from "./store.js";
 
 /**
  * Walking-skeleton slice for Zodiac IWE phase 1 -- proves the target
@@ -439,7 +439,7 @@ describe("WorldStore walking skeleton", () => {
 			const store = createWorldStore(worldId("w1"));
 			store.createWorkspace(workspaceId("ws"), "WS");
 
-			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", commandId: commandId("cmd-1") });
+			const outcome = applySync(store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", commandId: commandId("cmd-1") }));
 
 			expect(outcome.commandId).toBe(commandId("cmd-1"));
 			const dockedSurfaceId = store.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id;
@@ -450,7 +450,7 @@ describe("WorldStore walking skeleton", () => {
 			const store = createWorldStore(worldId("w1"));
 			const workspace = store.createWorkspace(workspaceId("ws"), "WS");
 
-			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: workspace.windows[0]!.id });
+			const outcome = applySync(store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", windowId: workspace.windows[0]!.id }));
 
 			expect(outcome.surfaceId).toBeDefined();
 			expect(store.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id).toBe(outcome.surfaceId);
@@ -460,7 +460,7 @@ describe("WorldStore walking skeleton", () => {
 			const store = createWorldStore(worldId("w1"));
 			store.createWorkspace(workspaceId("ws"), "WS");
 
-			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws"), commandId: commandId("cmd-2") });
+			const outcome = applySync(store.apply({ type: "window.next", workspaceId: workspaceId("ws"), commandId: commandId("cmd-2") }));
 
 			expect(outcome).toEqual({ commandId: commandId("cmd-2") });
 		});
@@ -469,7 +469,7 @@ describe("WorldStore walking skeleton", () => {
 			const store = createWorldStore(worldId("w1"));
 			store.createWorkspace(workspaceId("ws"), "WS");
 
-			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
+			const outcome = applySync(store.apply({ type: "window.next", workspaceId: workspaceId("ws") }));
 
 			expect(outcome.commandId).toBeUndefined();
 		});
@@ -507,7 +507,7 @@ describe("WorldStore walking skeleton", () => {
 			const store = createWorldStore(worldId("w1"));
 			store.createWorkspace(workspaceId("ws"), "WS");
 
-			const outcome = store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", surfaceId: surfaceId("client-2") });
+			const outcome = applySync(store.apply({ type: "surface.dock", workspaceId: workspaceId("ws"), integrationId: integrationId("activity"), title: "Activity", surfaceId: surfaceId("client-2") }));
 
 			expect(outcome.surfaceId).toBe(surfaceId("client-2"));
 			expect(store.getWorkspace(workspaceId("ws"))?.surfaces[0]?.id).toBe(surfaceId("client-2"));
@@ -526,7 +526,7 @@ describe("WorldStore walking skeleton", () => {
 			const store = createWorldStore(worldId("w1"));
 			store.createWorkspace(workspaceId("ws"), "WS");
 
-			const outcome = store.apply({ type: "window.next", workspaceId: workspaceId("ws") });
+			const outcome = applySync(store.apply({ type: "window.next", workspaceId: workspaceId("ws") }));
 
 			expect(outcome.surfaceId).toBeUndefined();
 		});
@@ -746,7 +746,7 @@ describe("integration.invoke", () => {
 		const fixture = fixtureSymbolSearchIntegration();
 		store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
 
-		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "createWorldStore" }, commandId: commandId("cmd-1") });
+		const outcome = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "createWorldStore" }, commandId: commandId("cmd-1") }));
 
 		expect(outcome).toEqual({ commandId: commandId("cmd-1"), invokeResult: { ok: true, value: { matches: ["createWorldStore#1", "createWorldStore#2"] } } });
 		expect(fixture.calls).toEqual([{ action: "symbol.search", input: { query: "createWorldStore" } }]);
@@ -759,7 +759,7 @@ describe("integration.invoke", () => {
 		store.registerIntegrationInvokeHandler(integrationId("lector"), fixture.handler);
 
 		// A structurally valid intent whose action the fixture Integration itself doesn't recognize -- the dispatcher still routes it through; only the target Integration is in a position to reject it.
-		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "something.else", input: {} });
+		const outcome = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "something.else", input: {} }));
 		expect(outcome.invokeResult).toEqual({ ok: false, code: "unknown-action", message: 'Fixture Integration doesn\'t understand action "something.else"' });
 	});
 
@@ -808,6 +808,32 @@ describe("integration.invoke", () => {
 		store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: {} });
 
 		expect(contexts).toEqual([{ presentedCapability: "cap-abc" }, { presentedCapability: undefined }]);
+	});
+
+	it("an async handler (e.g. Lector's own real daemon round trip) makes apply() itself return a Promise<ApplyOutcome>, resolving to the handler's real outcome", async () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		store.registerIntegrationInvokeHandler(integrationId("lector"), async (action, input) => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			return { ok: true, value: { action, input } };
+		});
+
+		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "file.save", input: { path: "a.ts" }, commandId: commandId("cmd-async") });
+
+		expect(outcome).toBeInstanceOf(Promise);
+		await expect(outcome).resolves.toEqual({ commandId: commandId("cmd-async"), invokeResult: { ok: true, value: { action: "file.save", input: { path: "a.ts" } } } });
+	});
+
+	it("an async handler's rejection propagates through apply()'s own returned Promise instead of being swallowed", async () => {
+		const store = createWorldStore(worldId("w1"));
+		store.createWorkspace(workspaceId("ws"), "WS");
+		store.registerIntegrationInvokeHandler(integrationId("lector"), async () => {
+			throw new Error("daemon connection lost");
+		});
+
+		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "file.save", input: {} });
+
+		await expect(outcome).rejects.toThrow("daemon connection lost");
 	});
 });
 

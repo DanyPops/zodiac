@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { acquireDaemonLock, LOOPBACK_HOST, releaseDaemonLock, removeDaemonHandle, writeDaemonHandle } from "@danypops/vehicle-server/paths";
 import { appletId, COMMAND_INTENT_MIN_VERSION, panelId, worldId, type CommandIntent, type ContributionCommand, type ContributionResourceProvider, type IntegrationDefinition, type IntegrationId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { createJsonFileSnapshotPort, createWorldStore, hydrateWorldStore, type WorldStore, type WorldStorePanelOptions } from "@zodiac/server/world";
-import { createAppletRegistry, createEventBus, seedBuiltinApplets, type AppletRegistry } from "@zodiac/server";
+import { createAppletRegistry, createContributionInvokeHandler, createEventBus, integrationDefinitionsFrom, seedBuiltinApplets, type AppletRegistry } from "@zodiac/server";
 import { loadConfiguredIntegrationPackages, vehicleSurfaceDefinitionsFrom } from "@zodiac/server/contribution-loader";
 import { createApprovalCenter, bridgeVehicleRegistryApprovals } from "@zodiac/server/approval";
 import { createSharedVehicleSurfaceGateway, registerVisualCueOperations } from "@zodiac/server/vehicle";
@@ -142,9 +142,19 @@ function createDaemonAgentIntegrationFactory(
 	};
 }
 
-/** Test-only injection point for a stub Integration/tool-contribution pair, JSON-encoded (no real Integration declares hasApi:true yet) -- production runs with both empty, granting nothing. */
-function loadToolGrantConfig(): { getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined; getAllIntegrations: () => readonly IntegrationDefinition[]; getContribution: (id: IntegrationId) => ToolContribution | undefined } {
-	const integrations = JSON.parse(process.env["ZODIAC_TOOL_INTEGRATIONS"] ?? "[]") as readonly IntegrationDefinition[];
+/**
+ * `realIntegrationDefinitions` are the ones derived from actually-loaded
+ * configured contributions (see integrationDefinitionsFrom) -- an editor
+ * package that declares the agent-invokable capability tag reports
+ * hasApi: true here for real, the concrete fix for "no real Integration
+ * declares hasApi:true yet". The env-var pair stays as a test-only
+ * injection seam (used by this app's own system tests to grant a fixture
+ * tool without spinning up a real contribution package); production always
+ * passes both env vars empty, so only the real definitions apply there.
+ */
+function loadToolGrantConfig(realIntegrationDefinitions: readonly IntegrationDefinition[]): { getIntegration: (id: IntegrationId) => IntegrationDefinition | undefined; getAllIntegrations: () => readonly IntegrationDefinition[]; getContribution: (id: IntegrationId) => ToolContribution | undefined } {
+	const envIntegrations = JSON.parse(process.env["ZODIAC_TOOL_INTEGRATIONS"] ?? "[]") as readonly IntegrationDefinition[];
+	const integrations = [...realIntegrationDefinitions, ...envIntegrations];
 	const contributions = JSON.parse(process.env["ZODIAC_TOOL_CONTRIBUTIONS"] ?? "[]") as readonly ToolContribution[];
 	return {
 		getIntegration: (id) => integrations.find((definition) => definition.id === id),
@@ -227,8 +237,21 @@ async function main(): Promise<void> {
 
 	const world = await loadOrCreateWorld(snapshotPort, applets);
 
+	// Every loaded editor/applet contribution that declares itself
+	// agent-invokable (AGENT_INVOKABLE_CAPABILITY) gets a real
+	// integration.invoke handler bridged to its own commands -- the
+	// concrete fix for "integration.invoke has no registered handler for
+	// any real Integration". A contribution that never declares the tag
+	// (the default) stays renderable-only: docked, but not agent-callable.
+	const configuredDescriptions = new Map(configuredIntegrations.integrations.flatMap((entry) => (entry.description ? [[entry.id, entry.description] as const] : [])));
+	const realIntegrationDefinitions = integrationDefinitionsFrom(configuredIntegrations.integrations);
+	for (const definition of realIntegrationDefinitions) {
+		if (!definition.capabilities.hasApi) continue;
+		world.registerIntegrationInvokeHandler(definition.id, createContributionInvokeHandler(definition.id, { descriptions: configuredDescriptions, commands: contributionCommands }));
+	}
+
 	const toolRegistrar = createInMemoryToolRegistrar();
-	const { getIntegration, getAllIntegrations, getContribution } = loadToolGrantConfig();
+	const { getIntegration, getAllIntegrations, getContribution } = loadToolGrantConfig(realIntegrationDefinitions);
 	watchWorkspaceToolGrants(world, getIntegration, getContribution, toolRegistrar);
 
 	// Real, shared instances -- constructed here (not left to createZodiacService's own

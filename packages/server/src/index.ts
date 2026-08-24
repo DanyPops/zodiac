@@ -10,6 +10,9 @@ export { createInProcessExecutionStrategy } from "./contribution/execution-strat
 
 export type { AppletRegistry } from "./contribution/applet-registry.js";
 export { createAppletRegistry, seedBuiltinApplets } from "./contribution/applet-registry.js";
+export type { ContributionInvokeRegistry } from "./contribution/contribution-invoke.js";
+export { invokeContributionCommand } from "./contribution/contribution-invoke.js";
+export { AGENT_INVOKABLE_CAPABILITY, createContributionInvokeHandler, integrationDefinitionsFrom } from "./contribution/agent-invokable-integration.js";
 
 export { createIdSequence, highestIdSuffix } from "./world/id-sequence.js";
 

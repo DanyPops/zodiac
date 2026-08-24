@@ -65,9 +65,13 @@ export function createWorldRoutes(world: WorldStore, options?: { maxSseBufferedB
 				writeJson(res, 400, { code: "invalid-intent", message: "Request body was not a recognized CommandIntent.", issues: parsed.issues });
 				return;
 			}
-			let outcome: ReturnType<WorldStore["apply"]>;
+			let outcome: Awaited<ReturnType<WorldStore["apply"]>>;
 			try {
-				outcome = world.apply(parsed.value);
+				// world.apply() itself is synchronous for every CommandIntent variant
+				// except integration.invoke, whose own registered handler may be async
+				// (see IntegrationInvokeHandler's own doc comment) -- awaiting here is
+				// correct and harmless for the synchronous cases too.
+				outcome = await world.apply(parsed.value);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				// Every other 400 branch above is a caller-input problem (malformed JSON,

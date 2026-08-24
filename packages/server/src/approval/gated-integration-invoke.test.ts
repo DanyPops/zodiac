@@ -2,7 +2,7 @@ import { HmacApprovalAuthority } from "@danypops/vehicle-server/approval-authori
 import { integrationId, workspaceId, worldId, type ContributionOutcome } from "@zodiac/protocol";
 import { describe, expect, it } from "vitest";
 import { createEventBus } from "../event/bus.js";
-import { createWorldStore } from "../world/store.js";
+import { applySync, createWorldStore } from "../world/store.js";
 import { createApprovalCenter } from "./approval-center.js";
 import { createGatedIntegrationInvokeHandler } from "./gated-integration-invoke.js";
 
@@ -33,7 +33,7 @@ describe("createGatedIntegrationInvokeHandler", () => {
 	it("item 1: a gated operation invoked with no capability durably emits a VehicleApprovalRequest before the real handler ever runs", () => {
 		const { store, approvalCenter, calls } = setup();
 
-		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "createWorldStore" } });
+		const outcome = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "createWorldStore" } }));
 
 		expect(calls).toEqual([]); // the real handler never ran
 		expect(outcome.invokeResult).toMatchObject({ ok: false, code: "approval-required" });
@@ -51,7 +51,7 @@ describe("createGatedIntegrationInvokeHandler", () => {
 		const gatedHandler = createGatedIntegrationInvokeHandler({ handler: fixtureSymbolSearchHandler(calls), approvalCenter, operationName: "lector.symbol.search", operationVersion: 1, effect: "read" });
 		store.registerIntegrationInvokeHandler(integrationId("lector"), gatedHandler);
 
-		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "x" } });
+		const outcome = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "x" } }));
 
 		expect(outcome.invokeResult).toEqual({ ok: true, value: { matches: ["x#1"] } });
 		expect(approvalCenter.pending()).toEqual([]);
@@ -66,7 +66,7 @@ describe("createGatedIntegrationInvokeHandler", () => {
 		const capability = approvalCenter.approve(request!.requestId);
 		expect(capability).toBeDefined();
 
-		const reinvokedOutcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input, approvalCapability: capability });
+		const reinvokedOutcome = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input, approvalCapability: capability }));
 
 		// The direct, always-authorized baseline this must match byte-for-byte.
 		const directCalls: { action: string; input: unknown }[] = [];
@@ -85,7 +85,7 @@ describe("createGatedIntegrationInvokeHandler", () => {
 		const [request] = approvalCenter.pending();
 		approvalCenter.deny(request!.requestId);
 
-		const resubmitted = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input });
+		const resubmitted = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input }));
 
 		expect(calls).toEqual([]); // never ran, denial or not
 		expect(resubmitted.invokeResult).toMatchObject({ ok: false, code: "approval-required" });
@@ -97,7 +97,7 @@ describe("createGatedIntegrationInvokeHandler", () => {
 		const [request] = approvalCenter.pending();
 		const capability = approvalCenter.approve(request!.requestId);
 
-		const outcome = store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "a-different-query" }, approvalCapability: capability });
+		const outcome = applySync(store.apply({ type: "integration.invoke", workspaceId: workspaceId("ws"), integrationId: integrationId("lector"), action: "symbol.search", input: { query: "a-different-query" }, approvalCapability: capability }));
 
 		expect(calls).toEqual([]);
 		expect(outcome.invokeResult).toMatchObject({ ok: false, code: "approval-capability-invalid" });
