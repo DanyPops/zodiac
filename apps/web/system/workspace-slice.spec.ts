@@ -142,9 +142,25 @@ test("Chat placement in Settings live-repositions an already-open Window's Chat,
 	expect(composerBoxLeft.y).toBeGreaterThan(logBoxLeft.y + logBoxLeft.height - 20);
 });
 
-/** Zodiac starts with one Window -- add more via the "+" control for tests needing several. */
+/**
+ * Zodiac starts with one Window -- add more via the "+" control for tests
+ * needing several. window.add has no optimistic overlay (unlike
+ * workspace.create/surface.dock): the Carousel's own window count only
+ * updates once the daemon's SSE broadcast confirms it, so firing clicks
+ * back to back with no wait between them can outrun that round trip and
+ * undercount by the time a caller reads it back (confirmed: this exact
+ * flakiness in "several Windows in the Carousel..."). Waits for each
+ * click's own effect (one more window button than before) before firing
+ * the next.
+ */
 async function addWindows(page: Page, count: number): Promise<void> {
-	for (let i = 0; i < count; i++) await page.getByRole("button", { name: "New Window" }).click();
+	const carousel = page.getByRole("navigation", { name: "Window Carousel" });
+	const buttons = windowButtons(carousel);
+	for (let i = 0; i < count; i++) {
+		const before = await buttons.count();
+		await page.getByRole("button", { name: "New Window" }).click();
+		await expect(buttons).toHaveCount(before + 1);
+	}
 }
 
 test("several Windows in the Carousel center the active one and fade by distance, with an empty docking watermark", async ({ page }) => {
