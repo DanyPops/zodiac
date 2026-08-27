@@ -189,7 +189,7 @@ describe("TerminalPaneComponent -- a real shell mounted natively, no Lector, no 
 			};
 			tick();
 		});
-	});
+	}, 15_000); // headroom above the test's own bounded 8s process-exit wait under full-suite load
 
 	it("resizes the real child pty when the mounted width or the host's reported row count changes between renders -- checked via `stty size`, the real kernel ioctl value, not a shell variable's own refresh timing", async () => {
 		const { host, mounted, setRows } = fakeNativeHost();
