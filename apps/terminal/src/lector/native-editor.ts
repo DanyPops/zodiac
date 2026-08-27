@@ -1,4 +1,4 @@
-import { dirname, relative } from "node:path";
+import { dirname, isAbsolute, relative } from "node:path";
 import type { ContributionReadBounds, ContributionResourceReference } from "@zodiac/protocol";
 import { ModalEditorComponent, type ModalEditorHost } from "@danypops/pi-lector/editor";
 import type { Component } from "@earendil-works/pi-tui";
@@ -27,6 +27,16 @@ export interface NativeEditorHost {
 }
 
 const READ_BOUNDS: ContributionReadBounds = { maxBytes: 4 * 1024 * 1024, maxEntries: 10_000 };
+
+export interface NativeEditorTarget {
+	readonly rootPath: string;
+	readonly workspaceId: string;
+	readonly relativePath: string;
+}
+
+export type NativeEditorTargetOutcome =
+	| { readonly ok: true; readonly value: NativeEditorTarget }
+	| { readonly ok: false; readonly code: "foreign-workspace-resource" | "workspace-open-failed" | "invalid-workspace-response"; readonly message: string };
 
 function record(value: unknown): Record<string, unknown> | undefined {
 	// Defensive-parse convention already used identically by workspace-bootstrap.ts,
@@ -87,6 +97,15 @@ function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, abs
 		return opened.value;
 	}
 
+	async function hoverAt(line: number, character: number): Promise<{ contents: string } | undefined> {
+		const outcome = await lectorHost.execute("lector.symbol.hover", { workspaceId, path: relativePath, line, character });
+		if (!outcome.ok) return undefined;
+		const read = await lectorHost.read(outcome.value, READ_BOUNDS);
+		if (!read.ok) return undefined;
+		const contents = hoverContents(read.value);
+		return contents === undefined ? undefined : { contents };
+	}
+
 	return {
 		filePath: absolutePath,
 		async save(text) {
@@ -100,21 +119,38 @@ function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, abs
 			const saved = await lectorHost.execute("lector.file.save", { resource });
 			if (!saved.ok) throw new Error(saved.message);
 		},
-		async hover(line, character) {
-			const outcome = await lectorHost.execute("lector.symbol.hover", { workspaceId, path: relativePath, line, character });
-			if (!outcome.ok) return undefined;
-			const read = await lectorHost.read(outcome.value, READ_BOUNDS);
-			if (!read.ok) return undefined;
-			const contents = hoverContents(read.value);
-			return contents === undefined ? undefined : { contents };
+		hover: hoverAt,
+		async hoverSnapshot(request) {
+			if (request.buffer.dirty) return { kind: "stale-active-buffer", bufferHash: request.buffer.hash };
+			const hover = await hoverAt(request.line, request.character);
+			return hover === undefined ? { kind: "ready" } : { kind: "ready", hover };
 		},
 	};
+}
+
+/** Resolves an editor path against one active Workspace and rejects paths outside its root before opening any resource. */
+export async function resolveNativeEditorTarget(
+	lectorHost: LectorHost,
+	absolutePath: string,
+	activeRootPath?: string,
+): Promise<NativeEditorTargetOutcome> {
+	const rootPath = activeRootPath ?? nearestGitRoot(dirname(absolutePath)) ?? dirname(absolutePath);
+	const relativePath = relative(rootPath, absolutePath);
+	if (isAbsolute(relativePath) || relativePath === ".." || relativePath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+		return { ok: false, code: "foreign-workspace-resource", message: `Editor target is outside the active Workspace` };
+	}
+	const opened = await lectorHost.execute("lector.workspace.open", { path: rootPath });
+	if (!opened.ok) return { ok: false, code: "workspace-open-failed", message: opened.message };
+	const workspaceId = workspaceIdFromReference(opened.value);
+	if (!workspaceId) return { ok: false, code: "invalid-workspace-response", message: "Lector returned an unrecognized workspace resource" };
+	return { ok: true, value: { rootPath, workspaceId, relativePath } };
 }
 
 /**
  * Opens `absolutePath` in a real Lector editor, mounted natively -- no AgentSession, no
  * ExtensionRunner, no Pi extension involvement at all. Resolves the file's nearest git root as
- * its Lector workspace (mirroring bootstrapWorkspace's own convention), opens both through the
+ * its Lector workspace when no active Workspace root is supplied (mirroring
+ * bootstrapWorkspace's own convention), opens both through the
  * existing lector-host.ts contribution commands, constructs a real ModalEditorComponent against
  * a fake tui/theme (the same real, working substitutes ZodiacExtensionUIContext already
  * proved live against this exact Component), and mounts it via host.showExternalComponent() --
@@ -122,13 +158,15 @@ function createLectorEditorHost(lectorHost: LectorHost, workspaceId: string, abs
  * Zodiac's TUI has no other Surface-hosting mechanism yet (see the Window/Surface-docking
  * discussion this task deliberately excludes from scope).
  */
-export async function openLectorEditorNatively(host: NativeEditorHost, lectorHost: LectorHost, absolutePath: string): Promise<void> {
-	const rootPath = nearestGitRoot(dirname(absolutePath)) ?? dirname(absolutePath);
-	const opened = await lectorHost.execute("lector.workspace.open", { path: rootPath });
-	if (!opened.ok) throw new Error(`Could not open workspace for "${absolutePath}": ${opened.message}`);
-	const workspaceId = workspaceIdFromReference(opened.value);
-	if (!workspaceId) throw new Error(`Lector returned an unrecognized workspace resource for "${absolutePath}"`);
-	const relativePath = relative(rootPath, absolutePath);
+export async function openLectorEditorNatively(
+	host: NativeEditorHost,
+	lectorHost: LectorHost,
+	absolutePath: string,
+	activeRootPath?: string,
+): Promise<void> {
+	const target = await resolveNativeEditorTarget(lectorHost, absolutePath, activeRootPath);
+	if (!target.ok) throw new Error(`${target.code}: ${target.message}`);
+	const { workspaceId, relativePath } = target.value;
 
 	const fileOpened = await lectorHost.execute("lector.file.open", { workspaceId, path: relativePath });
 	if (!fileOpened.ok) throw new Error(`Could not open "${absolutePath}": ${fileOpened.message}`);
@@ -162,7 +200,7 @@ export async function openLectorEditorNatively(host: NativeEditorHost, lectorHos
  * ZodiacExtensionUIContext.input() uses), then opens it natively. The interim invocation UI
  * until a real file browser exists (deliberately out of scope for this task).
  */
-export async function promptAndOpenLectorEditorNatively(host: NativeEditorHost, lectorHost: LectorHost): Promise<void> {
+export async function promptAndOpenLectorEditorNatively(host: NativeEditorHost, lectorHost: LectorHost, activeRootPath?: string): Promise<void> {
 	const path = await new Promise<string | undefined>((resolve) => {
 		function done(value: string | undefined): void {
 			host.hideExternalComponent();
@@ -175,5 +213,5 @@ export async function promptAndOpenLectorEditorNatively(host: NativeEditorHost, 
 		host.showExternalComponent(new TitledComponent("Open in Lector editor -- absolute file path", field));
 		host.refresh();
 	});
-	if (path && path.trim().length > 0) await openLectorEditorNatively(host, lectorHost, path.trim());
+	if (path && path.trim().length > 0) await openLectorEditorNatively(host, lectorHost, path.trim(), activeRootPath);
 }

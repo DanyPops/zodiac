@@ -123,7 +123,7 @@ export async function openLectorExplorerNatively(host: NativeEditorHost, lectorH
 				host.showExternalComponent(component);
 				host.refresh();
 			}),
-		showEditor: (absolutePath) => openLectorEditorNatively(host, lectorHost, absolutePath),
+		showEditor: (absolutePath) => openLectorEditorNatively(host, lectorHost, absolutePath, rootPath),
 	};
 
 	await runExplorerFlow(session, flowHost);

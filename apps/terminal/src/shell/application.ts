@@ -130,7 +130,7 @@ export class SemanticShellApplication {
   /** Fire-and-forget, matching every other dispatch branch's own void-returning contract -- a real failure (e.g. an unreachable Lector daemon) surfaces as a thrown error inside the prompted editor's own status line (ModalEditorComponent's own performActionSafely convention), not here. */
   private openLectorEditor(): void {
     if (!this.lectorHost) return;
-    void promptAndOpenLectorEditorNatively(this, this.lectorHost).catch(() => {
+    void promptAndOpenLectorEditorNatively(this, this.lectorHost, this.rootPath).catch(() => {
       // Opening failed before any Component ever mounted (e.g. the initial workspace/file open
       // itself rejected) -- nothing is showing external focus in that case, so just refresh back
       // to Zodiac's own chrome instead of leaving a dead promise with no user-visible outcome.

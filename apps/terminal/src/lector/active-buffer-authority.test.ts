@@ -1,11 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lectorOperationsFromClient } from "@danypops/zodiac-lector";
 import type { Component } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLectorHost, type LectorHost } from "./lector-host.js";
-import { openLectorEditorNatively } from "./native-editor.js";
+import { openLectorEditorNatively, resolveNativeEditorTarget } from "./native-editor.js";
 import { startIsolatedLectorDaemon } from "../test/isolated-lector-daemon.js";
 
 let root: string | undefined;
@@ -93,5 +93,26 @@ describe("active Lector buffer authority", () => {
 
 		typeKeys(editor, [":", "q", "\r"]);
 		await opened;
+	}, 15_000);
+
+	it("rejects a foreign Workspace target", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-buffer-scope-"));
+		const activeRoot = join(root, "active");
+		const foreignRoot = join(root, "foreign");
+		mkdirSync(activeRoot);
+		mkdirSync(foreignRoot);
+		const activeFile = join(activeRoot, "active.ts");
+		const foreignFile = join(foreignRoot, "foreign.ts");
+		writeFileSync(activeFile, "export const active = true;\n");
+		writeFileSync(foreignFile, "export const foreign = true;\n");
+		const host = await realHost();
+
+		const accepted = await resolveNativeEditorTarget(host, activeFile, activeRoot);
+		expect(accepted.ok).toBe(true);
+		expect(await resolveNativeEditorTarget(host, foreignFile, activeRoot)).toEqual({
+			ok: false,
+			code: "foreign-workspace-resource",
+			message: "Editor target is outside the active Workspace",
+		});
 	}, 15_000);
 });
