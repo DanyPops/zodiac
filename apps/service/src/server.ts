@@ -31,7 +31,7 @@ export interface CreateZodiacServiceOptions {
 	/** Serve deterministic fixture conversations instead of scanning sessionsRoot -- see apps/service/src/fixtures. */
 	fixtureMode?: boolean;
 	/** Constructs a fresh AgentIntegrationPort per new agent session, given an optional client-requested cwd -- a real createZodiacAgentSession(...).integration in production, a fake port in tests. */
-	createAgentIntegration: (cwd?: string, initialActiveToolNames?: readonly string[]) => AgentIntegrationPort | Promise<AgentIntegrationPort>;
+	createAgentIntegration: (cwd?: string, initialActiveToolNames?: readonly string[], workspaceId?: WorkspaceId) => AgentIntegrationPort | Promise<AgentIntegrationPort>;
 	/** Wires the terminal-session routes (POST to spawn, WS to attach) -- off by default, see parse-args.ts's own doc comment on why. */
 	enableTerminal?: boolean;
 	/** Constructs a real pty per new terminal session -- a real node-pty child in production (createNodePtyFactory), a fake port in tests. Required when enableTerminal is true. */
@@ -88,7 +88,9 @@ export function createZodiacService(options: CreateZodiacServiceOptions): Promis
 		options.fixtureMode ? { sessionsRoot: options.sessionsRoot, scan: fixtureScanConversations, readEvents: fixtureReadSessionEvents } : { sessionsRoot: options.sessionsRoot },
 	);
 	const agentSessionRegistry = createAgentSessionRegistry(options.createAgentIntegration);
-	const agentRoutes = createAgentRoutes(agentSessionRegistry, options.getWorkspaceToolIds, options.pendingClientActions);
+	const agentRoutes = createAgentRoutes(agentSessionRegistry, options.getWorkspaceToolIds, options.pendingClientActions, {
+		workspaceExists: (workspaceId) => options.world.getWorkspace(workspaceId) !== undefined,
+	});
 
 	// Only constructed when explicitly opted into -- see enableTerminal's own
 	// doc comment on why this isn't wired by default.

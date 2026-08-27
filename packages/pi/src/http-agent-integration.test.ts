@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ZodiacAgentEvent } from "@zodiac/agent";
+import { workspaceId } from "@zodiac/protocol";
 import { createHttpAgentIntegration, createRemoteZodiacAgentSession } from "./http-agent-integration.js";
 
 /**
@@ -163,6 +164,16 @@ describe("createRemoteZodiacAgentSession", () => {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ cwd: "/repos/lector" }),
+		});
+	});
+
+	it("sends the Workspace identity with cwd", async () => {
+		const daemon = createFakeDaemon();
+		await createRemoteZodiacAgentSession({ baseUrl: "http://fake", cwd: "/repos/lector", workspaceId: workspaceId("workspace-1"), fetcher: daemon.fetcher });
+		expect(daemon.fetcher).toHaveBeenCalledWith("http://fake/api/agent/sessions", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ cwd: "/repos/lector", workspaceId: "workspace-1" }),
 		});
 	});
 

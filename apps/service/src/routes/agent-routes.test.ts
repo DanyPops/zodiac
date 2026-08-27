@@ -72,7 +72,7 @@ describe("createAgentRoutes", () => {
 		const createIntegration = vi.fn(() => fakeIntegration());
 		const registry = createAgentSessionRegistry(createIntegration);
 		const getWorkspaceToolIds = vi.fn(() => ["lector.fs"]);
-		const routes = createAgentRoutes(registry, getWorkspaceToolIds);
+		const routes = createAgentRoutes(registry, getWorkspaceToolIds, undefined, { workspaceExists: () => true });
 		const base = await listen((req, res) => {
 			void routes.createSession(req, res);
 		});
@@ -101,7 +101,7 @@ describe("createAgentRoutes", () => {
 	it("createSession forwards the raw workspaceId to the integration factory even when getWorkspaceToolIds is unavailable -- it's a separate concern from the tool-list resolution", async () => {
 		const createIntegration = vi.fn(() => fakeIntegration());
 		const registry = createAgentSessionRegistry(createIntegration);
-		const routes = createAgentRoutes(registry);
+		const routes = createAgentRoutes(registry, undefined, undefined, { workspaceExists: () => true });
 		const base = await listen((req, res) => {
 			void routes.createSession(req, res);
 		});
@@ -109,6 +109,19 @@ describe("createAgentRoutes", () => {
 		await fetch(`${base}/api/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "ws" }) });
 
 		expect(createIntegration).toHaveBeenCalledWith(undefined, undefined, workspaceId("ws"));
+	});
+
+	it("rejects an unknown Workspace before session creation", async () => {
+		const createIntegration = vi.fn(() => fakeIntegration());
+		const registry = createAgentSessionRegistry(createIntegration);
+		const routes = createAgentRoutes(registry, () => ["lector.fs"], undefined, { workspaceExists: () => false });
+		const base = await listen((req, res) => void routes.createSession(req, res));
+
+		const response = await fetch(`${base}/api/agent/sessions`, { method: "POST", body: JSON.stringify({ workspaceId: "foreign" }) });
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ code: "workspace-not-found", message: "Workspace is unavailable." });
+		expect(createIntegration).not.toHaveBeenCalled();
 	});
 
 	it("listSessions reports every live session", async () => {

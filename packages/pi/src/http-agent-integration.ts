@@ -1,4 +1,5 @@
 import { AgentSessionControlOutcomeSchema, ZodiacAgentEventSchema, type AgentIntegrationPort, type AgentSessionControlOutcome, type ZodiacAgentEvent } from "@zodiac/agent";
+import type { WorkspaceId } from "@zodiac/protocol";
 import { readSseFrames } from "@zodiac/server/net";
 import { z } from "zod";
 
@@ -154,6 +155,8 @@ export interface CreateRemoteZodiacAgentSessionOptions {
 	readonly baseUrl: string;
 	/** The agent session's working directory. Omitted keeps zodiacd's own default (the daemon's own process cwd). */
 	readonly cwd?: string;
+	/** The active Workspace whose server-derived Integration grant scopes the session. */
+	readonly workspaceId?: WorkspaceId;
 	readonly fetcher?: typeof fetch;
 }
 
@@ -174,9 +177,13 @@ export interface RemoteZodiacAgentSession {
  */
 export async function createRemoteZodiacAgentSession(options: CreateRemoteZodiacAgentSessionOptions): Promise<RemoteZodiacAgentSession> {
 	const fetcher = options.fetcher ?? fetch;
+	const sessionRequest = {
+		...(options.cwd ? { cwd: options.cwd } : {}),
+		...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
+	};
 	const response = await fetcher(`${options.baseUrl}/api/agent/sessions`, {
 		method: "POST",
-		...(options.cwd ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd: options.cwd }) } : {}),
+		...(Object.keys(sessionRequest).length > 0 ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(sessionRequest) } : {}),
 	});
 	if (!response.ok) throw new Error(`createRemoteZodiacAgentSession: POST /api/agent/sessions returned ${response.status}`);
 	const body = (await response.json()) as { sessionId?: unknown };

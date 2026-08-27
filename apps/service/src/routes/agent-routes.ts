@@ -63,7 +63,12 @@ function matchClientAction(pathname: string): { sessionId: string; toolCallId: s
  * conversation another client already started, which is the actual point
  * of zodiacd existing.
  */
-export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[], pendingClientActions?: PendingClientActions, options?: { maxSseBufferedBytes?: number }) {
+export function createAgentRoutes(
+	registry: AgentSessionRegistry,
+	getWorkspaceToolIds?: (workspaceId: WorkspaceId) => readonly string[],
+	pendingClientActions?: PendingClientActions,
+	options?: { maxSseBufferedBytes?: number; workspaceExists?: (workspaceId: WorkspaceId) => boolean },
+) {
 	const maxSseBufferedBytes = options?.maxSseBufferedBytes;
 	return {
 		/**
@@ -108,7 +113,12 @@ export function createAgentRoutes(registry: AgentSessionRegistry, getWorkspaceTo
 				// Never trust a client-supplied tool list -- only a workspaceId, resolved server-side against the real WorldStore-derived grant.
 				const requestedWorkspaceId = (body as { workspaceId?: unknown } | undefined)?.workspaceId;
 				if (typeof requestedWorkspaceId === "string" && requestedWorkspaceId.trim()) {
-					workspaceId = requestedWorkspaceId as WorkspaceId;
+					const candidate = requestedWorkspaceId as WorkspaceId;
+					if (!options?.workspaceExists?.(candidate)) {
+						writeJson(res, 404, { code: "workspace-not-found", message: "Workspace is unavailable." });
+						return;
+					}
+					workspaceId = candidate;
 					if (getWorkspaceToolIds) initialActiveToolNames = getWorkspaceToolIds(workspaceId);
 				}
 			} catch {

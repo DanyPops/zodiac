@@ -2,7 +2,7 @@
 import { dirname } from "node:path";
 import { createWorldStore } from "@zodiac/server/world";
 import { connectRemoteWorldStore, type WorldClient } from "@zodiac/world";
-import { appletId, MIN_FOOTER_HEIGHT, panelId, worldId, type Panel } from "@zodiac/protocol";
+import { appletId, MIN_FOOTER_HEIGHT, panelId, workspaceId, worldId, type Panel, type WorkspaceId } from "@zodiac/protocol";
 import { Key, matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
 import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";
@@ -139,6 +139,7 @@ async function main(): Promise<void> {
   const { world, remoteWorld, localDaemon, chatOptions } = backing;
 
   let host: LectorHost | undefined;
+  let activeWorkspaceId: WorkspaceId | undefined;
   if (classified.kind !== "none") {
     host = createLectorHost();
     await host.activate();
@@ -149,6 +150,7 @@ async function main(): Promise<void> {
       return fail(bootstrapped.message);
     }
     applyBootstrapToWorld(world, bootstrapped.value);
+    activeWorkspaceId = workspaceId(bootstrapped.value.workspaceId);
   }
 
   // The application must exist *before* startFooterChat() runs:
@@ -160,7 +162,12 @@ async function main(): Promise<void> {
   const terminal = new ProcessTerminal();
   const application = new SemanticShellApplication(world, terminal, undefined, host, rootPath);
   const uiContext = createZodiacExtensionUIContext(application);
-  const chat = await startFooterChat({ cwd: resolveAgentCwd(classified), uiContext, ...chatOptions });
+  const chat = await startFooterChat({
+    cwd: resolveAgentCwd(classified),
+    uiContext,
+    ...(activeWorkspaceId ? { workspaceId: activeWorkspaceId } : {}),
+    ...chatOptions,
+  });
   if (chat) application.attachFooterChat(chat.footerChat);
   let stopping = false;
 

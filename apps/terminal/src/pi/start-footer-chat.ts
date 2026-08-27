@@ -1,4 +1,5 @@
 import { createRemoteZodiacAgentSession, createZodiacAgentSession } from "@zodiac/pi";
+import type { WorkspaceId } from "@zodiac/protocol";
 import type { AgentSession, ExtensionUIContext, ModelRuntime, ResourceLoader, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createFooterChatController, type FooterChatController } from "./footer-chat-controller.js";
 
@@ -44,6 +45,8 @@ export interface StartFooterChatOptions {
 	 * process, not this one.
 	 */
 	readonly daemonUrl?: string;
+	/** Active Workspace identity sent to zodiacd for server-derived Integration grants. */
+	readonly workspaceId?: WorkspaceId;
 }
 
 export interface StartedFooterChat {
@@ -78,7 +81,11 @@ export interface StartedFooterChat {
 export async function startFooterChat(options: StartFooterChatOptions): Promise<StartedFooterChat | undefined> {
 	try {
 		if (options.daemonUrl) {
-			const { integration } = await createRemoteZodiacAgentSession({ baseUrl: options.daemonUrl, cwd: options.cwd });
+			const { integration } = await createRemoteZodiacAgentSession({
+				baseUrl: options.daemonUrl,
+				cwd: options.cwd,
+				...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
+			});
 			const footerChat = createFooterChatController(integration);
 			return { footerChat, dispose: () => integration.dispose() };
 		}
