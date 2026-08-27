@@ -114,12 +114,43 @@ describe("openLectorExplorerNatively", () => {
 		typeKeys(editor, [":", "q", "\r"]);
 		const backToExplorer = await waitForMounted(mounted, editor);
 		expect(backToExplorer).not.toBe(editor);
-		await waitForText(backToExplorer, "readme.md");
+		await waitForText(backToExplorer, "eadme.md");
 
 		typeKeys(backToExplorer, [":", "q", "\r"]);
 		await opened;
 		expect(mounted()).toBeUndefined();
-	});
+	}, 15_000);
+
+	it("restores the active file when the Workspace Explorer is reopened", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-state-"));
+		mkdirSync(join(root, "src"));
+		writeFileSync(join(root, "readme.md"), "remember me\n");
+		const { host: nativeHost, mounted } = fakeNativeHost();
+		const lectorHost = await realHost();
+
+		const firstOpen = openLectorExplorerNatively(nativeHost, lectorHost, root);
+		const firstExplorer = await waitForMounted(mounted);
+		await waitForText(firstExplorer, "readme.md");
+		typeKeys(firstExplorer, ["j", "\r"]);
+		const firstEditor = await waitForMounted(mounted, firstExplorer);
+		typeKeys(firstEditor, [":", "q", "\r"]);
+		const returnedExplorer = await waitForMounted(mounted, firstEditor);
+		await waitForText(returnedExplorer, "eadme.md");
+		typeKeys(returnedExplorer, [":", "q", "\r"]);
+		const viewState = await firstOpen;
+
+		const secondOpen = openLectorExplorerNatively(nativeHost, lectorHost, root, viewState);
+		const restoredExplorer = await waitForMounted(mounted);
+		await waitForText(restoredExplorer, "eadme.md");
+		typeKeys(restoredExplorer, ["\r"]);
+		const restoredEditor = await waitForMounted(mounted, restoredExplorer);
+		expect(restoredEditor.render(80).join("\n")).toContain("emember me");
+
+		typeKeys(restoredEditor, [":", "q", "\r"]);
+		const finalExplorer = await waitForMounted(mounted, restoredEditor);
+		typeKeys(finalExplorer, [":", "q", "\r"]);
+		await secondOpen;
+	}, 15_000);
 
 	it("creates a real file on disk through the mounted explorer's own oil.nvim-style buffer edit (lector.file.create end to end)", async () => {
 		root = mkdtempSync(join(tmpdir(), "zodiac-native-explorer-create-"));

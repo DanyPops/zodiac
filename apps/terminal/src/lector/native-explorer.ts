@@ -1,5 +1,5 @@
 import type { ContributionReadBounds, ContributionResourceReference } from "@zodiac/protocol";
-import { type DirectoryExplorerSession, ExplorerComponent, type ExplorerFlowHost, type ExplorerResult, runExplorerFlow } from "@danypops/pi-lector/editor";
+import { type DirectoryExplorerSession, ExplorerComponent, type ExplorerFlowHost, type ExplorerResult, type ExplorerViewState, runExplorerFlow } from "@danypops/pi-lector/editor";
 import { nearestGitRoot } from "../bootstrap/nearest-git-root.js";
 import { workspaceIdFromReference } from "../bootstrap/workspace-bootstrap.js";
 import { createZodiacEditorTheme } from "../pi/zodiac-extension-ui-context.js";
@@ -96,7 +96,12 @@ function createLectorExplorerSession(lectorHost: LectorHost, workspaceId: string
  * the browse/open/return *policy* stays entirely inside pi-lector; this only supplies how a
  * Component actually gets shown and hidden in this one app.
  */
-export async function openLectorExplorerNatively(host: NativeEditorHost, lectorHost: LectorHost, rootPathHint: string): Promise<void> {
+export async function openLectorExplorerNatively(
+	host: NativeEditorHost,
+	lectorHost: LectorHost,
+	rootPathHint: string,
+	initialViewState: ExplorerViewState = { relativePath: "" },
+): Promise<ExplorerViewState> {
 	const rootPath = nearestGitRoot(rootPathHint) ?? rootPathHint;
 	const opened = await lectorHost.execute("lector.workspace.open", { path: rootPath });
 	if (!opened.ok) throw new Error(`Could not open workspace for "${rootPath}": ${opened.message}`);
@@ -107,7 +112,7 @@ export async function openLectorExplorerNatively(host: NativeEditorHost, lectorH
 	const theme = createZodiacEditorTheme();
 
 	const flowHost: ExplorerFlowHost = {
-		showExplorer: (explorerSession, relativePath) =>
+		showExplorer: (explorerSession, relativePath, selectedEntryName) =>
 			new Promise<ExplorerResult>((resolve) => {
 				function done(result: ExplorerResult): void {
 					host.hideExternalComponent();
@@ -119,12 +124,12 @@ export async function openLectorExplorerNatively(host: NativeEditorHost, lectorH
 				// ExplorerComponent's real coupling surface is exactly {requestRender, terminal.rows}
 				// and {fg, bg}, proven by direct source read, not pi-coding-agent's full TUI/Theme
 				// classes (which have private fields no plain object can satisfy structurally).
-				const component = new ExplorerComponent(fakeTui(host) as any, theme as any, explorerSession, relativePath, done);
+				const component = new ExplorerComponent(fakeTui(host) as any, theme as any, explorerSession, relativePath, done, selectedEntryName);
 				host.showExternalComponent(component);
 				host.refresh();
 			}),
 		showEditor: (absolutePath) => openLectorEditorNatively(host, lectorHost, absolutePath, rootPath),
 	};
 
-	await runExplorerFlow(session, flowHost);
+	return runExplorerFlow(session, flowHost, initialViewState);
 }

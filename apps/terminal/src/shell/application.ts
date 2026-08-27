@@ -3,6 +3,7 @@ import { appletId, type CommandIntent, type Location, type Panel, type WorldView
 import type { GridUpdate, Outcome } from "@zodiac/tui";
 import type { LectorHost } from "../lector/lector-host.js";
 import { promptAndOpenLectorEditorNatively } from "../lector/native-editor.js";
+import type { ExplorerViewState } from "@danypops/pi-lector/editor";
 import { openLectorExplorerNatively } from "../lector/native-explorer.js";
 import type { FooterChatController } from "../pi/footer-chat-controller.js";
 import { GridTerminal } from "@zodiac/tui";
@@ -28,6 +29,8 @@ export class SemanticShellApplication {
   private readonly output: GridTerminal;
   private width = 0;
   private height = 0;
+  /** One bounded view state for this application's single active Lector Workspace. */
+  private explorerViewState: ExplorerViewState = { relativePath: "" };
 
   /** Absent means no live Pi integration was constructed yet (no model configured, construction failed, still awaiting startFooterChat's own async setup, ...) -- the Footer renders its existing "unavailable" state and Enter/typing in the footer are no-ops. Not readonly: startFooterChat's own bindExtensions() call (which needs a real ZodiacExtensionUIContext, which needs a real SemanticShellApplication to route custom()'s mounted Components through) necessarily resolves *before* this application even exists in cli.ts's own construction order -- see attachFooterChat's own doc comment. */
   private footerChat?: FooterChatController;
@@ -36,9 +39,9 @@ export class SemanticShellApplication {
     private readonly world: WorldProjection,
     terminal: Pick<Terminal, "write">,
     footerChat?: FooterChatController,
-    /** Absent exactly when cli.ts started with no path argument at all (see its own `classified.kind === "none"` branch) -- "open-lector-editor" is then a silent no-op rather than throwing, matching how footer-submit is already a no-op with no footerChat. */
+    /** Optional for embedded tests and hosts; the real CLI always supplies its cwd-backed Lector host. */
     private readonly lectorHost?: LectorHost,
-    /** The resolved workspace root "open-lector-explorer" browses from -- absent under the exact same condition as lectorHost (no path argument at boot), and for the same reason: there is nothing to browse. */
+    /** Optional for embedded tests and hosts; the real CLI always supplies its resolved Workspace root. */
     private readonly rootPath?: string,
   ) {
     this.output = new GridTerminal(terminal);
@@ -142,10 +145,12 @@ export class SemanticShellApplication {
   /** Same fire-and-forget/failure-recovery contract as openLectorEditor -- no Input prompt needed, unlike the editor, since the explorer always starts at the already-resolved workspace root. */
   private openLectorExplorer(): void {
     if (!this.lectorHost || !this.rootPath) return;
-    void openLectorExplorerNatively(this, this.lectorHost, this.rootPath).catch(() => {
-      this.hideExternalComponent();
-      this.refresh();
-    });
+    void openLectorExplorerNatively(this, this.lectorHost, this.rootPath, this.explorerViewState)
+      .then((viewState) => { this.explorerViewState = viewState; })
+      .catch(() => {
+        this.hideExternalComponent();
+        this.refresh();
+      });
   }
 
   /**
