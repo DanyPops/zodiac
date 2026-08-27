@@ -28,6 +28,7 @@ const BASE: CellStyle = { foreground: 7 };
 const MUTED: CellStyle = { foreground: 6, dim: true };
 const BORDER_ACTIVE: CellStyle = { ...BASE, bold: true };
 const ERROR_STYLE: CellStyle = { foreground: 1 };
+const WORKFLOW_HINT = "^O Explorer  ^E Editor  ^T Shell";
 
 // Pi TUI's own AssistantMessageComponent/UserMessageComponent/ToolExecutionComponent
 // (packages/coding-agent/src/modes/interactive/components/*.ts) render role via a
@@ -310,6 +311,10 @@ export class SemanticShell {
 
   /** Paints the active Window's live tile as bordered, titled Surface boxes; falls back to a single centered label when the world is empty or the Window has no docked Surfaces yet. */
   private paintBody(frame: GridFrame, area: Rect, region: Extract<Region, { kind: "body" }>, title: CellStyle): Outcome<void> {
+    // Persistent command affordance: visible before a user knows which key can open a help sheet.
+    const hintX = Math.max(0, Math.floor((area.width - visibleWidth(WORKFLOW_HINT)) / 2));
+    const hinted = paint(frame, area, hintX, 0, WORKFLOW_HINT, MUTED);
+    if (!hinted.ok) return hinted;
     const content = region.content;
     if (content.state === "empty" || content.tile === null) {
       const label = content.state === "empty" ? content.watermark : content.title;
@@ -333,9 +338,7 @@ export class SemanticShell {
     // (see paintFrameBorders/panelBorderLabel), never a separate content
     // heading painted here.
     if (!chatApplet) {
-      // window-carousel has no row content of its own (its title text alone,
-      // border-embedded, is the whole of it); an items-shaped Applet
-      // (workspace-nav/integrations-nav) shows its first item or "(none)".
+      // An items-shaped Applet (workspace-nav/integrations-nav) shows its first item or "(none)".
       const itemsApplet = region.body.find((applet): applet is Extract<AppletContent, { items: unknown }> => "items" in applet);
       if (!itemsApplet) return { ok: true, value: undefined };
       return paint(frame, area, 1, 1, itemsApplet.items.length === 0 ? "(none)" : itemsApplet.items[0]!.label, MUTED);

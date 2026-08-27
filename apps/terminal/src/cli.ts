@@ -114,17 +114,16 @@ async function resolveBacking(mode: ZodiacTuiMode, daemonUrl: string | undefined
 
 async function main(): Promise<void> {
   const { path, mode, daemonUrl } = parseTerminalArgs(process.argv.slice(2));
-  const classified = classifyPath(path);
+  // Neovim's no-file startup can browse the cwd with `:edit .`; make that useful state
+  // immediate here so the visible Explorer/Editor entry points never become silent no-ops.
+  const classified = classifyPath(path ?? process.cwd());
+  if (classified.kind === "none") return fail("could not resolve the current working directory");
   if (classified.kind === "missing") return fail(`no such path: ${classified.path}`);
   if (classified.kind === "denied") return fail(`permission denied: ${classified.path}`);
   if (classified.kind === "unsupported") return fail(`not a file or directory: ${classified.path}`);
 
-  // Always resolved, unlike `host` -- a terminal pane needs *some* starting directory
-  // regardless of whether a Lector workspace ever opened (resolveAgentCwd's own "none" branch
-  // already falls back to process.cwd(), matching how a real `pi` CLI session or any ordinary
-  // shell resolves its own working directory with no argument at all). openLectorExplorer's own
-  // guard still additionally requires `lectorHost`, so browsing correctly stays gated on a real
-  // workspace having opened -- only openTerminal only ever needed *this*, not that.
+  // Always resolved: no positional path classifies the cwd above, matching a real `pi` CLI
+  // session while also giving Lector, the explorer, and terminal one shared Workspace root.
   const rootPath = resolveAgentCwd(classified);
 
   // The one explicit mode decision -- "remote" and "local-server" propagate
@@ -138,20 +137,16 @@ async function main(): Promise<void> {
   }
   const { world, remoteWorld, localDaemon, chatOptions } = backing;
 
-  let host: LectorHost | undefined;
-  let activeWorkspaceId: WorkspaceId | undefined;
-  if (classified.kind !== "none") {
-    host = createLectorHost();
-    await host.activate();
-    const bootstrapped = await bootstrapWorkspace(classified, host);
-    if (!bootstrapped.ok) {
-      await host.dispose();
-      await localDaemon?.stop();
-      return fail(bootstrapped.message);
-    }
-    applyBootstrapToWorld(world, bootstrapped.value);
-    activeWorkspaceId = workspaceId(bootstrapped.value.workspaceId);
+  const host: LectorHost = createLectorHost();
+  await host.activate();
+  const bootstrapped = await bootstrapWorkspace(classified, host);
+  if (!bootstrapped.ok) {
+    await host.dispose();
+    await localDaemon?.stop();
+    return fail(bootstrapped.message);
   }
+  applyBootstrapToWorld(world, bootstrapped.value);
+  const activeWorkspaceId: WorkspaceId = workspaceId(bootstrapped.value.workspaceId);
 
   // The application must exist *before* startFooterChat() runs:
   // ZodiacExtensionUIContext needs a real host to route .custom() through,
@@ -165,7 +160,7 @@ async function main(): Promise<void> {
   const chat = await startFooterChat({
     cwd: resolveAgentCwd(classified),
     uiContext,
-    ...(activeWorkspaceId ? { workspaceId: activeWorkspaceId } : {}),
+    workspaceId: activeWorkspaceId,
     ...chatOptions,
   });
   if (chat) application.attachFooterChat(chat.footerChat);
@@ -194,7 +189,7 @@ async function main(): Promise<void> {
     unsubscribeWorld();
     remoteWorld?.dispose();
     await localDaemon?.stop();
-    await host?.dispose();
+    await host.dispose();
     process.exitCode = exitCode;
   }
 

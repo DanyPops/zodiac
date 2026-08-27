@@ -29,7 +29,7 @@ describe("packaged TUI process boundary", () => {
       // correctly represent cursor-addressed rendering like GridTerminal's own output;
       // waitForText()/snapshot() are the real VT-reconstruction fix (see live-pty-terminal.ts's own
       // doc comment, which already named this exact file as the reason it exists).
-      await terminal.waitForText("No workspace open");
+      await terminal.waitForText("^O Explorer  ^E Editor  ^T Shell");
 
       // Tab/resize/cursor-visibility/raw-mode-restoration below are genuinely wire-protocol-level
       // assertions (did the right raw control sequences get emitted, did the shell wrapper's own

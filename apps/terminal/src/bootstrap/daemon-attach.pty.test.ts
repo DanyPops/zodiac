@@ -102,36 +102,31 @@ describe("apps/terminal attaching to a real zodiacd (stage 5)", () => {
 		expect(body.workspaces?.some((workspace) => workspace.title === rootTitle)).toBe(true);
 	}, 25_000);
 
-	it("a workspace created by a completely independent HTTP client against the same daemon appears live in the already-running terminal's own rendered screen", async () => {
+	it("a Surface docked by an independent HTTP client appears live in the running terminal", async () => {
 		const url = await startDaemon();
+		workspaceDir = mkdtempSync(join(tmpdir(), "zodiac-terminal-live-update-"));
+		writeFileSync(join(workspaceDir, "a.ts"), "export const a = 1;\n");
+		const rootTitle = basename(workspaceDir);
 
-		// Booted with *no* path argument -- the same "empty shell" walking-
-		// skeleton state cli-bootstrap.pty.test.ts already exercises locally,
-		// here against a fresh, still-empty attached daemon instead.
-		// Deliberate: this TUI's own pillar/body regions only ever project a
-		// *summary* of the World (layoutWorldRegions's own left pillar paints
-		// items[0]'s own label, body paints workspaces[0]'s own title --
-		// confirmed by reading semantic-shell.ts's own paintRegion) -- there is
-		// no scrollable list of every open Workspace to render a *second*,
-		// independently-created one into. A workspace created by an outside
-		// client only becomes visible here if it's the *first* one the shared
-		// World ever gets -- exactly the scenario a terminal attaching to an
-		// already-shared, still-empty daemon produces, and still a real,
-		// honest proof of the onChange -> refresh wiring against a real
-		// running process (not just a fake fetcher in a unit test).
-		terminal = spawnLiveTerminal(process.execPath, [cli, "--daemon", url], { cols: 80, rows: 24 });
-		await terminal.waitForText("No workspace open", 15_000);
+		// No positional path deliberately exercises cwd bootstrap while the remote daemon remains
+		// the sole World authority. The independent client mutates that already-open Workspace.
+		terminal = spawnLiveTerminal(process.execPath, [cli, "--daemon", url], { cols: 80, rows: 24, cwd: workspaceDir });
+		await terminal.waitForText(rootTitle, 15_000);
+		const worldResponse = await fetch(`${url}/api/world`);
+		expect(worldResponse.ok).toBe(true);
+		const world = (await worldResponse.json()) as { workspaces?: Array<{ id?: string }> };
+		const activeWorkspaceId = world.workspaces?.[0]?.id;
+		expect(activeWorkspaceId).toBeDefined();
 
-		const distinctiveTitle = "RemoteWS";
+		const distinctiveTitle = "Remote Surface";
 		const response = await fetch(`${url}/api/world/commands`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ intent: { type: "workspace.create", workspaceId: "remote-created", title: distinctiveTitle } }),
+			body: JSON.stringify({ intent: { type: "surface.dock", workspaceId: activeWorkspaceId, integrationId: "remote-fixture", title: distinctiveTitle } }),
 		});
 		expect(response.ok).toBe(true);
 
 		await terminal.waitForText(distinctiveTitle, 10_000);
-		expect(terminal.snapshot()).not.toContain("No workspace open");
 	}, 25_000);
 
 	it("--mode remote with an unreachable --daemon is a real, explicit startup error -- never a silent fallback to embedded mode", async () => {

@@ -40,6 +40,21 @@ describe("real CLI process bootstrap against a real Lector daemon", () => {
 		expect(text).not.toContain("Windows: none");
 	}, 15_000);
 
+	it("opens the process cwd as a real Workspace when no path is given, then opens its Explorer", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-cwd-"));
+		writeFileSync(join(root, "cwd-entry.ts"), "export const fromCwd = true;\n");
+		const rootTitle = basename(root);
+
+		const daemon = await startIsolatedLectorDaemon();
+		stopDaemon = daemon.stop;
+		terminal = spawnLiveTerminal(process.execPath, [cli], { cols: 80, rows: 24, cwd: root });
+		await terminal.waitForText(rootTitle, 15_000);
+		expect(terminal.snapshot()).not.toContain("No workspace open");
+
+		terminal.write("\x0f");
+		await terminal.waitForText("cwd-entry.ts", 15_000);
+	}, 20_000);
+
 	it("opens a real fixture file directly, identifying its nearest real git repository root as the Workspace", async () => {
 		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-file-"));
 		execFileSync("git", ["init", "-q"], { cwd: root });

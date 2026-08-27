@@ -66,6 +66,13 @@ describe("semantic empty Zodiac shell", () => {
     } finally { result.terminal.dispose(); }
   });
 
+  it("advertises the Explorer, Editor, and Shell entry points in the normal TUI", async () => {
+    const result = await render(80, 24);
+    try {
+      expect(result.terminal.plainLines().join("\n")).toContain("^O Explorer  ^E Editor  ^T Shell");
+    } finally { result.terminal.dispose(); }
+  });
+
   it("embeds Workspaces/Integrations/Chat into the border itself, like the header's own brand used to, rather than as separate content headings", async () => {
     const result = await render(80, 24);
     try {
