@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lectorOperationsFromClient } from "@danypops/zodiac-lector";
 import type { Component } from "@earendil-works/pi-tui";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLectorHost, type LectorHost } from "./lector-host.js";
 import { openLectorEditorNatively, promptAndOpenLectorEditorNatively } from "./native-editor.js";
 import { startIsolatedLectorDaemon } from "../test/isolated-lector-daemon.js";
@@ -53,6 +53,17 @@ function typeKeys(component: Component, keys: readonly string[]): void {
 	for (const key of keys) component.handleInput?.(key);
 }
 
+async function waitForMounted(mounted: () => Component | undefined, previous?: Component): Promise<Component> {
+	return await vi.waitFor(
+		() => {
+			const component = mounted();
+			if (!component || component === previous) throw new Error("component has not mounted yet");
+			return component;
+		},
+		{ timeout: 5_000, interval: 20 },
+	);
+}
+
 describe("openLectorEditorNatively", () => {
 	it("mounts a real ModalEditorComponent showing the real file's own content -- no AgentSession, no Pi extension involvement at all", async () => {
 		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-"));
@@ -60,14 +71,13 @@ describe("openLectorEditorNatively", () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
 		const opened = openLectorEditorNatively(nativeHost, await realHost(), join(root, "greet.ts"));
-		await new Promise((r) => setTimeout(r, 50)); // let the async open/read/mount chain settle before asserting
-		expect(mounted()).toBeDefined();
-		const rendered = mounted()!.render(80).join("\n");
+		const editor = await waitForMounted(mounted);
+		const rendered = editor.render(80).join("\n");
 		expect(rendered).toContain("greet");
 		expect(rendered).toContain("NORMAL");
 
 		// Quit without saving so the awaited promise actually resolves.
-		typeKeys(mounted()!, [":", "q", "\r"]);
+		typeKeys(editor, [":", "q", "\r"]);
 		await opened;
 		expect(mounted()).toBeUndefined();
 	});
@@ -79,9 +89,7 @@ describe("openLectorEditorNatively", () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
 		const opened = openLectorEditorNatively(nativeHost, await realHost(), filePath);
-		await new Promise((r) => setTimeout(r, 50));
-		const editor = mounted();
-		if (!editor) throw new Error("editor never mounted");
+		const editor = await waitForMounted(mounted);
 
 		typeKeys(editor, ["A", " ", "w", "o", "r", "l", "d", "\x1b"]); // append " world" in insert mode, then Escape
 		typeKeys(editor, [":", "w", "q", "\r"]);
@@ -96,9 +104,7 @@ describe("openLectorEditorNatively", () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
 		const opened = openLectorEditorNatively(nativeHost, await realHost(), join(root, "a.ts"));
-		await new Promise((r) => setTimeout(r, 50));
-		const editor = mounted();
-		if (!editor) throw new Error("editor never mounted");
+		const editor = await waitForMounted(mounted);
 
 		typeKeys(editor, ["K"]); // request hover at the cursor's starting position
 		await new Promise((r) => setTimeout(r, 300)); // a real hover round trip through a real (if not fully populated) language server
@@ -121,9 +127,7 @@ describe("openLectorEditorNatively", () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
 		const opened = openLectorEditorNatively(nativeHost, await realHost(), filePath);
-		await new Promise((r) => setTimeout(r, 50));
-		const editor = mounted();
-		if (!editor) throw new Error("editor never mounted");
+		const editor = await waitForMounted(mounted);
 
 		// Make an unsaved in-memory edit, but don't save yet.
 		typeKeys(editor, ["A", " ", "w", "o", "r", "l", "d", "\x1b"]);
@@ -173,17 +177,12 @@ describe("promptAndOpenLectorEditorNatively", () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
 
 		const flow = promptAndOpenLectorEditorNatively(nativeHost, await realHost());
-		await new Promise((r) => setTimeout(r, 20));
-		const prompt = mounted();
-		if (!prompt) throw new Error("prompt never mounted");
+		const prompt = await waitForMounted(mounted);
 		expect(prompt.render(80).join("\n")).toContain("Open in Lector editor");
 
 		for (const char of join(root, "x.ts")) prompt.handleInput?.(char);
 		prompt.handleInput?.("\r");
-		await new Promise((r) => setTimeout(r, 50));
-
-		const editor = mounted();
-		if (!editor) throw new Error("editor never mounted after submitting the path");
+		const editor = await waitForMounted(mounted, prompt);
 		expect(editor.render(80).join("\n")).toContain("x = 1");
 
 		typeKeys(editor, [":", "q", "\r"]);
@@ -194,8 +193,8 @@ describe("promptAndOpenLectorEditorNatively", () => {
 		const { host: nativeHost, mounted } = fakeNativeHost();
 		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-cancel-"));
 		const flow = promptAndOpenLectorEditorNatively(nativeHost, await realHost());
-		await new Promise((r) => setTimeout(r, 20));
-		mounted()?.handleInput?.("\x1b");
+		const prompt = await waitForMounted(mounted);
+		prompt.handleInput?.("\x1b");
 		await flow;
 		expect(mounted()).toBeUndefined();
 	});

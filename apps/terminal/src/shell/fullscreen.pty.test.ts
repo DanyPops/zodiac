@@ -11,6 +11,23 @@ const cli = resolve(packageRoot, "dist/cli.js");
 let root: string | undefined;
 let terminal: LiveTerminal | undefined;
 
+async function stableSnapshot(liveTerminal: LiveTerminal, timeoutMs = 5_000): Promise<string> {
+  const startedAt = Date.now();
+  let previous = liveTerminal.snapshot();
+  let unchangedAt = Date.now();
+  while (Date.now() - startedAt <= timeoutMs) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    const current = liveTerminal.snapshot();
+    if (current !== previous) {
+      previous = current;
+      unchangedAt = Date.now();
+    } else if (Date.now() - unchangedAt >= 100) {
+      return current;
+    }
+  }
+  throw new Error("Timed out waiting for the PTY screen to stabilize");
+}
+
 afterEach(async () => {
   await terminal?.dispose();
   terminal = undefined;
@@ -31,7 +48,7 @@ describe("Ctrl+Right/Ctrl+Left fullscreen, against a real running process", () =
     // A real directory argument bootstraps a real Workspace (its own title
     // in the body), not the empty-state watermark -- see cli-bootstrap.pty.test.ts.
     await terminal.waitForText(rootTitle);
-    const original = terminal.snapshot();
+    const original = await stableSnapshot(terminal);
     expect(original).toContain("Workspaces");
     expect(original).toContain("Integrations");
 
@@ -52,6 +69,6 @@ describe("Ctrl+Right/Ctrl+Left fullscreen, against a real running process", () =
 
     terminal.write("\x1b[1;5D"); // Ctrl+Left -- exit fullscreen
     await terminal.waitForText("Workspaces");
-    expect(terminal.snapshot()).toBe(original);
+    expect(await stableSnapshot(terminal)).toBe(original);
   }, 20_000); // headroom above waitForText's own 12s default -- see live-pty-terminal.ts's doc comment
 });

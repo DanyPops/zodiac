@@ -6,7 +6,7 @@
  * into this program too, even though this app never imports or runs that code path). The real
  * `bun-types` package would work too, but its own ambient globals (fetch/WebSocket/...)
  * conflict with @types/node's; this app runs under Node, never Bun, so only these two symbols
- * -- resolved as opaque `unknown`, never actually constructed here -- need to type-check at all.
+ * and Lector's TOML parser signature need to type-check at all.
  */
 declare module "bun:sqlite" {
 	export class Database {
@@ -17,7 +17,11 @@ declare module "bun:sqlite" {
 	export type DatabaseOptions = Record<string, unknown>;
 }
 
-declare const Bun: unknown;
+declare const Bun: {
+	readonly TOML: {
+		parse(text: string): unknown;
+	};
+};
 
 /**
  * @danypops/lector's own lsp-symbol-index.ts and service/workspace-watch-handlers.ts import
