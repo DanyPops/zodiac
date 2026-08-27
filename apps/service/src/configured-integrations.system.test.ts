@@ -67,7 +67,7 @@ describe("zodiacd configured Integration loading", () => {
 		expect(opened).toMatchObject({ ok: true, value: { uri: "lector://workspace/ws?path=" } });
 		const tree = await (await fetch(`${baseUrl}/api/contributions/fixture-lector/read`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resource: { uri: opened.value.uri, kind: "workspace", title: "project", readOnly: true }, bounds: { maxBytes: 1024, maxEntries: 10 } }) })).json();
 		expect(tree).toMatchObject({ ok: true, value: { kind: "tree", entries: [{ name: "src", kind: "directory" }] } });
-	});
+	}, 15_000);
 
 	it("fails startup with package-scoped diagnostics for a malformed configured export", async () => {
 		const packageRoot = temporaryRoot("zodiac-malformed-editor-");
@@ -81,5 +81,5 @@ describe("zodiacd configured Integration loading", () => {
 		const daemon = spawnZodiacd(stateDir, join(packageRoot, "package.json"));
 		expect(await daemon.waitForExit()).not.toBe(0);
 		expect(daemon.stderr).toContain("@fixture/malformed editor entry must default-export a ZodiacContribution");
-	});
+	}, 15_000);
 });

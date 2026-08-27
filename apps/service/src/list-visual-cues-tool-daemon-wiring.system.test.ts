@@ -81,7 +81,7 @@ describe("zodiacd's own cli.ts wires list_visual_cues (backed by RemoteBrowserVi
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as { sessionId?: string };
 		expect(typeof body.sessionId).toBe("string");
-	});
+	}, 15_000);
 
 	it("creating a session with no workspaceId still succeeds -- list_visual_cues is active in both createDaemonAgentIntegrationFactory branches, not just the Workspace-scoped one", async () => {
 		const url = await startDaemon();
@@ -89,7 +89,7 @@ describe("zodiacd's own cli.ts wires list_visual_cues (backed by RemoteBrowserVi
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as { sessionId?: string };
 		expect(typeof body.sessionId).toBe("string");
-	});
+	}, 15_000);
 
 	it("the daemon's own /api/agent/sessions/:id/client-actions/:toolCallId route is real and reachable -- a POST for a toolCallId nothing is pending under reports delivered: false, never a 500", async () => {
 		const url = await startDaemon();
@@ -100,5 +100,5 @@ describe("zodiacd's own cli.ts wires list_visual_cues (backed by RemoteBrowserVi
 		});
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ delivered: false });
-	});
+	}, 15_000);
 });

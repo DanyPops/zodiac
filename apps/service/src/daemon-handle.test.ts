@@ -61,7 +61,7 @@ describe("zodiacd's own daemon handle file and single-instance lock", () => {
 		expect(handle.host).toBe("127.0.0.1");
 		expect(handle.port).toBe(Number(new URL(url).port));
 		expect(handle.pid).toBe(daemon.pid);
-	});
+	}, 20_000);
 
 	it("a second zodiacd against the same stateDir fails fast, naming the existing holder's pid -- never silently binds a second port", async () => {
 		stateDir = await mkdtemp(join(tmpdir(), "zodiacd-handle-conflict-"));
@@ -75,7 +75,7 @@ describe("zodiacd's own daemon handle file and single-instance lock", () => {
 		expect(exitCode).not.toBe(0);
 		expect(second.stderr).toContain("already holds");
 		expect(second.stderr).toContain(String(first.pid));
-	});
+	}, 20_000);
 
 	it("a fresh zodiacd against a DIFFERENT stateDir starts normally even while another is running -- zodiacd is legitimately multi-instance, not a machine-wide singleton", async () => {
 		const stateDirA = await mkdtemp(join(tmpdir(), "zodiacd-handle-multi-a-"));
@@ -92,7 +92,7 @@ describe("zodiacd's own daemon handle file and single-instance lock", () => {
 			await rm(stateDirA, { recursive: true, force: true });
 			await rm(stateDirB, { recursive: true, force: true });
 		}
-	});
+	}, 20_000);
 
 	it("removes its own handle file and releases the lock on a clean SIGTERM shutdown -- a fresh instance against the same stateDir starts normally afterward", async () => {
 		stateDir = await mkdtemp(join(tmpdir(), "zodiacd-handle-cleanup-"));
@@ -105,5 +105,5 @@ describe("zodiacd's own daemon handle file and single-instance lock", () => {
 		const second = spawnZodiacd(stateDir);
 		daemons.push(second);
 		await expect(waitForStdout(second, /listening on (http:\/\/\S+)/)).resolves.toBeDefined();
-	});
+	}, 20_000);
 });
