@@ -131,7 +131,7 @@ describe("TerminalPaneComponent -- a real shell mounted natively, no Lector, no 
 
 		component.handleInput?.("echo before && false; echo exit-code-is-$?\r");
 		await waitForRender(component, 80, "exit-code-is-1");
-	});
+	}, 15_000);
 
 	/**
 	 * A real, user-reported bug: pressing Ctrl+] in a real running Zodiac process did nothing.

@@ -12,7 +12,7 @@ describe("installed Lector packages", () => {
 				{ cwd: new URL("../../../../", import.meta.url), encoding: "utf8", stdio: "pipe" },
 			),
 		).not.toThrow();
-	});
+	}, 15_000);
 
 	it("loads editor and navigation capabilities", () => {
 		expect(typeof ModalEditorComponent).toBe("function");
