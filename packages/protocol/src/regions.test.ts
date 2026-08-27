@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { layoutWorldRegions, MIN_FOOTER_HEIGHT, RegionSchema, type EmptyWorldViewModel, type ReadyWorldViewModel } from "./regions.js";
-import { appletId, panelId, surfaceId, windowId, workspaceId } from "./ids.js";
+import { appletId, integrationId, panelId, surfaceId, windowId, workspaceId } from "./ids.js";
 import type { Panel } from "./panel.js";
 
 const emptyWorld: EmptyWorldViewModel = { state: "empty", workspaces: [], activeWorkspaceId: null };
 
 const TWO_SURFACES = [
-	{ id: surfaceId("s1"), integrationId: "terminal" as never, title: "Terminal", status: "idle" as const, selected: false },
-	{ id: surfaceId("s2"), integrationId: "editor" as never, title: "Editor", status: "idle" as const, selected: false },
+	{ id: surfaceId("s1"), integrationId: integrationId("terminal"), title: "Terminal", status: "idle" as const, selected: false },
+	{ id: surfaceId("s2"), integrationId: integrationId("editor"), title: "Editor", status: "idle" as const, selected: false },
 ];
 
 function readyWorld(tile: ReadyWorldViewModel["workspaces"][number]["windows"][number]["tile"], surfaces = tile === null ? [] : TWO_SURFACES): ReadyWorldViewModel {
@@ -15,7 +15,7 @@ function readyWorld(tile: ReadyWorldViewModel["workspaces"][number]["windows"][n
 	return {
 		state: "ready",
 		activeWorkspaceId: workspaceId("ws1"),
-		workspaces: [{ id: workspaceId("ws1"), title: "My Workspace", activeWindowId: window.id, windows: [window], activeIntegrationIds: [] }],
+		workspaces: [{ id: workspaceId("ws1"), title: "My Workspace", activeWindowId: window.id, windows: [window], activeIntegrationIds: surfaces.map((surface) => surface.integrationId) }],
 	};
 }
 
@@ -83,6 +83,17 @@ describe("semantic Region protocol", () => {
         ],
       },
     });
+  });
+
+  it("projects the active Workspace's docked Integrations into the Integration navigator", () => {
+    const tile = { kind: "row" as const, children: [{ tile: { kind: "leaf" as const, surfaceId: surfaceId("s1") }, constraint: { kind: "fill" as const, weight: 1 } }, { tile: { kind: "leaf" as const, surfaceId: surfaceId("s2") }, constraint: { kind: "fill" as const, weight: 1 } }] };
+    const result = layoutWorldRegions(readyWorld(tile), 80, 24);
+    if (!result.ok) throw new Error(result.issues.join("; "));
+    const integrations = result.value.find((region) => region.kind === "panel" && region.location === "right");
+    expect(integrations).toMatchObject({ body: [{ appletId: "integrations-nav", items: [
+      { id: "terminal", label: "terminal", active: true },
+      { id: "editor", label: "editor", active: true },
+    ] }] });
   });
 
   it("projects a null tile and empty Surface list when the active Window has no docked Surfaces", () => {

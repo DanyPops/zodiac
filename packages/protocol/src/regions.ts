@@ -115,8 +115,15 @@ function appletContentFor(id: AppletId, world: WorldViewModel): AppletContent | 
 		}
 		case "workspace-nav":
 			return { appletId: "workspace-nav", items: world.workspaces.map((w) => ({ id: w.id, label: w.title, active: w.id === world.activeWorkspaceId })) };
-		case "integrations-nav":
-			return { appletId: "integrations-nav", items: [] };
+		case "integrations-nav": {
+			if (world.state === "empty") return { appletId: "integrations-nav", items: [] };
+			const activeWorkspace = world.workspaces.find((workspace) => workspace.id === world.activeWorkspaceId) ?? world.workspaces[0];
+			if (!activeWorkspace) return { appletId: "integrations-nav", items: [] };
+			return {
+				appletId: "integrations-nav",
+				items: activeWorkspace.activeIntegrationIds.map((id) => ({ id, label: id, active: true })),
+			};
+		}
 		case "chat":
 			return { appletId: "chat", chat: { state: "unavailable", reason: "no-active-agent-integration" } };
 		default:

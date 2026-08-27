@@ -702,6 +702,15 @@ describe("semantic Zodiac shell body region renders live docked Surfaces", () =>
     expect(text).toMatch(/\u250c\u2500+ Editor \u2500+\u2510/);
   });
 
+  it("shows the docked Lector Integration in the Integration navigator", async () => {
+    const world = createWorldStore(worldId("w"));
+    const workspace = world.createWorkspace(workspaceId("ws"), "My Workspace");
+    world.dockSurface(workspace.id, integrationId("lector"), "Files");
+    const text = await renderText(80, 24, world);
+    expect(text).toContain("lector");
+    expect(text).not.toContain("(none)");
+  });
+
   it("falls back to the Workspace title placeholder when the active Window has no docked Surfaces yet", async () => {
     const world = createWorldStore(worldId("w"));
     world.createWorkspace(workspaceId("ws"), "My Workspace");
