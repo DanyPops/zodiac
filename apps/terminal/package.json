@@ -24,7 +24,7 @@
     "@zodiac/protocol": "*",
     "@zodiac/tui": "*",
     "@zodiac/world": "*",
-    "@danypops/zodiac-lector": "^0.0.9",
+    "@danypops/zodiac-lector": "^0.0.10",
     "@danypops/pi-lector": "^0.13.9",
     "@danypops/vehicle-client": "0.10.5",
     "@danypops/vehicle-server": "0.26.0",
