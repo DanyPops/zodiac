@@ -29,6 +29,15 @@ function fakeIntegration(): AgentIntegrationPort & { emit(event: ZodiacAgentEven
 }
 
 describe("createFooterChatController", () => {
+	it("forwards validated events to the client-action observer", () => {
+		const integration = fakeIntegration();
+		const onAgentEvent = vi.fn();
+		createFooterChatController(integration, { onAgentEvent });
+		const event: ZodiacAgentEvent = { type: "tool-call-start", toolCallId: "call-1", toolName: "grounded", input: {} };
+		integration.emit(event);
+		expect(onAgentEvent).toHaveBeenCalledWith(event);
+	});
+
 	it("starts in composing state with an empty draft and no history", () => {
 		const controller = createFooterChatController(fakeIntegration());
 		expect(controller.snapshot()).toEqual({ kind: "composing", draft: "", items: [] });

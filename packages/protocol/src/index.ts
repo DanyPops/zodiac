@@ -12,6 +12,8 @@ export { ResourceSchema, SurfaceSchema, WorkspaceWindowSchema, WorkspaceSchema, 
 
 export type { CommandIntent } from "./commands.js";
 export { CommandIntentSchema, COMMAND_INTENT_PROTOCOL_VERSION, COMMAND_INTENT_MIN_VERSION, isSupportedCommandIntent } from "./commands.js";
+export type { EditorOpenClientAction } from "./client-actions.js";
+export { EditorOpenClientActionSchema, MAX_CLIENT_ACTION_PATH_BYTES, MAX_CLIENT_ACTION_HASH_BYTES, MAX_CLIENT_ACTION_POSITION } from "./client-actions.js";
 
 export type { SurfaceViewModel, WindowViewModel, WorkspaceViewModel } from "./view-models.js";
 export { SurfaceViewModelSchema, WindowViewModelSchema, WorkspaceViewModelSchema } from "./view-models.js";

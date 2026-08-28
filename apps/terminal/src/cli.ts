@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { createWorldStore } from "@zodiac/server/world";
 import { connectRemoteWorldStore, type WorldClient } from "@zodiac/world";
 import { appletId, MIN_FOOTER_HEIGHT, panelId, workspaceId, worldId, type Panel, type WorkspaceId } from "@zodiac/protocol";
@@ -8,8 +8,10 @@ import { applyBootstrapToWorld } from "./bootstrap/apply-bootstrap.js";
 import { classifyPath, type ClassifiedPath } from "./bootstrap/classify-path.js";
 import { bootstrapWorkspace } from "./bootstrap/workspace-bootstrap.js";
 import { createLectorHost, type LectorHost } from "./lector/lector-host.js";
+import { openLectorEditorNatively } from "./lector/native-editor.js";
 import { parseTerminalArgs, type ZodiacTuiMode } from "./parse-args.js";
 import { createZodiacExtensionUIContext } from "./pi/zodiac-extension-ui-context.js";
+import { createNavigationClientActionHandler, readCurrentLectorContentHash } from "./pi/navigation-client-action.js";
 import { startFooterChat } from "./pi/start-footer-chat.js";
 import { SemanticShellApplication } from "./shell/application.js";
 import { buildMonolithGovernance } from "./monolith-governance.js";
@@ -157,10 +159,19 @@ async function main(): Promise<void> {
   const terminal = new ProcessTerminal();
   const application = new SemanticShellApplication(world, terminal, undefined, host, rootPath);
   const uiContext = createZodiacExtensionUIContext(application);
+  const navigation = createNavigationClientActionHandler({
+    activeWorkspaceId,
+    currentContentHash: (action) => readCurrentLectorContentHash(host, rootPath, action),
+    openEditor: (action) => openLectorEditorNatively(application, host, resolve(rootPath, action.resource.path), rootPath),
+  });
   const chat = await startFooterChat({
     cwd: resolveAgentCwd(classified),
     uiContext,
     workspaceId: activeWorkspaceId,
+    onAgentEvent: (event) => {
+      if (event.type === "tool-call-start") navigation.observeToolCall(event.toolCallId);
+      if (event.type === "tool-call-end") void navigation.handleToolCallEnd(event).catch(() => application.refresh());
+    },
     ...chatOptions,
   });
   if (chat) application.attachFooterChat(chat.footerChat);

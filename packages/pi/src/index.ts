@@ -3,6 +3,7 @@ export { createSubprocessAgentIntegration, type SubprocessAgentIntegrationOption
 export { createZodiacAgentSession, type CreateZodiacAgentSessionOptions, type ZodiacAgentSession, type ZodiacAgentSessionMode } from "./zodiac-agent-session.js";
 export { createHttpAgentIntegration, createRemoteZodiacAgentSession, type CreateRemoteZodiacAgentSessionOptions, type HttpAgentIntegrationOptions, type RemoteZodiacAgentSession } from "./http-agent-integration.js";
 export { createAgentCommandTool, type CreateAgentCommandToolOptions } from "./agent-command-tool.js";
+export { createAgentNavigationResult, extractAgentNavigationAction, type GroundedEditorNavigationEvidence } from "./agent-navigation-action.js";
 export { createListIntegrationsTool, type CreateListIntegrationsToolOptions } from "./list-integrations-tool.js";
 export { createListWorkspacesTool, type CreateListWorkspacesToolOptions } from "./list-workspaces-tool.js";
 export { createListWorkspaceTool, type CreateListWorkspaceToolOptions } from "./list-workspace-tool.js";

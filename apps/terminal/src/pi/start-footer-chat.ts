@@ -1,4 +1,5 @@
 import { createRemoteZodiacAgentSession, createZodiacAgentSession } from "@zodiac/pi";
+import type { ZodiacAgentEvent } from "@zodiac/agent";
 import type { WorkspaceId } from "@zodiac/protocol";
 import type { AgentSession, ExtensionUIContext, ModelRuntime, ResourceLoader, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createFooterChatController, type FooterChatController } from "./footer-chat-controller.js";
@@ -47,6 +48,8 @@ export interface StartFooterChatOptions {
 	readonly daemonUrl?: string;
 	/** Active Workspace identity sent to zodiacd for server-derived Integration grants. */
 	readonly workspaceId?: WorkspaceId;
+	/** Observes validated integration events so developer-defined client actions can be executed by the local TUI. */
+	readonly onAgentEvent?: (event: ZodiacAgentEvent) => void;
 }
 
 export interface StartedFooterChat {
@@ -86,11 +89,11 @@ export async function startFooterChat(options: StartFooterChatOptions): Promise<
 				cwd: options.cwd,
 				...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
 			});
-			const footerChat = createFooterChatController(integration);
+			const footerChat = createFooterChatController(integration, { onAgentEvent: options.onAgentEvent });
 			return { footerChat, dispose: () => integration.dispose() };
 		}
 		const { session, integration } = await createZodiacAgentSession({ ...options, mode: "tui" });
-		const footerChat = createFooterChatController(integration);
+		const footerChat = createFooterChatController(integration, { onAgentEvent: options.onAgentEvent });
 		return { footerChat, session, dispose: () => session.dispose() };
 	} catch {
 		return undefined;

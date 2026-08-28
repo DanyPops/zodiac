@@ -62,7 +62,7 @@ export interface FooterChatController {
  * bounded conversation view -- real history, not just a single status line,
  * so an expanded Footer has something real to show.
  */
-export function createFooterChatController(integration: AgentIntegrationPort): FooterChatController {
+export function createFooterChatController(integration: AgentIntegrationPort, options: { readonly onAgentEvent?: (event: ZodiacAgentEvent) => void } = {}): FooterChatController {
 	let draft = "";
 	let items: FooterChatItem[] = [];
 	/** Index into `items` of the assistant entry currently streaming, if any -- distinguishes "keep replacing this turn's item" from "start a new one". */
@@ -97,6 +97,7 @@ export function createFooterChatController(integration: AgentIntegrationPort): F
 	}
 
 	function handleEvent(event: ZodiacAgentEvent): void {
+		options.onAgentEvent?.(event);
 		switch (event.type) {
 			case "agent-start":
 				busy = true;
