@@ -6,21 +6,6 @@ export interface StyledSegment {
 	readonly style: CellStyle;
 }
 
-/**
- * A real ECMA-48 CSI sequence's own general grammar (ESC [ parameter-bytes intermediate-bytes
- * final-byte) -- not just SGR's own `m`-terminated subset. Real, previously-missing case,
- * confirmed live (not hypothetical): a real shell's own bracketed-paste-mode enable sequence
- * (`\x1b[?2004h`, DEC private mode, final byte `h`) leaked as literal visible "[?2004h" text
- * through this parser's own prior SGR-only regex -- it simply never matched, so the whole raw
- * sequence fell through as plain "rest" text (see native-terminal.ts's own doc comment on
- * excludeModes for the full story of where that sequence came from). isSgr below is the one place
- * that decides which matched CSI sequences are real, intended styling to apply (SGR, final byte
- * `m`, no DEC-private parameter marker) versus anything else, which is silently dropped --
- * consumed here, never leaked -- matching this parser's own documented contract that a caller only
- * ever hands it plain text plus SGR.
- */
-const CSI_RE = /\x1b\[([0-?]*)[ -/]*([@-~])/g;
-
 function isSgr(params: string, final: string): boolean {
 	return final === "m" && !/[<=>?]/.test(params);
 }
@@ -103,26 +88,71 @@ export function parseAnsiLine(line: string, base: CellStyle = {}): StyledSegment
 	const segments: StyledSegment[] = [];
 	const stack: (readonly number[])[] = [];
 	const currentStyle = (): CellStyle => stack.reduce((style: CellStyle, codes) => applyCodes(style, codes), base);
-
-	CSI_RE.lastIndex = 0;
-	let lastIndex = 0;
-	let match: RegExpExecArray | null;
-	while ((match = CSI_RE.exec(line))) {
-		const text = line.slice(lastIndex, match.index);
+	const pushText = (text: string) => {
 		if (text.length > 0) segments.push({ text, style: currentStyle() });
-		const params = match[1] ?? "";
-		const final = match[2] ?? "";
-		if (isSgr(params, final)) {
-			const codes = params === "" ? [0] : params.split(";").map(Number);
-			if (codes.length === 1 && codes[0] === 0) stack.pop();
-			else stack.push(codes);
+	};
+	const controlStringEnd = (start: number, bellTerminates: boolean): number => {
+		for (let index = start; index < line.length; index++) {
+			if (bellTerminates && line[index] === "\x07") return index + 1;
+			if (line[index] === "\x1b" && line[index + 1] === "\\") return index + 2;
 		}
-		// Any other CSI sequence this matched (DEC private mode toggles, cursor positioning, ...) is
-		// intentionally not applied to the style stack -- it's still consumed (lastIndex still
-		// advances past it below), just never treated as styling or re-emitted as text.
-		lastIndex = CSI_RE.lastIndex;
+		return line.length;
+	};
+
+	let offset = 0;
+	while (offset < line.length) {
+		const escape = line.indexOf("\x1b", offset);
+		if (escape === -1) {
+			pushText(line.slice(offset));
+			break;
+		}
+		pushText(line.slice(offset, escape));
+		const introducer = line[escape + 1];
+		if (introducer === undefined) break;
+
+		if (introducer === "[") {
+			let finalIndex = escape + 2;
+			while (finalIndex < line.length) {
+				const code = line.charCodeAt(finalIndex);
+				if (code >= 0x40 && code <= 0x7e) break;
+				finalIndex++;
+			}
+			if (finalIndex >= line.length) break;
+
+			const body = line.slice(escape + 2, finalIndex);
+			let parameterEnd = 0;
+			while (parameterEnd < body.length) {
+				const code = body.charCodeAt(parameterEnd);
+				if (code < 0x30 || code > 0x3f) break;
+				parameterEnd++;
+			}
+			const params = body.slice(0, parameterEnd);
+			const final = line[finalIndex] ?? "";
+			if (isSgr(params, final)) {
+				const codes = params === "" ? [0] : params.split(";").map(Number);
+				if (codes.length === 1 && codes[0] === 0) stack.pop();
+				else stack.push(codes);
+			}
+			offset = finalIndex + 1;
+			continue;
+		}
+
+		if (introducer === "]") {
+			offset = controlStringEnd(escape + 2, true);
+			continue;
+		}
+		if (introducer === "P" || introducer === "X" || introducer === "^" || introducer === "_") {
+			offset = controlStringEnd(escape + 2, introducer === "_");
+			continue;
+		}
+
+		let finalIndex = escape + 1;
+		while (finalIndex < line.length) {
+			const code = line.charCodeAt(finalIndex);
+			if (code >= 0x30 && code <= 0x7e) break;
+			finalIndex++;
+		}
+		offset = Math.min(line.length, finalIndex + 1);
 	}
-	const rest = line.slice(lastIndex);
-	if (rest.length > 0) segments.push({ text: rest, style: currentStyle() });
 	return segments;
 }

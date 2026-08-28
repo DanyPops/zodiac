@@ -74,6 +74,18 @@ describe("bounded cell-grid frame", () => {
     expect(cursorUpdate.ok && cursorUpdate.value.cursorChanged).toBe(true);
   });
 
+  it("repaints a changed row containing wide cells", () => {
+    const previous = frame(9, 1);
+    const next = frame(9, 1);
+    const area = createRect(0, 0, 9, 1);
+    if (!area.ok) throw new Error(area.error.message);
+    paintText(previous, area.value, 0, 0, "ab界x界--", {}, 0);
+    paintText(next, area.value, 0, 0, "ab界-界--", {}, 0);
+
+    const update = diffFrames(previous, next);
+    expect(update.ok && update.value.runs).toMatchObject([{ row: 0, startColumn: 0, cells: { length: 9 } }]);
+  });
+
   it("detects a single-cell style-only change", () => {
     const previous = frame(2, 1);
     const next = frame(2, 1);

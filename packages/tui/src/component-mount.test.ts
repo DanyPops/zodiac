@@ -1,4 +1,4 @@
-import type { Component } from "@earendil-works/pi-tui";
+import { CURSOR_MARKER, type Component } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { mountComponent } from "./component-mount.js";
 import { createGridFrame, createRect, gridId, type CellStyle, type GridFrame } from "./grid-frame.js";
@@ -41,6 +41,17 @@ describe("mountComponent", () => {
 		expect(cellAt(frame, 1, 0)).toMatchObject({ grapheme: "b", style: {} });
 		expect(cellAt(frame, 2, 0)).toMatchObject({ grapheme: "c", style: { inverse: true } });
 		expect(cellAt(frame, 3, 0)).toMatchObject({ grapheme: "d", style: {} });
+	});
+
+	it("projects Pi's zero-width cursor marker without leaking its APC payload into cells", () => {
+		const frame = frameAt(10, 1);
+		const area = createRect(0, 0, 10, 1);
+		if (!area.ok) throw new Error(area.error.message);
+
+		const outcome = mountComponent(frame, area.value, componentRendering([`ab${CURSOR_MARKER}c`]));
+		expect(outcome.ok).toBe(true);
+		expect(Array.from({ length: 4 }, (_, x) => cellAt(frame, x, 0).grapheme)).toEqual(["a", "b", "c", " "]);
+		expect(frame.cursor).toEqual({ row: 0, column: 2, visible: true });
 	});
 
 	it("tracks a moving cursor across frames, exactly as a real interactive session re-renders on every keystroke", () => {

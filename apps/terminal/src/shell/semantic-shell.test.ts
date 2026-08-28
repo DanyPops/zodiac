@@ -1,6 +1,7 @@
 import { createWorldStore } from "@zodiac/server/world";
 import { appletId, integrationId, layoutWorldRegions, panelId, workspaceId, worldId, type Panel } from "@zodiac/protocol";
 import { renderToTerminal } from "@danypops/pi-tui-harness";
+import { Input } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { diffFrames, type GridFrame } from "@zodiac/tui";
 import { encodeGridUpdate } from "@zodiac/tui";
@@ -662,6 +663,22 @@ describe("semantic empty Zodiac shell", () => {
       // No border glyphs at all -- project() short-circuits before paintFrameBorders ever runs.
       expect(text).not.toContain("\u2500");
       expect(text).not.toContain("\u2502");
+    });
+
+    it("projects a focused Pi input cursor without rendering its marker payload", () => {
+      const shell = new SemanticShell();
+      const input = new Input();
+      input.focused = true;
+      input.handleInput("a");
+      input.handleInput("b");
+      shell.enterExternal(input);
+
+      const frame = shell.project(createWorldStore(worldId("empty")).worldViewModel(), 60, 12);
+      if (!frame.ok) throw new Error(frame.error.message);
+      const text = frame.value.cells.map((cell) => cell.grapheme).join("");
+      expect(text).toContain("> ab");
+      expect(text).not.toContain("_pi:c");
+      expect(frame.value.cursor).toEqual({ row: 0, column: 4, visible: true });
     });
 
     it("externalComponentHandle() exposes the exact mounted Component instance for input routing", () => {

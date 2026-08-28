@@ -56,16 +56,15 @@ describe("Ctrl+Right/Ctrl+Left fullscreen, against a real running process", () =
     terminal.write("\t"); // left-pillar -> body
     terminal.write("\x1b[1;5C"); // Ctrl+Right -- enter fullscreen
     await terminal.waitForText("(fullscreen)"); // the fullscreen box's own label text
-    const fullscreen = terminal.snapshot();
+    const fullscreen = await stableSnapshot(terminal);
     expect(fullscreen).toContain(rootTitle);
     expect(fullscreen).not.toContain("Workspaces");
     expect(fullscreen).not.toContain("Integrations");
     expect(fullscreen).not.toContain("Windows");
 
-    const beforeTab = terminal.snapshot();
+    const beforeTab = fullscreen;
     terminal.write("\t"); // Tab must be a no-op -- nothing else is visible to focus
-    await new Promise((r) => setTimeout(r, 150));
-    expect(terminal.snapshot()).toBe(beforeTab);
+    expect(await stableSnapshot(terminal)).toBe(beforeTab);
 
     terminal.write("\x1b[1;5D"); // Ctrl+Left -- exit fullscreen
     await terminal.waitForText("Workspaces");

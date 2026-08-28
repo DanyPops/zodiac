@@ -2,10 +2,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lectorOperationsFromClient } from "@danypops/zodiac-lector";
+import { renderToTerminal, type RenderedTerminal } from "@danypops/pi-tui-harness";
 import type { Component } from "@earendil-works/pi-tui";
+import { worldId } from "@zodiac/protocol";
+import { createWorldStore } from "@zodiac/server/world";
+import { diffFrames, encodeGridUpdate, GridTerminal, type GridFrame } from "@zodiac/tui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLectorHost, type LectorHost } from "./lector-host.js";
 import { openLectorEditorNatively, promptAndOpenLectorEditorNatively } from "./native-editor.js";
+import { SemanticShell } from "../shell/semantic-shell.js";
 import { startIsolatedLectorDaemon } from "../test/isolated-lector-daemon.js";
 
 let root: string | undefined;
@@ -53,6 +58,22 @@ function typeKeys(component: Component, keys: readonly string[]): void {
 	for (const key of keys) component.handleInput?.(key);
 }
 
+function terminalCells(terminal: RenderedTerminal) {
+	return Array.from({ length: terminal.rows }, (_, row) =>
+		Array.from({ length: terminal.cols }, (_, column) => terminal.cellAt(row, column)),
+	);
+}
+
+function expectWideCellsValid(frame: GridFrame): void {
+	for (let row = 0; row < frame.height; row++) {
+		for (let column = 0; column < frame.width; column++) {
+			const cell = frame.cells[row * frame.width + column]!;
+			if (cell.width === 2) expect(frame.cells[row * frame.width + column + 1]?.continuation).toBe(true);
+			if (cell.continuation) expect(frame.cells[row * frame.width + column - 1]?.width).toBe(2);
+		}
+	}
+}
+
 async function waitForMounted(mounted: () => Component | undefined, previous?: Component): Promise<Component> {
 	return await vi.waitFor(
 		() => {
@@ -81,6 +102,65 @@ describe("openLectorEditorNatively", () => {
 		await opened;
 		expect(mounted()).toBeUndefined();
 	});
+
+	it("keeps real editor traces stable across edits and resize", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-render-"));
+		const filePath = join(root, "unicode.txt");
+		writeFileSync(filePath, "alpha\nshort\nwide 界 row\nlast\n");
+		const shell = new SemanticShell();
+		let mounted: Component | undefined;
+		const nativeHost = {
+			showExternalComponent(component: Component): void {
+				mounted = component;
+				shell.enterExternal(component);
+			},
+			hideExternalComponent(): void {
+				mounted = undefined;
+				shell.exitExternal();
+			},
+			refresh(): void {},
+			terminalRows(): number {
+				return 24;
+			},
+		};
+		const opened = openLectorEditorNatively(nativeHost, await realHost(), filePath);
+		const editor = await waitForMounted(() => mounted);
+		const writes: string[] = [];
+		const gridTerminal = new GridTerminal({ write: (data) => writes.push(data) });
+		const trace = [
+			{ width: 60, keys: [] },
+			{ width: 60, keys: ["A", " ", "界", "🙂", "\x1b"] },
+			{ width: 80, keys: ["h", "h", "j", "0"] },
+			{ width: 80, keys: ["j", "$", "x"] },
+			{ width: 60, keys: ["k", "0"] },
+		] as const;
+
+		for (const [step, action] of trace.entries()) {
+			typeKeys(editor, action.keys);
+			const projected = shell.project(createWorldStore(worldId("render-trace")).worldViewModel(), action.width, 24);
+			if (!projected.ok) throw new Error(projected.error.message);
+			expectWideCellsValid(projected.value);
+			expect(projected.value.cells.map((cell) => cell.grapheme).join("")).not.toContain("_pi:c");
+			const update = gridTerminal.render(projected.value);
+			if (!update.ok) throw new Error(update.error.message);
+			const full = diffFrames(undefined, projected.value);
+			if (!full.ok) throw new Error(full.error.message);
+			const encodedFull = encodeGridUpdate(full.value);
+			if (!encodedFull.ok) throw new Error(encodedFull.error.message);
+			const incrementalTerminal = await renderToTerminal([writes.join("")], { cols: 80, rows: 24 });
+			const fullTerminal = await renderToTerminal([encodedFull.value], { cols: 80, rows: 24 });
+			try {
+				expect(incrementalTerminal.plainLines(), `plain rows at step ${step}`).toEqual(fullTerminal.plainLines());
+				expect(terminalCells(incrementalTerminal), `cells and styles at step ${step}`).toEqual(terminalCells(fullTerminal));
+			} finally {
+				incrementalTerminal.dispose();
+				fullTerminal.dispose();
+			}
+		}
+
+		typeKeys(editor, [":", "q", "\r"]);
+		await opened;
+	}, 15_000);
 
 	it("real vim edit + :wq actually saves the new content to disk through Zodiac's own lector-host.ts, not pi-lector's own operations.ts", async () => {
 		root = mkdtempSync(join(tmpdir(), "zodiac-native-editor-save-"));

@@ -274,9 +274,21 @@ export function diffFrames(previous: GridFrame | undefined, next: GridFrame): Ou
   const runs: GridLineRun[] = [];
 
   for (let rowValue = 0; rowValue < next.height; rowValue++) {
+    const start = rowValue * next.width;
     if (full) {
-      const start = rowValue * next.width;
       runs.push({ row: rowValue, startColumn: 0, cells: next.cells.slice(start, start + next.width).map((cell) => ({ ...cell, style: { ...cell.style } })) });
+      continue;
+    }
+    const nextRow = next.cells.slice(start, start + next.width);
+    const previousRow = previous?.cells.slice(start, start + next.width) ?? [];
+    const rowContainsWideCell = nextRow.some((cell) => cell.width === 2 || cell.continuation) || previousRow.some((cell) => cell.width === 2 || cell.continuation);
+    const rowChanged = nextRow.some((cell, columnValue) => {
+      const previousCell = previousRow[columnValue];
+      return !previousCell || !cellsEqual(previousCell, cell);
+    });
+    // Repaint the row because replacing either half of a terminal wide cell can clear an adjacent cell that is unchanged in the logical grid.
+    if (rowContainsWideCell && rowChanged) {
+      runs.push({ row: rowValue, startColumn: 0, cells: nextRow.map((cell) => ({ ...cell, style: { ...cell.style } })) });
       continue;
     }
     let columnValue = 0;

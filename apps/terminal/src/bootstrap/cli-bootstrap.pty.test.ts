@@ -55,6 +55,39 @@ describe("real CLI process bootstrap against a real Lector daemon", () => {
 		await terminal.waitForText("cwd-entry.ts", 15_000);
 	}, 20_000);
 
+	it("keeps the complete editor-prompt screen stable across split escape sequences", async () => {
+		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-input-"));
+		writeFileSync(join(root, "target.ts"), "export const target = true;\n");
+		const rootTitle = basename(root);
+
+		const daemon = await startIsolatedLectorDaemon();
+		stopDaemon = daemon.stop;
+		terminal = spawnLiveTerminal(process.execPath, [cli], {
+			cols: 80,
+			rows: 24,
+			cwd: root,
+			adversarialEscapeSplits: 64,
+		});
+		await terminal.waitForText(rootTitle, 15_000);
+		terminal.write("\x05");
+		await terminal.waitForText("Open in Lector editor -- absolute file path", 15_000);
+		terminal.write("a");
+		terminal.write("b");
+		terminal.write("c");
+		await terminal.waitForText("> abc", 15_000);
+
+		const rows = terminal.snapshot().split("\n");
+		expect(rows).toEqual([
+			"Open in Lector editor -- absolute file path".padEnd(80),
+			"> abc".padEnd(80),
+			...Array.from({ length: 22 }, () => " ".repeat(80)),
+		]);
+		expect(terminal.snapshot()).not.toContain("_pi:c");
+
+		terminal.write("\x1b");
+		await terminal.waitForText(rootTitle, 15_000);
+	}, 20_000);
+
 	it("opens a real fixture file directly, identifying its nearest real git repository root as the Workspace", async () => {
 		root = mkdtempSync(join(tmpdir(), "zodiac-cli-system-file-"));
 		execFileSync("git", ["init", "-q"], { cwd: root });

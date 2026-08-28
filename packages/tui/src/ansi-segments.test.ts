@@ -81,4 +81,26 @@ describe("parseAnsiLine", () => {
 	it("still treats a real SGR sequence as styling even though the general CSI match now also covers non-SGR final bytes", () => {
 		expect(parseAnsiLine("\x1b[1mbold\x1b[0m")).toEqual([{ text: "bold", style: { bold: true } }]);
 	});
+
+	it("drops complete OSC, DCS, APC, SOS, and PM control strings", () => {
+		const line = [
+			"a",
+			"\x1b]0;window title\x07",
+			"b",
+			"\x1bP1;2|device payload\x1b\\",
+			"c",
+			"\x1b_pi:cursor\x07",
+			"d",
+			"\x1bXsos payload\x1b\\",
+			"e",
+			"\x1b^pm payload\x1b\\",
+			"f",
+		].join("");
+
+		expect(parseAnsiLine(line).map((segment) => segment.text).join("")).toBe("abcdef");
+	});
+
+	it("drops an unterminated control string through the end of the row", () => {
+		expect(parseAnsiLine("visible\x1b]0;unfinished title")).toEqual([{ text: "visible", style: {} }]);
+	});
 });

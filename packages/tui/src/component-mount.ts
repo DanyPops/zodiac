@@ -1,6 +1,5 @@
-import type { Component } from "@earendil-works/pi-tui";
-import { visibleWidth } from "@earendil-works/pi-tui";
-import { paintText, type GridFrame, type Outcome, type Rect } from "./grid-frame.js";
+import { CURSOR_MARKER, type Component, visibleWidth } from "@earendil-works/pi-tui";
+import { paintText, setCursor, type GridFrame, type Outcome, type Rect } from "./grid-frame.js";
 import { parseAnsiLine } from "./ansi-segments.js";
 
 /**
@@ -27,8 +26,19 @@ import { parseAnsiLine } from "./ansi-segments.js";
  */
 export function mountComponent(frame: GridFrame, area: Rect, component: Component): Outcome<void> {
 	const lines = component.render(area.width);
-	for (let y = 0; y < lines.length && y < area.height; y++) {
+	let cursor: { row: number; column: number } | undefined;
+
+	for (let y = Math.min(lines.length, area.height) - 1; y >= 0; y--) {
 		const line = lines[y] ?? "";
+		const markerIndex = line.indexOf(CURSOR_MARKER);
+		if (markerIndex === -1) continue;
+		const column = visibleWidth(line.slice(0, markerIndex));
+		if (column < area.width) cursor = { row: area.y + y, column: area.x + column };
+		break;
+	}
+
+	for (let y = 0; y < lines.length && y < area.height; y++) {
+		const line = (lines[y] ?? "").replaceAll(CURSOR_MARKER, "");
 		let x = 0;
 		for (const segment of parseAnsiLine(line)) {
 			if (x >= area.width) break;
@@ -36,6 +46,10 @@ export function mountComponent(frame: GridFrame, area: Rect, component: Componen
 			if (!painted.ok) return painted;
 			x += visibleWidth(segment.text);
 		}
+	}
+	if (cursor) {
+		const positioned = setCursor(frame, { ...cursor, visible: true });
+		if (!positioned.ok) return positioned;
 	}
 	return { ok: true, value: undefined };
 }

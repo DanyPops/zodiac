@@ -49,6 +49,8 @@ export interface LiveTerminalOptions {
   readonly rows: number;
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /** Splits at most this many reconstructed-output chunks immediately after ESC, exercising parser boundaries independently of the host PTY's incidental chunking. */
+  readonly adversarialEscapeSplits?: number;
 }
 
 /**
@@ -110,6 +112,9 @@ export interface LiveTerminal {
 
 /** Spawns `command args` behind a real PTY and wires its output into a real, live-reconstructed terminal. */
 export function spawnLiveTerminal(command: string, args: readonly string[], options: LiveTerminalOptions): LiveTerminal {
+  if (!Number.isSafeInteger(options.adversarialEscapeSplits ?? 0) || (options.adversarialEscapeSplits ?? 0) < 0 || (options.adversarialEscapeSplits ?? 0) > 1_000) {
+    throw new Error("adversarialEscapeSplits must be an integer from 0 through 1000");
+  }
   const terminal = new headless.Terminal({ cols: options.cols, rows: options.rows, allowProposedApi: true });
   const child = pty.spawn(command, [...args], {
     name: "xterm-256color",
@@ -126,13 +131,26 @@ export function spawnLiveTerminal(command: string, args: readonly string[], opti
   // Chaining writes means anything that awaits `writeChain` sees a state
   // that is at least as new as every chunk received so far.
   let writeChain: Promise<void> = Promise.resolve();
+  let remainingEscapeSplits = options.adversarialEscapeSplits ?? 0;
   /** Bumped on every chunk -- see SETTLE_IDLE_MS's own doc comment for the second, independent race this closes (more chunks still arriving after a predicate first holds). */
   let lastDataAt = Date.now();
   let rawOutput = "";
   child.onData((data) => {
     lastDataAt = Date.now();
     rawOutput += data;
-    writeChain = writeChain.then(() => new Promise<void>((resolveWrite) => terminal.write(data, resolveWrite)));
+    const chunks: string[] = [];
+    let offset = 0;
+    while (remainingEscapeSplits > 0) {
+      const escape = data.indexOf("\x1b", offset);
+      if (escape === -1) break;
+      chunks.push(data.slice(offset, escape + 1));
+      offset = escape + 1;
+      remainingEscapeSplits--;
+    }
+    if (offset < data.length) chunks.push(data.slice(offset));
+    for (const chunk of chunks) {
+      writeChain = writeChain.then(() => new Promise<void>((resolveWrite) => terminal.write(chunk, resolveWrite)));
+    }
   });
 
   let exitCode: number | null | undefined;
